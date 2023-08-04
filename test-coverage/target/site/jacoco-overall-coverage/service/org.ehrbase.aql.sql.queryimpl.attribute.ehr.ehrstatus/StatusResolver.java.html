@@ -1,0 +1,67 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../../jacoco-resources/report.gif" type="image/gif"/><title>StatusResolver.java</title><link rel="stylesheet" href="../../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../../index.html" class="el_report">Overall Coverage</a> &gt; <a href="../index.html" class="el_bundle">service</a> &gt; <a href="index.source.html" class="el_package">org.ehrbase.aql.sql.queryimpl.attribute.ehr.ehrstatus</a> &gt; <span class="el_source">StatusResolver.java</span></div><h1>StatusResolver.java</h1><pre class="source lang-java linenums">/*
+ * Copyright (c) 2019 vitasystems GmbH and Hannover Medical School.
+ *
+ * This file is part of project EHRbase
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     https://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.ehrbase.aql.sql.queryimpl.attribute.ehr.ehrstatus;
+
+import static org.ehrbase.jooq.pg.Tables.STATUS;
+
+import org.ehrbase.aql.sql.queryimpl.attribute.AttributePath;
+import org.ehrbase.aql.sql.queryimpl.attribute.AttributeResolver;
+import org.ehrbase.aql.sql.queryimpl.attribute.FieldResolutionContext;
+import org.ehrbase.aql.sql.queryimpl.attribute.JoinSetup;
+import org.ehrbase.aql.sql.queryimpl.attribute.ehr.ehrstatus.subject.SubjectResolver;
+import org.jooq.Field;
+
+@SuppressWarnings({&quot;java:S3740&quot;, &quot;java:S1452&quot;})
+public class StatusResolver extends AttributeResolver {
+
+    public StatusResolver(FieldResolutionContext fieldResolutionContext, JoinSetup joinSetup) {
+<span class="fc" id="L33">        super(fieldResolutionContext, joinSetup);</span>
+<span class="fc" id="L34">    }</span>
+
+    public Field&lt;?&gt; sqlField(String path) {
+
+        try {
+<span class="pc bpc" id="L39" title="1 of 2 branches missed.">            if (path.startsWith(&quot;other_details&quot;)) {</span>
+<span class="fc" id="L40">                return new EhrStatusOtherDetails(fieldResolutionContext, joinSetup)</span>
+<span class="fc" id="L41">                        .forTableField(NULL_FIELD)</span>
+<span class="fc" id="L42">                        .sqlField();</span>
+<span class="nc bnc" id="L43" title="All 2 branches missed.">            } else if (path.startsWith(&quot;subject&quot;)) {</span>
+<span class="nc" id="L44">                return new SubjectResolver(fieldResolutionContext, joinSetup)</span>
+<span class="nc" id="L45">                        .sqlField(new AttributePath(&quot;subject&quot;).redux(path));</span>
+<span class="nc bnc" id="L46" title="All 2 branches missed.">            } else if (path.isEmpty()) {</span>
+<span class="nc" id="L47">                return new EhrStatusJson(fieldResolutionContext, joinSetup).sqlField();</span>
+<span class="nc bnc" id="L48" title="All 2 branches missed.">            } else if (path.equals(&quot;is_queryable&quot;)) {</span>
+<span class="nc" id="L49">                return new SimpleEhrStatusAttribute(fieldResolutionContext, joinSetup)</span>
+<span class="nc" id="L50">                        .forTableField(STATUS.IS_QUERYABLE)</span>
+<span class="nc" id="L51">                        .sqlField();</span>
+<span class="nc bnc" id="L52" title="All 2 branches missed.">            } else if (path.equals(&quot;is_modifiable&quot;)) {</span>
+<span class="nc" id="L53">                return new SimpleEhrStatusAttribute(fieldResolutionContext, joinSetup)</span>
+<span class="nc" id="L54">                        .forTableField(STATUS.IS_MODIFIABLE)</span>
+<span class="nc" id="L55">                        .sqlField();</span>
+            } else
+<span class="nc" id="L57">                return new EhrStatusJson(fieldResolutionContext, joinSetup)</span>
+<span class="nc" id="L58">                        .forJsonPath(path)</span>
+<span class="nc" id="L59">                        .sqlField();</span>
+<span class="nc" id="L60">        } catch (IllegalArgumentException e) {</span>
+<span class="nc" id="L61">            return new EhrStatusJson(fieldResolutionContext, joinSetup)</span>
+<span class="nc" id="L62">                    .forJsonPath(path)</span>
+<span class="nc" id="L63">                    .sqlField();</span>
+        }
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.7.202105040129</span></div></body></html>

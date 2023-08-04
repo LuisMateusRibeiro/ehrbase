@@ -1,0 +1,268 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../../jacoco-resources/report.gif" type="image/gif"/><title>StoredQueryAccess.java</title><link rel="stylesheet" href="../../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../../index.html" class="el_report">Overall Coverage</a> &gt; <a href="../index.html" class="el_bundle">service</a> &gt; <a href="index.source.html" class="el_package">org.ehrbase.dao.access.jooq</a> &gt; <span class="el_source">StoredQueryAccess.java</span></div><h1>StoredQueryAccess.java</h1><pre class="source lang-java linenums">/*
+ * Copyright (c) 2015 vitasystems GmbH and Hannover Medical School.
+ *
+ * This file is part of project EHRbase
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     https://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.ehrbase.dao.access.jooq;
+
+import static org.ehrbase.jooq.pg.Tables.STORED_QUERY;
+
+import java.sql.Timestamp;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Optional;
+import java.util.stream.Stream;
+import org.apache.commons.lang3.StringUtils;
+import org.ehrbase.dao.access.interfaces.I_DomainAccess;
+import org.ehrbase.dao.access.interfaces.I_StoredQueryAccess;
+import org.ehrbase.dao.access.support.DataAccess;
+import org.ehrbase.dao.access.util.SemVer;
+import org.ehrbase.dao.access.util.StoredQueryQualifiedName;
+import org.ehrbase.jooq.pg.tables.records.StoredQueryRecord;
+import org.joda.time.DateTime;
+import org.jooq.Condition;
+import org.jooq.OrderField;
+import org.jooq.SelectOrderByStep;
+import org.jooq.SelectWhereStep;
+import org.jooq.SortOrder;
+import org.jooq.impl.DSL;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.lang.NonNull;
+
+/**
+ * Created by Christian Chevalley on 4/20/2015.
+ */
+public class StoredQueryAccess extends DataAccess implements I_StoredQueryAccess {
+
+<span class="fc" id="L50">    static final Logger log = LoggerFactory.getLogger(StoredQueryAccess.class);</span>
+    private StoredQueryRecord storedQueryRecord;
+
+    public StoredQueryAccess(I_DomainAccess domainAccess, StoredQueryRecord queryRecord, Short sysTenant) {
+<span class="fc" id="L54">        super(domainAccess);</span>
+<span class="fc" id="L55">        this.storedQueryRecord = queryRecord;</span>
+<span class="fc" id="L56">        this.storedQueryRecord.setSysTenant(sysTenant);</span>
+<span class="fc" id="L57">    }</span>
+
+    public StoredQueryAccess(
+            I_DomainAccess domainAccess,
+            String qualifiedQueryName,
+            SemVer version,
+            String sourceAqlText,
+            Short sysTenant) {
+<span class="nc" id="L65">        super(domainAccess);</span>
+
+<span class="nc" id="L67">        storedQueryRecord = domainAccess.getContext().newRecord(STORED_QUERY);</span>
+<span class="nc" id="L68">        storedQueryRecord.setSysTenant(sysTenant);</span>
+
+<span class="nc" id="L70">        StoredQueryQualifiedName qn = new StoredQueryQualifiedName(qualifiedQueryName, version);</span>
+
+<span class="nc" id="L72">        storedQueryRecord.setReverseDomainName(qn.reverseDomainName());</span>
+<span class="nc" id="L73">        storedQueryRecord.setSemanticId(qn.semanticId());</span>
+<span class="nc" id="L74">        storedQueryRecord.setSemver(version.toVersionString());</span>
+<span class="nc" id="L75">        storedQueryRecord.setQueryText(sourceAqlText);</span>
+<span class="nc" id="L76">        storedQueryRecord.setType(&quot;AQL&quot;);</span>
+<span class="nc" id="L77">    }</span>
+
+    /**
+     * return null if couldn't retrieve instance with given settings
+     */
+    public static Optional&lt;StoredQueryAccess&gt; retrieveQualified(
+            I_DomainAccess domainAccess, String qualifiedName, @NonNull SemVer version) {
+
+        // Split the qualified name in fields
+<span class="fc" id="L86">        StoredQueryQualifiedName qn = new StoredQueryQualifiedName(qualifiedName, version);</span>
+
+<span class="fc" id="L88">        SemVer semVer = qn.semVer();</span>
+
+<span class="fc" id="L90">        Condition condition = nameConstraint(qn);</span>
+<span class="fc" id="L91">        condition = condition.and(versionConstraint(semVer));</span>
+<span class="fc" id="L92">        var unordered = domainAccess.getContext().selectFrom(STORED_QUERY).where(condition);</span>
+
+        Optional&lt;StoredQueryRecord&gt; queryRecord;
+<span class="pc bpc" id="L95" title="2 of 4 branches missed.">        if (semVer.isRelease() || semVer.isPreRelease()) {</span>
+            // equals =&gt; only one result
+<span class="nc" id="L97">            queryRecord = unordered.fetchOptional();</span>
+<span class="nc" id="L98">        } else {</span>
+<span class="fc" id="L99">            var ordered = unordered.orderBy(orderBySemVerStream(SortOrder.DESC).toList());</span>
+<span class="fc" id="L100">            queryRecord = ordered.limit(1).fetchOptional();</span>
+        }
+
+<span class="fc" id="L103">        return queryRecord.map(r -&gt; new StoredQueryAccess(domainAccess, r, r.getSysTenant()));</span>
+    }
+
+    private static @NonNull Condition versionConstraint(SemVer semVer) {
+<span class="pc bpc" id="L107" title="2 of 4 branches missed.">        if (semVer.isRelease() || semVer.isPreRelease()) {</span>
+<span class="nc" id="L108">            return STORED_QUERY.SEMVER.eq(semVer.toVersionString());</span>
+        }
+<span class="fc" id="L110">        Condition noPreRelease = STORED_QUERY.SEMVER.notContains(&quot;-&quot;);</span>
+<span class="pc bpc" id="L111" title="1 of 2 branches missed.">        if (semVer.isNoVersion()) {</span>
+<span class="fc" id="L112">            return noPreRelease;</span>
+        }
+<span class="nc" id="L114">        Condition prefixMatch = STORED_QUERY.SEMVER.like(semVer.toVersionString() + &quot;.%&quot;);</span>
+<span class="nc" id="L115">        return prefixMatch.and(noPreRelease);</span>
+    }
+
+    private static Condition nameConstraint(StoredQueryQualifiedName storedQueryQualifiedName) {
+<span class="fc" id="L119">        return STORED_QUERY</span>
+<span class="fc" id="L120">                .REVERSE_DOMAIN_NAME</span>
+<span class="fc" id="L121">                .eq(storedQueryQualifiedName.reverseDomainName())</span>
+<span class="fc" id="L122">                .and(STORED_QUERY.SEMANTIC_ID.eq(storedQueryQualifiedName.semanticId()));</span>
+    }
+
+    /**
+     * Retrieves list of all stored queries on the system matched by qualifiedQueryName as pattern.
+     * If pattern should be given in the format of [{namespace}::]{query-name},
+     * and when is empty, it will be treated as &quot;wildcard&quot; in the search.
+     */
+    public static List&lt;StoredQueryAccess&gt; retrieveQualifiedList(
+            I_DomainAccess domainAccess, String qualifiedQueryName) {
+<span class="nc" id="L132">        SelectWhereStep&lt;StoredQueryRecord&gt; selection = domainAccess.getContext().selectFrom(STORED_QUERY);</span>
+
+        // Determine {query-name} and {namespace}
+        String semanticId;
+        String reverseDomainName;
+<span class="nc bnc" id="L137" title="All 2 branches missed.">        if (StringUtils.isEmpty(qualifiedQueryName)) {</span>
+<span class="nc" id="L138">            semanticId = null;</span>
+<span class="nc" id="L139">            reverseDomainName = null;</span>
+<span class="nc" id="L140">        } else {</span>
+            // qualifiedQueryName is optional
+<span class="nc" id="L142">            int pos = qualifiedQueryName.indexOf(&quot;::&quot;);</span>
+<span class="nc bnc" id="L143" title="All 2 branches missed.">            if (pos &lt; 0) {</span>
+<span class="nc" id="L144">                reverseDomainName = null;</span>
+<span class="nc" id="L145">                semanticId = qualifiedQueryName;</span>
+<span class="nc" id="L146">            } else {</span>
+<span class="nc" id="L147">                reverseDomainName = StringUtils.defaultIfEmpty(qualifiedQueryName.substring(0, pos), null);</span>
+<span class="nc" id="L148">                semanticId = StringUtils.defaultIfEmpty(qualifiedQueryName.substring(pos + 2), null);</span>
+            }
+        }
+
+<span class="nc" id="L152">        List&lt;Condition&gt; constraints = new ArrayList&lt;&gt;();</span>
+<span class="nc" id="L153">        List&lt;OrderField&lt;?&gt;&gt; orderFields = new ArrayList&lt;&gt;();</span>
+
+<span class="nc bnc" id="L155" title="All 2 branches missed.">        if (reverseDomainName == null) {</span>
+<span class="nc" id="L156">            orderFields.add(STORED_QUERY.REVERSE_DOMAIN_NAME.sort(SortOrder.ASC));</span>
+<span class="nc" id="L157">        } else {</span>
+<span class="nc" id="L158">            constraints.add(STORED_QUERY.REVERSE_DOMAIN_NAME.eq(reverseDomainName));</span>
+        }
+
+<span class="nc bnc" id="L161" title="All 2 branches missed.">        if (semanticId == null) {</span>
+<span class="nc" id="L162">            orderFields.add(STORED_QUERY.SEMANTIC_ID.sort(SortOrder.ASC));</span>
+<span class="nc" id="L163">        } else {</span>
+<span class="nc" id="L164">            constraints.add(STORED_QUERY.SEMANTIC_ID.eq(semanticId));</span>
+        }
+
+        SelectOrderByStep&lt;StoredQueryRecord&gt; unordered;
+<span class="nc bnc" id="L168" title="All 2 branches missed.">        if (constraints.isEmpty()) {</span>
+<span class="nc" id="L169">            unordered = selection;</span>
+<span class="nc" id="L170">        } else {</span>
+<span class="nc" id="L171">            unordered = selection.where(constraints);</span>
+        }
+
+<span class="nc" id="L174">        var sortOrder = Stream.concat(orderFields.stream(), orderBySemVerStream(SortOrder.DESC))</span>
+<span class="nc" id="L175">                .toList();</span>
+
+<span class="nc" id="L177">        try (Stream&lt;StoredQueryRecord&gt; stream = unordered.orderBy(sortOrder).stream()) {</span>
+<span class="nc" id="L178">            return stream.map(r -&gt; new StoredQueryAccess(domainAccess, r, r.getSysTenant()))</span>
+<span class="nc" id="L179">                    .toList();</span>
+        }
+    }
+
+    private static Stream&lt;OrderField&lt;?&gt;&gt; orderBySemVerStream(SortOrder sortOrder) {
+<span class="fc" id="L184">        return Stream.of(</span>
+<span class="fc" id="L185">                DSL.splitPart(STORED_QUERY.SEMVER, &quot;.&quot;, 1).cast(Integer.class).sort(sortOrder),</span>
+<span class="fc" id="L186">                DSL.splitPart(STORED_QUERY.SEMVER, &quot;.&quot;, 2).cast(Integer.class).sort(sortOrder),</span>
+<span class="fc" id="L187">                DSL.splitPart(DSL.splitPart(STORED_QUERY.SEMVER, &quot;.&quot;, 3), &quot;-&quot;, 1)</span>
+<span class="fc" id="L188">                        .cast(Integer.class)</span>
+<span class="fc" id="L189">                        .sort(sortOrder),</span>
+<span class="fc" id="L190">                DSL.splitPart(DSL.splitPart(STORED_QUERY.SEMVER, &quot;.&quot;, 3), &quot;-&quot;, 2)</span>
+<span class="fc" id="L191">                        .sort(sortOrder));</span>
+    }
+
+    @Override
+    public StoredQueryAccess commit(Timestamp transactionTime) {
+<span class="nc" id="L196">        storedQueryRecord.setCreationDate(transactionTime);</span>
+<span class="nc" id="L197">        storedQueryRecord.store();</span>
+<span class="nc" id="L198">        return this;</span>
+    }
+
+    @Override
+    public StoredQueryAccess commit() {
+<span class="nc" id="L203">        return commit(new Timestamp(DateTime.now().getMillis()));</span>
+    }
+
+    @Override
+    public Boolean update(Timestamp transactionTime) {
+
+<span class="nc" id="L209">        storedQueryRecord.setCreationDate(transactionTime);</span>
+
+<span class="nc bnc" id="L211" title="All 2 branches missed.">        if (storedQueryRecord.changed()) {</span>
+<span class="nc bnc" id="L212" title="All 2 branches missed.">            return storedQueryRecord.update() &gt; 0;</span>
+        }
+
+<span class="nc" id="L215">        return false;</span>
+    }
+
+    @Override
+    public Boolean update(Timestamp transactionTime, boolean force) {
+<span class="nc" id="L220">        return update(transactionTime);</span>
+    }
+
+    @Override
+    public Integer delete() {
+<span class="nc" id="L225">        return storedQueryRecord.delete();</span>
+    }
+
+    @Override
+    public String getReverseDomainName() {
+<span class="fc" id="L230">        return storedQueryRecord.getReverseDomainName();</span>
+    }
+
+    @Override
+    public String getSemanticId() {
+<span class="fc" id="L235">        return storedQueryRecord.getSemanticId();</span>
+    }
+
+    @Override
+    public String getSemver() {
+<span class="fc" id="L240">        return storedQueryRecord.getSemver();</span>
+    }
+
+    @Override
+    public String getQueryText() {
+<span class="fc" id="L245">        return storedQueryRecord.getQueryText();</span>
+    }
+
+    @Override
+    public void setQueryText(String queryText) {
+<span class="nc" id="L250">        storedQueryRecord.setQueryText(queryText);</span>
+<span class="nc" id="L251">    }</span>
+
+    @Override
+    public Timestamp getCreationDate() {
+<span class="fc" id="L255">        return storedQueryRecord.getCreationDate();</span>
+    }
+
+    @Override
+    public String getQueryType() {
+<span class="nc" id="L260">        return storedQueryRecord.getType();</span>
+    }
+
+    @Override
+    public DataAccess getDataAccess() {
+<span class="nc" id="L265">        return this;</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.7.202105040129</span></div></body></html>

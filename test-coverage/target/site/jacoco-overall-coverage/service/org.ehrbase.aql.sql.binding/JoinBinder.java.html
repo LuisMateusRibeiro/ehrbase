@@ -1,0 +1,238 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../../jacoco-resources/report.gif" type="image/gif"/><title>JoinBinder.java</title><link rel="stylesheet" href="../../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../../index.html" class="el_report">Overall Coverage</a> &gt; <a href="../index.html" class="el_bundle">service</a> &gt; <a href="index.source.html" class="el_package">org.ehrbase.aql.sql.binding</a> &gt; <span class="el_source">JoinBinder.java</span></div><h1>JoinBinder.java</h1><pre class="source lang-java linenums">/*
+ * Copyright (c) 2019 vitasystems GmbH and Hannover Medical School.
+ *
+ * This file is part of project EHRbase
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     https://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.ehrbase.aql.sql.binding;
+
+import static org.ehrbase.jooq.pg.Tables.*;
+
+import java.util.List;
+import java.util.UUID;
+import org.ehrbase.aql.sql.queryimpl.attribute.JoinSetup;
+import org.ehrbase.dao.access.interfaces.I_DomainAccess;
+import org.ehrbase.jooq.pg.tables.records.*;
+import org.jooq.Field;
+import org.jooq.JoinType;
+import org.jooq.SelectQuery;
+import org.jooq.Table;
+import org.jooq.impl.DSL;
+
+/**
+ * Created by christian on 10/31/2016.
+ */
+@SuppressWarnings({&quot;java:S3776&quot;, &quot;java:S3740&quot;, &quot;java:S1452&quot;})
+public class JoinBinder implements IJoinBinder {
+
+    public static final String COMPOSITION_JOIN = &quot;composition_join&quot;;
+<span class="fc" id="L40">    public static final Table&lt;CompositionRecord&gt; compositionRecordTable = COMPOSITION.as(COMPOSITION_JOIN);</span>
+    public static final String SYSTEM_JOIN = &quot;system_join&quot;;
+<span class="fc" id="L42">    public static final Table&lt;SystemRecord&gt; systemRecordTable = SYSTEM.as(SYSTEM_JOIN);</span>
+    public static final String STATUS_JOIN = &quot;status_join&quot;;
+<span class="fc" id="L44">    public static final Table&lt;StatusRecord&gt; statusRecordTable = STATUS.as(STATUS_JOIN);</span>
+    public static final String EHR_JOIN = &quot;ehr_join&quot;;
+<span class="fc" id="L46">    public static final Table&lt;EhrRecord&gt; ehrRecordTable = EHR_.as(EHR_JOIN);</span>
+<span class="fc" id="L47">    public static final Table&lt;PartyIdentifiedRecord&gt; composerRef = PARTY_IDENTIFIED.as(&quot;composer_ref&quot;);</span>
+<span class="fc" id="L48">    public static final Table&lt;PartyIdentifiedRecord&gt; subjectRef = PARTY_IDENTIFIED.as(&quot;subject_ref&quot;);</span>
+<span class="fc" id="L49">    public static final Table&lt;PartyIdentifiedRecord&gt; facilityRef = PARTY_IDENTIFIED.as(&quot;facility_ref&quot;);</span>
+<span class="fc" id="L50">    private boolean compositionJoined = false;</span>
+<span class="fc" id="L51">    private boolean statusJoined = false;</span>
+<span class="fc" id="L52">    private boolean subjectJoin = false;</span>
+<span class="fc" id="L53">    private boolean eventContextJoined = false;</span>
+<span class="fc" id="L54">    private boolean facilityJoined = false;</span>
+<span class="fc" id="L55">    private boolean composerJoined = false;</span>
+<span class="fc" id="L56">    private boolean ehrJoined = false;</span>
+<span class="fc" id="L57">    private boolean systemJoined = false;</span>
+
+    private final I_DomainAccess domainAccess;
+    private final JoinSetup joinSetup;
+
+<span class="fc" id="L62">    public JoinBinder(I_DomainAccess domainAccess, JoinSetup joinSetup) {</span>
+<span class="fc" id="L63">        this.domainAccess = domainAccess;</span>
+<span class="fc" id="L64">        this.joinSetup = joinSetup;</span>
+<span class="fc" id="L65">    }</span>
+
+    /**
+     * Warning: JOIN sequence is important!
+     *
+     * @param  selectQuery
+     */
+    public SelectQuery&lt;?&gt; addJoinClause(SelectQuery&lt;?&gt; selectQuery) {
+
+<span class="pc bpc" id="L74" title="1 of 2 branches missed.">        if (joinSetup == null) return selectQuery;</span>
+
+<span class="fc bfc" id="L76" title="All 4 branches covered.">        if (!joinSetup.isUseEntry() &amp;&amp; noJoinRequired(joinSetup)) {</span>
+<span class="fc" id="L77">            selectQuery = simpleFromClause(selectQuery, joinSetup);</span>
+        } else {
+<span class="pc bpc" id="L79" title="1 of 2 branches missed.">            if (joinSetup.isJoinSubject()) {</span>
+<span class="nc" id="L80">                joinSubject(selectQuery, joinSetup);</span>
+            }
+<span class="fc bfc" id="L82" title="All 2 branches covered.">            if (joinSetup.isJoinComposition()) {</span>
+<span class="fc" id="L83">                joinComposition(selectQuery);</span>
+            }
+<span class="fc bfc" id="L85" title="All 2 branches covered.">            if (joinSetup.isJoinEventContext()) {</span>
+<span class="fc" id="L86">                joinEventContext(selectQuery);</span>
+            }
+<span class="pc bpc" id="L88" title="1 of 2 branches missed.">            if (joinSetup.isJoinContextFacility()) {</span>
+<span class="nc" id="L89">                joinContextFacility(selectQuery);</span>
+            }
+<span class="fc bfc" id="L91" title="All 2 branches covered.">            if (joinSetup.isJoinComposer()) {</span>
+<span class="fc" id="L92">                joinComposer(selectQuery);</span>
+            }
+<span class="fc bfc" id="L94" title="All 2 branches covered.">            if (joinSetup.isJoinEhr()) {</span>
+<span class="fc" id="L95">                joinEhr(selectQuery);</span>
+            }
+<span class="pc bpc" id="L97" title="1 of 2 branches missed.">            if (joinSetup.isJoinSystem()) {</span>
+<span class="nc" id="L98">                joinSystem(selectQuery);</span>
+            }
+<span class="fc bfc" id="L100" title="All 2 branches covered.">            if (joinSetup.isJoinEhrStatus()) {</span>
+<span class="fc" id="L101">                joinEhrStatus(selectQuery, joinSetup);</span>
+            }
+        }
+
+<span class="fc" id="L105">        return selectQuery;</span>
+    }
+
+    private boolean noJoinRequired(JoinSetup joinSetup) {
+<span class="fc bfc" id="L109" title="All 2 branches covered.">        return (joinSetup.isJoinComposer() ? 2 : 0)</span>
+<span class="pc bpc" id="L110" title="1 of 2 branches missed.">                        + (joinSetup.isJoinEventContext() ? 1 : 0)</span>
+<span class="pc bpc" id="L111" title="1 of 2 branches missed.">                        + (joinSetup.isJoinComposition() ? 2 : 0)</span>
+<span class="pc bpc" id="L112" title="1 of 2 branches missed.">                        + (joinSetup.isJoinContextFacility() ? 2 : 0)</span>
+<span class="fc bfc" id="L113" title="All 2 branches covered.">                        + (joinSetup.isJoinEhr() ? 1 : 0)</span>
+<span class="fc bfc" id="L114" title="All 2 branches covered.">                        + (joinSetup.isJoinEhrStatus() ? 2 : 0)</span>
+<span class="pc bpc" id="L115" title="1 of 2 branches missed.">                        + (joinSetup.isJoinSubject() ? 2 : 0)</span>
+<span class="pc bpc" id="L116" title="1 of 4 branches missed.">                        + (joinSetup.isJoinSystem() ? 1 : 0)</span>
+                == 1;
+    }
+
+    /**
+     * identify the initial from table to use (ENTRY or EHR)
+     * @return
+     */
+    public Table initialFrom() {
+<span class="fc bfc" id="L125" title="All 2 branches covered.">        if (joinSetup.isUseEntry()) return ENTRY;</span>
+        else {
+<span class="pc bpc" id="L127" title="1 of 4 branches missed.">            if (joinSetup.isJoinEhrStatus() || joinSetup.isJoinSubject()) {</span>
+<span class="fc" id="L128">                joinSetup.setJoinEhr(false); // since this is the initial table</span>
+<span class="fc" id="L129">                return EHR_.as(EHR_JOIN); // we keep the logic re ref table ids</span>
+<span class="fc" id="L130">            } else return ENTRY;</span>
+        }
+    }
+
+    private SelectQuery&lt;?&gt; simpleFromClause(SelectQuery&lt;?&gt; selectQuery, JoinSetup joinSetup) {
+
+<span class="fc" id="L136">        List&lt;Field&lt;?&gt;&gt; selectFields = selectQuery.getSelect();</span>
+<span class="fc" id="L137">        SelectQuery&lt;?&gt; selectQuery1 = domainAccess.getContext().selectQuery();</span>
+<span class="fc" id="L138">        selectQuery1.addSelect(selectFields);</span>
+
+<span class="pc bpc" id="L140" title="1 of 2 branches missed.">        if (joinSetup.isJoinEhr()) {</span>
+<span class="fc" id="L141">            selectQuery1.addFrom(EHR_.as(EHR_JOIN));</span>
+<span class="nc bnc" id="L142" title="All 2 branches missed.">        } else if (joinSetup.isJoinComposition()) {</span>
+<span class="nc" id="L143">            selectQuery1.addFrom(COMPOSITION.as(COMPOSITION_JOIN));</span>
+<span class="nc bnc" id="L144" title="All 2 branches missed.">        } else if (joinSetup.isJoinSystem()) {</span>
+<span class="nc" id="L145">            selectQuery1.addFrom(SYSTEM.as(SYSTEM_JOIN));</span>
+        }
+<span class="fc" id="L147">        return selectQuery1;</span>
+    }
+
+    private void joinComposition(SelectQuery&lt;?&gt; selectQuery) {
+<span class="fc bfc" id="L151" title="All 2 branches covered.">        if (compositionJoined) return;</span>
+<span class="fc" id="L152">        selectQuery.addJoin(</span>
+                compositionRecordTable,
+                JoinType.RIGHT_OUTER_JOIN,
+<span class="fc" id="L155">                DSL.field(compositionRecordTable.field(COMPOSITION.ID)).eq(ENTRY.COMPOSITION_ID));</span>
+<span class="fc" id="L156">        compositionJoined = true;</span>
+<span class="fc" id="L157">    }</span>
+
+    private void joinSystem(SelectQuery&lt;?&gt; selectQuery) {
+<span class="nc bnc" id="L160" title="All 2 branches missed.">        if (systemJoined) return;</span>
+<span class="nc" id="L161">        selectQuery.addJoin(</span>
+                systemRecordTable,
+                JoinType.JOIN,
+<span class="nc" id="L164">                DSL.field(systemRecordTable.field(SYSTEM.ID))</span>
+<span class="nc" id="L165">                        .eq(DSL.field(ehrRecordTable.field(EHR_.SYSTEM_ID.getName(), UUID.class))));</span>
+<span class="nc" id="L166">        systemJoined = true;</span>
+<span class="nc" id="L167">    }</span>
+
+    private void joinEhrStatus(SelectQuery&lt;?&gt; selectQuery, JoinSetup joinSetup) {
+<span class="pc bpc" id="L170" title="1 of 2 branches missed.">        if (statusJoined) return;</span>
+<span class="pc bpc" id="L171" title="2 of 4 branches missed.">        if (joinSetup.isJoinComposition() || joinSetup.isUseEntry()) {</span>
+<span class="nc" id="L172">            joinComposition(selectQuery);</span>
+<span class="nc" id="L173">            selectQuery.addJoin(</span>
+                    statusRecordTable,
+<span class="nc" id="L175">                    DSL.field(statusRecordTable.field(STATUS.EHR_ID.getName(), UUID.class))</span>
+<span class="nc" id="L176">                            .eq(DSL.field(compositionRecordTable.field(COMPOSITION.EHR_ID.getName(), UUID.class))));</span>
+<span class="nc" id="L177">            statusJoined = true;</span>
+        } else { // assume it is joined on EHR
+<span class="pc bpc" id="L179" title="1 of 2 branches missed.">            if (joinSetup.isJoinEhr()) joinEhr(selectQuery);</span>
+<span class="fc" id="L180">            selectQuery.addJoin(</span>
+                    statusRecordTable,
+<span class="fc" id="L182">                    DSL.field(statusRecordTable.field(STATUS.EHR_ID.getName(), UUID.class))</span>
+<span class="fc" id="L183">                            .eq(DSL.field(ehrRecordTable.field(EHR_.ID.getName(), UUID.class))));</span>
+<span class="fc" id="L184">            statusJoined = true;</span>
+        }
+<span class="fc" id="L186">    }</span>
+
+    private void joinSubject(SelectQuery&lt;?&gt; selectQuery, JoinSetup joinSetup) {
+<span class="nc bnc" id="L189" title="All 2 branches missed.">        if (subjectJoin) return;</span>
+<span class="nc" id="L190">        joinEhrStatus(selectQuery, joinSetup);</span>
+<span class="nc" id="L191">        Table&lt;PartyIdentifiedRecord&gt; subjectTable = subjectRef;</span>
+<span class="nc" id="L192">        selectQuery.addJoin(</span>
+                subjectTable,
+<span class="nc" id="L194">                DSL.field(subjectTable.field(PARTY_IDENTIFIED.ID.getName(), UUID.class))</span>
+<span class="nc" id="L195">                        .eq(DSL.field(statusRecordTable.field(STATUS.PARTY.getName(), UUID.class))));</span>
+<span class="nc" id="L196">        subjectJoin = true;</span>
+<span class="nc" id="L197">    }</span>
+
+    private void joinEventContext(SelectQuery&lt;?&gt; selectQuery) {
+<span class="pc bpc" id="L200" title="1 of 2 branches missed.">        if (eventContextJoined) return;</span>
+<span class="fc" id="L201">        selectQuery.addJoin(EVENT_CONTEXT, EVENT_CONTEXT.COMPOSITION_ID.eq(ENTRY.COMPOSITION_ID));</span>
+<span class="fc" id="L202">        eventContextJoined = true;</span>
+<span class="fc" id="L203">    }</span>
+
+    private void joinContextFacility(SelectQuery&lt;?&gt; selectQuery) {
+<span class="nc bnc" id="L206" title="All 2 branches missed.">        if (facilityJoined) return;</span>
+<span class="nc" id="L207">        joinEventContext(selectQuery);</span>
+<span class="nc" id="L208">        Table&lt;PartyIdentifiedRecord&gt; facilityTable = facilityRef;</span>
+<span class="nc" id="L209">        selectQuery.addJoin(</span>
+                facilityTable,
+                JoinType.LEFT_OUTER_JOIN,
+<span class="nc" id="L212">                EVENT_CONTEXT.FACILITY.eq(DSL.field(facilityTable.field(PARTY_IDENTIFIED.ID.getName(), UUID.class))));</span>
+<span class="nc" id="L213">        facilityJoined = true;</span>
+<span class="nc" id="L214">    }</span>
+
+    private void joinComposer(SelectQuery&lt;?&gt; selectQuery) {
+<span class="pc bpc" id="L217" title="1 of 2 branches missed.">        if (composerJoined) return;</span>
+<span class="fc" id="L218">        joinComposition(selectQuery);</span>
+<span class="fc" id="L219">        Table&lt;PartyIdentifiedRecord&gt; composerTable = composerRef;</span>
+<span class="fc" id="L220">        selectQuery.addJoin(</span>
+                composerTable,
+<span class="fc" id="L222">                DSL.field(compositionRecordTable.field(COMPOSITION.COMPOSER.getName(), UUID.class))</span>
+<span class="fc" id="L223">                        .eq(DSL.field(composerTable.field(PARTY_IDENTIFIED.ID.getName(), UUID.class))));</span>
+<span class="fc" id="L224">        composerJoined = true;</span>
+<span class="fc" id="L225">    }</span>
+
+    private void joinEhr(SelectQuery&lt;?&gt; selectQuery) {
+<span class="pc bpc" id="L228" title="1 of 2 branches missed.">        if (ehrJoined) return;</span>
+<span class="fc" id="L229">        joinComposition(selectQuery);</span>
+<span class="fc" id="L230">        selectQuery.addJoin(</span>
+                ehrRecordTable,
+                JoinType.RIGHT_OUTER_JOIN,
+<span class="fc" id="L233">                DSL.field(ehrRecordTable.field(EHR_.ID.getName(), UUID.class))</span>
+<span class="fc" id="L234">                        .eq(DSL.field(compositionRecordTable.field(COMPOSITION.EHR_ID.getName(), UUID.class))));</span>
+<span class="fc" id="L235">        ehrJoined = true;</span>
+<span class="fc" id="L236">    }</span>
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.7.202105040129</span></div></body></html>

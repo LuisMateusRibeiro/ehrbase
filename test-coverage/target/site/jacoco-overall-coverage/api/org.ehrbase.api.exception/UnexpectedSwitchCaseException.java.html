@@ -1,0 +1,157 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../../jacoco-resources/report.gif" type="image/gif"/><title>UnexpectedSwitchCaseException.java</title><link rel="stylesheet" href="../../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../../index.html" class="el_report">Overall Coverage</a> &gt; <a href="../index.html" class="el_bundle">api</a> &gt; <a href="index.source.html" class="el_package">org.ehrbase.api.exception</a> &gt; <span class="el_source">UnexpectedSwitchCaseException.java</span></div><h1>UnexpectedSwitchCaseException.java</h1><pre class="source lang-java linenums">/*
+ * Copyright (c) 2019 vitasystems GmbH and Hannover Medical School.
+ *
+ * This file is part of project EHRbase
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     https://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.ehrbase.api.exception;
+
+import org.apache.commons.lang3.StringUtils;
+
+/**
+ * &lt;p&gt;
+ * This exception is thrown when a case has occurred in a switch block that cannot be handled correctly.
+ * &lt;/p&gt;
+ * &lt;p&gt;
+ * Typical uses in a switch statement:
+ * &lt;ol&gt;
+ * &lt;li&gt;unexpected default case&lt;/li&gt;
+ * &lt;li&gt;explicitly not sensibly treatable case&lt;/li&gt;
+ * &lt;li&gt;unexpected default case with fall-through of not sensibly treatable case (combination of 1. and 2.)&lt;/li&gt;
+ * &lt;/ol&gt;
+ *
+ * @author Jan Falkenstern, Stefan Kock
+ */
+public class UnexpectedSwitchCaseException extends RuntimeException {
+
+    private static final long serialVersionUID = 5695009820197756438L;
+
+    /**
+     * Creates a message from the &lt;code&gt;enumValue&lt;/code&gt; parameter.&lt;br /&gt;
+     * The message is based on &lt;code&gt;enumValue.name()&lt;/code&gt;,
+     * so that the format is stable, e.g. in case of i18n.
+     *
+     * @param enumValue must not be null
+     */
+    public UnexpectedSwitchCaseException(Enum&lt;?&gt; enumValue) {
+<span class="nc" id="L48">        super(formatMessage(enumValue, null));</span>
+<span class="nc" id="L49">    }</span>
+
+    /**
+     * Creates a message from the &lt;code&gt;enumValue&lt;/code&gt; parameter.&lt;br /&gt;
+     * The message is based on &lt;code&gt;enumValue.name()&lt;/code&gt;,
+     * so that the format is stable, e.g. in case of i18n.
+     *
+     * @param enumValue         must not be null
+     * @param additionalMessage additional text for generated message
+     */
+    public UnexpectedSwitchCaseException(Enum&lt;?&gt; enumValue, String additionalMessage) {
+<span class="nc" id="L60">        super(formatMessage(enumValue, additionalMessage));</span>
+<span class="nc" id="L61">    }</span>
+
+    /**
+     * Creates a message from the &lt;code&gt;intValue&lt;/code&gt; parameter
+     *
+     * @param intValue
+     */
+    public UnexpectedSwitchCaseException(Integer intValue) {
+<span class="nc" id="L69">        super(formatMessage(intValue, null));</span>
+<span class="nc" id="L70">    }</span>
+
+    /**
+     * Creates a message from the &lt;code&gt;intValue&lt;/code&gt; parameter
+     *
+     * @param intValue
+     * @param additionalMessage additional text for generated message
+     */
+    public UnexpectedSwitchCaseException(Integer intValue, String additionalMessage) {
+<span class="nc" id="L79">        super(formatMessage(intValue, additionalMessage));</span>
+<span class="nc" id="L80">    }</span>
+
+    /**
+     * Creates a message from the &lt;code&gt;stringValue&lt;/code&gt; parameter
+     *
+     * @param stringValue
+     */
+    public UnexpectedSwitchCaseException(String stringValue) {
+<span class="nc" id="L88">        super(formatMessage(stringValue, null));</span>
+<span class="nc" id="L89">    }</span>
+
+    /**
+     * Creates a message from the &lt;code&gt;stringValue&lt;/code&gt; parameter
+     *
+     * @param stringValue
+     * @param additionalMessage additional text for generated message
+     */
+    public UnexpectedSwitchCaseException(String stringValue, String additionalMessage) {
+<span class="nc" id="L98">        super(formatMessage(stringValue, additionalMessage));</span>
+<span class="nc" id="L99">    }</span>
+
+    /**
+     * Creates the message of a {@link UnexpectedSwitchCaseException} containing the simple class name of the &lt;code&gt;enumValue&lt;/code&gt; parameter.
+     * The message is based on &lt;code&gt;enumValue.name()&lt;/code&gt;,
+     * so that the format is stable, e.g. in case of i18n.
+     *
+     * @param enumValue         must not be null
+     * @param additionalMessage additional text for generated message (optional)
+     * @return
+     */
+    public static String formatMessage(Enum&lt;?&gt; enumValue, String additionalMessage) {
+
+<span class="nc" id="L112">        return formatMessage(enumValue.getClass().getSimpleName(), enumValue.name(), additionalMessage);</span>
+    }
+
+    /**
+     * Creates the message of a {@link UnexpectedSwitchCaseException} based on the given parameters.
+     *
+     * @param value
+     * @param additionalMessage additional text for generated message (optional)
+     * @return
+     */
+    public static String formatMessage(Object value, String additionalMessage) {
+
+<span class="nc" id="L124">        return formatMessage(null, value, additionalMessage);</span>
+    }
+
+    /**
+     * Creates the message of a {@link UnexpectedSwitchCaseException} based on the given parameters.
+     *
+     * @param type              e.g. &lt;code&gt;enumValue.getClass().getSimpleName()&lt;/code&gt;
+     * @param value             unsupported value in switch
+     * @param additionalMessage additional text for generated message (optional)
+     * @return
+     */
+    public static String formatMessage(String type, Object value, String additionalMessage) {
+
+<span class="nc" id="L137">        StringBuilder sb = new StringBuilder();</span>
+<span class="nc" id="L138">        sb.append(&quot;Unexpected value&quot;);</span>
+
+<span class="nc bnc" id="L140" title="All 2 branches missed.">        if (StringUtils.isNotBlank(type)) {</span>
+<span class="nc" id="L141">            sb.append(&quot; of &quot;);</span>
+<span class="nc" id="L142">            sb.append(type);</span>
+        }
+
+<span class="nc" id="L145">        sb.append(&quot;: '&quot;);</span>
+<span class="nc" id="L146">        sb.append(value);</span>
+<span class="nc" id="L147">        sb.append(&quot;'&quot;);</span>
+
+<span class="nc bnc" id="L149" title="All 2 branches missed.">        if (StringUtils.isNotBlank(additionalMessage)) {</span>
+<span class="nc" id="L150">            sb.append(&quot;; &quot;);</span>
+<span class="nc" id="L151">            sb.append(additionalMessage);</span>
+        }
+
+<span class="nc" id="L154">        return sb.toString();</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.7.202105040129</span></div></body></html>

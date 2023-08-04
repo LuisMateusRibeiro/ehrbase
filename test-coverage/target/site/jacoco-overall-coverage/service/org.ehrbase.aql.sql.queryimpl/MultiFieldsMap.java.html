@@ -1,0 +1,111 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../../jacoco-resources/report.gif" type="image/gif"/><title>MultiFieldsMap.java</title><link rel="stylesheet" href="../../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../../index.html" class="el_report">Overall Coverage</a> &gt; <a href="../index.html" class="el_bundle">service</a> &gt; <a href="index.source.html" class="el_package">org.ehrbase.aql.sql.queryimpl</a> &gt; <span class="el_source">MultiFieldsMap.java</span></div><h1>MultiFieldsMap.java</h1><pre class="source lang-java linenums">/*
+ * Copyright (c) 2020 vitasystems GmbH and Hannover Medical School.
+ *
+ * This file is part of project EHRbase
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     https://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.ehrbase.aql.sql.queryimpl;
+
+import java.util.*;
+import java.util.stream.Collectors;
+import org.ehrbase.aql.definition.LateralJoinDefinition;
+
+public class MultiFieldsMap {
+
+    protected Map&lt;String, MultiFields&gt; multiFieldsListAsMap;
+
+<span class="fc" id="L28">    public MultiFieldsMap(List&lt;MultiFields&gt; multiFieldsList) {</span>
+<span class="fc" id="L29">        this.multiFieldsListAsMap = toMap(multiFieldsList);</span>
+<span class="fc" id="L30">    }</span>
+
+<span class="fc" id="L32">    public MultiFieldsMap() {}</span>
+
+    private Map&lt;String, MultiFields&gt; toMap(List&lt;MultiFields&gt; multiFieldsList) {
+
+<span class="fc" id="L36">        Map&lt;String, MultiFields&gt; multiMap = new LinkedHashMap&lt;&gt;(); // preserve order of insertion</span>
+
+<span class="fc bfc" id="L38" title="All 2 branches covered.">        for (MultiFields multiFields : multiFieldsList) {</span>
+<span class="fc bfc" id="L39" title="All 2 branches covered.">            if (!multiFields.isEmpty())</span>
+<span class="fc" id="L40">                multiMap.put(</span>
+<span class="fc" id="L41">                        variableIdentifierPath(</span>
+<span class="fc" id="L42">                                multiFields.getVariableDefinition().getIdentifier(),</span>
+<span class="fc" id="L43">                                multiFields.getVariableDefinition().getPath()),</span>
+                        multiFields);
+<span class="fc" id="L45">        }</span>
+<span class="fc" id="L46">        return multiMap;</span>
+    }
+
+    public MultiFields get(String identifierPath) {
+<span class="nc" id="L50">        return multiFieldsListAsMap.get(identifierPath);</span>
+    }
+
+    public MultiFields get(String variableIdentifier, String variablePath) {
+        // seek for multifields where the variable matches identifier and path
+<span class="fc" id="L55">        List&lt;MultiFields&gt; result = multiFieldsListAsMap.values().stream()</span>
+<span class="fc bfc" id="L56" title="All 2 branches covered.">                .filter(v -&gt; v.getVariableDefinition().getIdentifier().equals(variableIdentifier)</span>
+<span class="fc bfc" id="L57" title="All 2 branches covered.">                        &amp;&amp; v.getVariableDefinition().getPath() != null</span>
+<span class="fc bfc" id="L58" title="All 2 branches covered.">                        &amp;&amp; v.getVariableDefinition().getPath().equals(variablePath))</span>
+<span class="fc" id="L59">                .collect(Collectors.toList());</span>
+<span class="fc bfc" id="L60" title="All 2 branches covered.">        if (result.isEmpty()) return null;</span>
+<span class="fc" id="L61">        else return result.get(0); // by construction, the result is unique</span>
+    }
+
+    private String variableIdentifierPath(String variableIdentifier, String variablePath) {
+<span class="fc" id="L65">        return variableIdentifier + &quot;::&quot; + variablePath;</span>
+    }
+
+    public Iterator&lt;MultiFields&gt; multiFieldsIterator() {
+<span class="fc" id="L69">        return multiFieldsListAsMap.values().iterator();</span>
+    }
+
+    /**
+     * return the upper limit of all paths in the map
+     */
+    public int upperPathBoundary() {
+<span class="fc" id="L76">        int upperbound = 0;</span>
+
+<span class="fc bfc" id="L78" title="All 2 branches covered.">        for (MultiFields multiFields : multiFieldsListAsMap.values()) {</span>
+<span class="fc bfc" id="L79" title="All 2 branches covered.">            if (multiFields.fieldsSize() &gt; upperbound) upperbound = multiFields.fieldsSize();</span>
+<span class="fc" id="L80">        }</span>
+<span class="fc" id="L81">        return upperbound;</span>
+    }
+
+    /**
+     * traverse the list of existing definition and identify a lateral join matching this variable path, template and SQL expression
+     * @param templateId
+     * @param candidateLateralExpression
+     * @return
+     */
+    public Optional&lt;LateralJoinDefinition&gt; matchingLateralJoin(String templateId, String candidateLateralExpression) {
+<span class="fc" id="L91">        return matchingLateralJoin(multiFieldsListAsMap.values(), templateId, candidateLateralExpression);</span>
+    }
+
+    /**
+     * traverse the list of existing definition and identify a lateral join matching this variable path, template and SQL expression
+     * @param multiFieldsCollection
+     * @param templateId
+     * @param candidateLateralExpression
+     * @return
+     */
+    public static Optional&lt;LateralJoinDefinition&gt; matchingLateralJoin(
+            Collection&lt;MultiFields&gt; multiFieldsCollection, String templateId, String candidateLateralExpression) {
+<span class="fc" id="L103">        return multiFieldsCollection.stream()</span>
+<span class="fc" id="L104">                .map(MultiFields::getVariableDefinition)</span>
+<span class="fc" id="L105">                .map(vd -&gt; vd.getLastLateralJoin(templateId))</span>
+<span class="fc" id="L106">                .filter(Objects::nonNull)</span>
+<span class="fc" id="L107">                .filter(lj -&gt; lj.getSqlExpression().equals(candidateLateralExpression))</span>
+<span class="fc" id="L108">                .findFirst();</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.7.202105040129</span></div></body></html>

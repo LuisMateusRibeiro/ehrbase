@@ -1,0 +1,125 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../../jacoco-resources/report.gif" type="image/gif"/><title>CorsProperties.java</title><link rel="stylesheet" href="../../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../../index.html" class="el_report">Coverage with Unit Tests</a> &gt; <a href="../index.html" class="el_bundle">application</a> &gt; <a href="index.source.html" class="el_package">org.ehrbase.application.config.web</a> &gt; <span class="el_source">CorsProperties.java</span></div><h1>CorsProperties.java</h1><pre class="source lang-java linenums">/*
+ * Copyright (c) 2021 vitasystems GmbH and Hannover Medical School.
+ *
+ * This file is part of project EHRbase
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     https://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.ehrbase.application.config.web;
+
+import java.time.Duration;
+import java.time.temporal.ChronoUnit;
+import java.util.ArrayList;
+import java.util.List;
+import org.springframework.boot.context.properties.ConfigurationProperties;
+import org.springframework.boot.context.properties.PropertyMapper;
+import org.springframework.boot.convert.DurationUnit;
+import org.springframework.util.CollectionUtils;
+import org.springframework.web.cors.CorsConfiguration;
+
+/**
+ * {@link ConfigurationProperties} for CORS support.
+ *
+ * @see org.springframework.boot.actuate.autoconfigure.endpoint.web.CorsEndpointProperties
+ */
+@ConfigurationProperties(prefix = &quot;web.cors&quot;)
+<span class="nc" id="L36">public class CorsProperties {</span>
+
+<span class="nc" id="L38">    private List&lt;String&gt; allowedOrigins = new ArrayList&lt;&gt;();</span>
+
+<span class="nc" id="L40">    private List&lt;String&gt; allowedOriginPatterns = new ArrayList&lt;&gt;();</span>
+
+<span class="nc" id="L42">    private List&lt;String&gt; allowedMethods = new ArrayList&lt;&gt;();</span>
+
+<span class="nc" id="L44">    private List&lt;String&gt; allowedHeaders = new ArrayList&lt;&gt;();</span>
+
+<span class="nc" id="L46">    private List&lt;String&gt; exposedHeaders = new ArrayList&lt;&gt;();</span>
+
+    private Boolean allowCredentials;
+
+<span class="nc" id="L50">    @DurationUnit(ChronoUnit.SECONDS)</span>
+<span class="nc" id="L51">    private Duration maxAge = Duration.ofSeconds(1800);</span>
+
+    public List&lt;String&gt; getAllowedOrigins() {
+<span class="nc" id="L54">        return allowedOrigins;</span>
+    }
+
+    public void setAllowedOrigins(List&lt;String&gt; allowedOrigins) {
+<span class="nc" id="L58">        this.allowedOrigins = allowedOrigins;</span>
+<span class="nc" id="L59">    }</span>
+
+    public List&lt;String&gt; getAllowedOriginPatterns() {
+<span class="nc" id="L62">        return allowedOriginPatterns;</span>
+    }
+
+    public void setAllowedOriginPatterns(List&lt;String&gt; allowedOriginPatterns) {
+<span class="nc" id="L66">        this.allowedOriginPatterns = allowedOriginPatterns;</span>
+<span class="nc" id="L67">    }</span>
+
+    public List&lt;String&gt; getAllowedMethods() {
+<span class="nc" id="L70">        return allowedMethods;</span>
+    }
+
+    public void setAllowedMethods(List&lt;String&gt; allowedMethods) {
+<span class="nc" id="L74">        this.allowedMethods = allowedMethods;</span>
+<span class="nc" id="L75">    }</span>
+
+    public List&lt;String&gt; getAllowedHeaders() {
+<span class="nc" id="L78">        return allowedHeaders;</span>
+    }
+
+    public void setAllowedHeaders(List&lt;String&gt; allowedHeaders) {
+<span class="nc" id="L82">        this.allowedHeaders = allowedHeaders;</span>
+<span class="nc" id="L83">    }</span>
+
+    public List&lt;String&gt; getExposedHeaders() {
+<span class="nc" id="L86">        return exposedHeaders;</span>
+    }
+
+    public void setExposedHeaders(List&lt;String&gt; exposedHeaders) {
+<span class="nc" id="L90">        this.exposedHeaders = exposedHeaders;</span>
+<span class="nc" id="L91">    }</span>
+
+    public Boolean getAllowCredentials() {
+<span class="nc" id="L94">        return allowCredentials;</span>
+    }
+
+    public void setAllowCredentials(Boolean allowCredentials) {
+<span class="nc" id="L98">        this.allowCredentials = allowCredentials;</span>
+<span class="nc" id="L99">    }</span>
+
+    public Duration getMaxAge() {
+<span class="nc" id="L102">        return this.maxAge;</span>
+    }
+
+    public void setMaxAge(Duration maxAge) {
+<span class="nc" id="L106">        this.maxAge = maxAge;</span>
+<span class="nc" id="L107">    }</span>
+
+    public CorsConfiguration toCorsConfiguration() {
+<span class="nc bnc" id="L110" title="All 4 branches missed.">        if (CollectionUtils.isEmpty(this.allowedOrigins) &amp;&amp; CollectionUtils.isEmpty(this.allowedOriginPatterns)) {</span>
+<span class="nc" id="L111">            return null;</span>
+        }
+<span class="nc" id="L113">        PropertyMapper map = PropertyMapper.get();</span>
+<span class="nc" id="L114">        CorsConfiguration configuration = new CorsConfiguration();</span>
+<span class="nc" id="L115">        map.from(this::getAllowedOrigins).to(configuration::setAllowedOrigins);</span>
+<span class="nc" id="L116">        map.from(this::getAllowedOriginPatterns).to(configuration::setAllowedOriginPatterns);</span>
+<span class="nc" id="L117">        map.from(this::getAllowedHeaders).whenNot(CollectionUtils::isEmpty).to(configuration::setAllowedHeaders);</span>
+<span class="nc" id="L118">        map.from(this::getAllowedMethods).whenNot(CollectionUtils::isEmpty).to(configuration::setAllowedMethods);</span>
+<span class="nc" id="L119">        map.from(this::getExposedHeaders).whenNot(CollectionUtils::isEmpty).to(configuration::setExposedHeaders);</span>
+<span class="nc" id="L120">        map.from(this::getMaxAge).whenNonNull().as(Duration::getSeconds).to(configuration::setMaxAge);</span>
+<span class="nc" id="L121">        map.from(this::getAllowCredentials).whenNonNull().to(configuration::setAllowCredentials);</span>
+<span class="nc" id="L122">        return configuration;</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.7.202105040129</span></div></body></html>

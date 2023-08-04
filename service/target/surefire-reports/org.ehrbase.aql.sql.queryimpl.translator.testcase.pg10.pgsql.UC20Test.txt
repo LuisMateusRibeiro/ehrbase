@@ -1,0 +1,4 @@
+-------------------------------------------------------------------------------
+Test set: org.ehrbase.aql.sql.queryimpl.translator.testcase.pg10.pgsql.UC20Test
+-------------------------------------------------------------------------------
+Tests run: 1, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.701 s -- in org.ehrbase.aql.sql.queryimpl.translator.testcase.pg10.pgsql.UC20Test

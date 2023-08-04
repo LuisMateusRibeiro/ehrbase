@@ -1,0 +1,337 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../../jacoco-resources/report.gif" type="image/gif"/><title>JsonbEntryQuery.java</title><link rel="stylesheet" href="../../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../../index.html" class="el_report">Overall Coverage</a> &gt; <a href="../index.html" class="el_bundle">service</a> &gt; <a href="index.source.html" class="el_package">org.ehrbase.aql.sql.queryimpl</a> &gt; <span class="el_source">JsonbEntryQuery.java</span></div><h1>JsonbEntryQuery.java</h1><pre class="source lang-java linenums">/*
+ * Copyright (c) 2019 vitasystems GmbH and Hannover Medical School.
+ *
+ * This file is part of project EHRbase
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     https://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.ehrbase.aql.sql.queryimpl;
+
+import static org.ehrbase.aql.sql.queryimpl.QueryImplConstants.AQL_NODE_ITERATIVE_MARKER;
+import static org.ehrbase.jooq.pg.Tables.ENTRY;
+
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
+import java.util.Set;
+import java.util.stream.Collectors;
+import org.apache.commons.lang3.StringUtils;
+import org.ehrbase.aql.definition.I_VariableDefinition;
+import org.ehrbase.aql.sql.PathResolver;
+import org.ehrbase.dao.access.interfaces.I_DomainAccess;
+import org.ehrbase.openehr.sdk.webtemplate.model.WebTemplate;
+import org.ehrbase.service.IntrospectService;
+import org.jooq.DataType;
+import org.jooq.Field;
+import org.jooq.impl.DSL;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+/**
+ * Generate an SQL field corresponding to a JSONB data value query
+ * Created by christian on 5/6/2016.
+ */
+@SuppressWarnings({&quot;java:S3776&quot;, &quot;java:S3740&quot;, &quot;java:S1452&quot;, &quot;java:S1075&quot;})
+public class JsonbEntryQuery extends ObjectQuery implements IQueryImpl {
+
+    public static final String MAGNITUDE = &quot;magnitude&quot;;
+<span class="fc" id="L48">    Logger logger = LoggerFactory.getLogger(JsonbEntryQuery.class);</span>
+
+    private static final String JSONB_PATH_SELECTOR_EXPR = &quot; #&gt;&gt; '{&quot;;
+    private static final String JSONB_AT_AT_SELECTOR_EXPR = &quot; @@ '&quot;;
+<span class="fc" id="L52">    private static final String JSONB_SELECTOR_COMPOSITION_OPEN = ENTRY.ENTRY_ + JSONB_PATH_SELECTOR_EXPR;</span>
+<span class="fc" id="L53">    public static final String JSQUERY_COMPOSITION_OPEN = ENTRY.ENTRY_ + JSONB_AT_AT_SELECTOR_EXPR;</span>
+
+    public static final String COMPOSITION = &quot;composition&quot;;
+    public static final String CONTENT = &quot;content&quot;;
+    public static final String ACTIVITIES = &quot;activities&quot;;
+    public static final String EVENTS = &quot;events&quot;;
+    public static final String ITEMS = &quot;items&quot;;
+
+    public static final String PROTOCOL = &quot;protocol&quot;;
+    public static final String DATA = &quot;data&quot;;
+    public static final String DESCRIPTION = &quot;description&quot;;
+    public static final String INSTRUCTION = &quot;instruction&quot;;
+    public static final String ACTIVITY = &quot;activity&quot;;
+    public static final String ENTRY1 = &quot;entry&quot;;
+    public static final String EVALUATION = &quot;evaluation&quot;;
+    public static final String OBSERVATION = &quot;observation&quot;;
+    public static final String ACTION = &quot;action&quot;;
+
+    public static final String VALUE = &quot;value&quot;;
+    public static final String DEFINING_CODE = &quot;definingCode&quot;;
+    public static final String TIME = &quot;time&quot;;
+    public static final String NAME = &quot;name&quot;;
+    public static final String ORIGIN = &quot;origin&quot;;
+    public static final String MAPPINGS = &quot;mappings&quot;;
+    public static final String PURPOSE = &quot;purpose&quot;;
+    public static final String TARGET = &quot;target&quot;;
+    public static final String TERMINOLOGY_ID = &quot;terminologyId&quot;;
+
+    // Generic stuff
+    private static final String JSONB_SELECTOR_CLOSE = &quot;}'&quot;;
+    public static final String JSQUERY_CLOSE = &quot; '::jsquery&quot;;
+
+    public static final String TAG_ACTIVITIES = &quot;/&quot; + ACTIVITIES;
+    public static final String TAG_EVENTS = &quot;/&quot; + EVENTS;
+    public static final String TAG_COMPOSITION = &quot;/&quot; + COMPOSITION;
+    public static final String TAG_CONTENT = &quot;/&quot; + CONTENT;
+    public static final String TAG_ITEMS = &quot;/&quot; + ITEMS;
+
+<span class="fc" id="L91">    private static final String[] listIdentifier = {TAG_CONTENT, TAG_ITEMS, TAG_ACTIVITIES, TAG_EVENTS};</span>
+
+<span class="fc" id="L93">    private boolean ignoreUnresolvedIntrospect = false;</span>
+
+<span class="fc" id="L95">    private static final String ENV_IGNORE_UNRESOLVED_INTROSPECT = &quot;aql.ignoreUnresolvedIntrospect&quot;;</span>
+
+    private final IntrospectService introspectCache;
+
+    public JsonbEntryQuery(I_DomainAccess domainAccess, IntrospectService introspectCache, PathResolver pathResolver) {
+<span class="fc" id="L100">        super(domainAccess, pathResolver);</span>
+<span class="fc" id="L101">        this.introspectCache = introspectCache;</span>
+<span class="fc" id="L102">        ignoreUnresolvedIntrospect =</span>
+<span class="fc" id="L103">                Boolean.parseBoolean(System.getProperty(ENV_IGNORE_UNRESOLVED_INTROSPECT, &quot;false&quot;));</span>
+<span class="fc" id="L104">    }</span>
+
+<span class="fc" id="L106">    public enum PATH_PART {</span>
+<span class="fc" id="L107">        IDENTIFIER_PATH_PART,</span>
+<span class="fc" id="L108">        VARIABLE_PATH_PART</span>
+    }
+
+<span class="nc" id="L111">    public enum OTHER_ITEM {</span>
+<span class="nc" id="L112">        OTHER_DETAILS,</span>
+<span class="nc" id="L113">        OTHER_CONTEXT</span>
+    }
+
+    private int retrieveIndex(String nodeId) {
+<span class="nc bnc" id="L117" title="All 2 branches missed.">        if (nodeId.contains(&quot;#&quot;)) {</span>
+<span class="nc" id="L118">            return Integer.parseInt((nodeId.split(&quot;#&quot;)[1]).split(&quot;']&quot;)[0]);</span>
+        }
+<span class="nc" id="L120">        return 0;</span>
+    }
+
+    @Override
+    public MultiFields makeField(
+            String templateId, String identifier, I_VariableDefinition variableDefinition, Clause clause)
+            throws UnknownVariableException {
+<span class="fc" id="L127">        boolean setReturningFunctionInWhere = false; // if true, use a subselect</span>
+<span class="fc" id="L128">        boolean isRootContent = false; // that is a query path on a full composition starting from the root content</span>
+<span class="fc" id="L129">        DataType castTypeAs = null;</span>
+
+<span class="pc bpc" id="L131" title="1 of 2 branches missed.">        if (pathResolver.entryRoot(templateId) == null) // case of (invalid) composition with null entry!</span>
+<span class="nc" id="L132">        return null;</span>
+
+        Set&lt;String&gt; pathSet;
+<span class="fc bfc" id="L135" title="All 4 branches covered.">        if (variableDefinition.getPath() != null &amp;&amp; variableDefinition.getPath().startsWith(CONTENT)) {</span>
+<span class="fc" id="L136">            pathSet = new MultiPath().asSet(&quot;/&quot; + variableDefinition.getPath());</span>
+<span class="fc" id="L137">            isRootContent = true;</span>
+<span class="fc" id="L138">        } else pathSet = pathResolver.pathOf(templateId, variableDefinition.getIdentifier());</span>
+
+<span class="fc bfc" id="L140" title="All 2 branches covered.">        String alias = clause.equals(Clause.WHERE) ? null : variableDefinition.getAlias();</span>
+
+<span class="pc bpc" id="L142" title="2 of 4 branches missed.">        if (pathSet == null || pathSet.isEmpty()) {</span>
+<span class="nc" id="L143">            throw new UnknownVariableException(variableDefinition.getPath());</span>
+        }
+
+        // traverse the set of paths and create the corresponding fields
+<span class="fc" id="L147">        List&lt;QualifiedAqlField&gt; fieldList = new ArrayList&lt;&gt;();</span>
+
+<span class="fc" id="L149">        WebTemplate webTemplate = introspectCache.getQueryOptMetaData(templateId);</span>
+<span class="pc bpc" id="L150" title="1 of 2 branches missed.">        if (webTemplate == null) throw new UnknownVariableException(&quot;unknown template:&quot; + templateId);</span>
+
+<span class="fc bfc" id="L152" title="All 2 branches covered.">        for (String path : pathSet) {</span>
+            // check whether the path is valid for this template
+<span class="fc bfc" id="L154" title="All 2 branches covered.">            if (!WebTemplateAqlPath.isValid(webTemplate, path, variableDefinition.getPath())) {</span>
+<span class="pc bpc" id="L155" title="1 of 2 branches missed.">                if (clause.equals(Clause.WHERE))</span>
+                // f.e. NOT EXISTS path
+                {
+<span class="fc" id="L158">                    continue;</span>
+                } else {
+                    // ignore this path as it is not identified in the webtemplate
+<span class="nc" id="L161">                    throw new UnknownVariableException(path);</span>
+                }
+            }
+
+<span class="fc" id="L165">            String rightMostJsonbExpression = null;</span>
+
+<span class="fc" id="L167">            List&lt;String&gt; itemPathArray = new ArrayList&lt;&gt;();</span>
+<span class="fc" id="L168">            itemPathArray.add(pathResolver.entryRoot(templateId));</span>
+
+<span class="pc bpc" id="L170" title="1 of 4 branches missed.">            if (!path.startsWith(TAG_COMPOSITION) &amp;&amp; !isRootContent)</span>
+<span class="fc" id="L171">                itemPathArray.addAll(new JqueryPath(PATH_PART.IDENTIFIER_PATH_PART, path, &quot;0&quot;).evaluate());</span>
+
+<span class="fc" id="L173">            JqueryPath jqueryPath = new JqueryPath(PATH_PART.VARIABLE_PATH_PART, variableDefinition.getPath(), &quot;0&quot;);</span>
+<span class="fc" id="L174">            itemPathArray.addAll(new NormalizedRmAttributePath(jqueryPath.evaluate()).transformStartingAt(1));</span>
+
+            try {
+<span class="fc" id="L177">                IterativeNode iterativeNode = new IterativeNode(domainAccess, templateId, introspectCache);</span>
+
+<span class="fc" id="L179">                itemPathArray = iterativeNode.insertIterativeMarkers(itemPathArray);</span>
+<span class="fc bfc" id="L180" title="All 2 branches covered.">                if (clause.equals(Clause.WHERE)) setReturningFunctionInWhere = true;</span>
+<span class="pc" id="L181">            } catch (Exception e) {</span>
+                // do nothing
+            }
+
+<span class="fc" id="L185">            resolveArrayIndex(itemPathArray);</span>
+
+<span class="fc" id="L187">            List&lt;String&gt; referenceItemPathArray = new ArrayList&lt;&gt;(itemPathArray);</span>
+<span class="fc" id="L188">            Collections.replaceAll(referenceItemPathArray, AQL_NODE_ITERATIVE_MARKER, &quot;0&quot;);</span>
+
+            final boolean isSetReturningFunction; // if true, this will be used for lateral joins and mustn't be cast
+
+<span class="fc bfc" id="L192" title="All 2 branches covered.">            if (itemPathArray.contains(QueryImplConstants.AQL_NODE_NAME_PREDICATE_MARKER)) {</span>
+<span class="fc" id="L193">                itemPathArray = new NodePredicateCall(itemPathArray).resolve();</span>
+<span class="fc" id="L194">                isSetReturningFunction = false;</span>
+<span class="pc bpc" id="L195" title="1 of 2 branches missed.">            } else if (itemPathArray.contains(AQL_NODE_ITERATIVE_MARKER)) {</span>
+<span class="fc" id="L196">                JsonbFunctionCall jsonbFunctionCall = new JsonbFunctionCall(</span>
+<span class="fc" id="L197">                        itemPathArray, AQL_NODE_ITERATIVE_MARKER, QueryImplConstants.AQL_NODE_ITERATIVE_FUNCTION);</span>
+<span class="fc" id="L198">                itemPathArray = jsonbFunctionCall.resolve();</span>
+                // get the jsonb right-most part of the expression
+<span class="pc bpc" id="L200" title="1 of 2 branches missed.">                if (jsonbFunctionCall.hasRightMostJsonbExpression()) {</span>
+<span class="fc" id="L201">                    rightMostJsonbExpression = jsonbFunctionCall.getRightMostJsonbExpression();</span>
+                }
+<span class="fc" id="L203">                isSetReturningFunction = true;</span>
+<span class="fc" id="L204">            } else {</span>
+<span class="nc" id="L205">                isSetReturningFunction = false;</span>
+            }
+
+<span class="fc" id="L208">            String itemPath = String.join(&quot;,&quot;, itemPathArray);</span>
+
+<span class="fc bfc" id="L210" title="All 2 branches covered.">            if (!itemPath.startsWith(QueryImplConstants.AQL_NODE_NAME_PREDICATE_FUNCTION)</span>
+<span class="pc bpc" id="L211" title="1 of 2 branches missed.">                    &amp;&amp; !itemPath.contains(QueryImplConstants.AQL_NODE_ITERATIVE_FUNCTION)) {</span>
+<span class="nc" id="L212">                itemPath = wrapQuery(itemPath);</span>
+            }
+
+<span class="fc" id="L215">            DataTypeFromTemplate dataTypeFromTemplate =</span>
+<span class="fc" id="L216">                    new DataTypeFromTemplate(introspectCache, ignoreUnresolvedIntrospect, clause);</span>
+
+<span class="fc" id="L218">            dataTypeFromTemplate.evaluate(templateId, referenceItemPathArray);</span>
+
+<span class="fc" id="L220">            Field&lt;?&gt; fieldPathItem = null;</span>
+
+<span class="fc bfc" id="L222" title="All 2 branches covered.">            castTypeAs = isSetReturningFunction ? null : dataTypeFromTemplate.getIdentifiedType();</span>
+
+            // set the determined type with the variable
+<span class="fc" id="L225">            variableDefinition.setSelectType(dataTypeFromTemplate.getIdentifiedType());</span>
+
+<span class="fc bfc" id="L227" title="All 2 branches covered.">            if (clause.equals(Clause.SELECT)) {</span>
+
+<span class="fc bfc" id="L229" title="All 2 branches covered.">                if (StringUtils.isNotEmpty(alias)) fieldPathItem = buildFieldWithCast(itemPath, castTypeAs, alias);</span>
+                else {
+<span class="fc" id="L231">                    String tempAlias = DefaultColumnId.value(variableDefinition);</span>
+<span class="fc" id="L232">                    fieldPathItem = buildFieldWithCast(itemPath, castTypeAs, tempAlias);</span>
+                }
+<span class="pc bpc" id="L234" title="1 of 2 branches missed.">            } else if (clause.equals(Clause.WHERE)) {</span>
+<span class="fc" id="L235">                fieldPathItem = buildFieldWithCast(itemPath, castTypeAs, null);</span>
+<span class="pc bpc" id="L236" title="1 of 2 branches missed.">                if (itemPathArray.contains(AQL_NODE_ITERATIVE_MARKER))</span>
+<span class="nc" id="L237">                    fieldPathItem = DSL.field(DSL.select(fieldPathItem));</span>
+            }
+
+<span class="fc bfc" id="L240" title="All 2 branches covered.">            if (setReturningFunctionInWhere)</span>
+<span class="fc" id="L241">                fieldPathItem = DSL.select(fieldPathItem).asField();</span>
+
+<span class="fc" id="L243">            QualifiedAqlField aqlField = new QualifiedAqlField(</span>
+<span class="fc" id="L244">                    fieldPathItem,</span>
+<span class="fc" id="L245">                    dataTypeFromTemplate.getItemType(),</span>
+<span class="fc" id="L246">                    dataTypeFromTemplate.getItemCategory(),</span>
+<span class="fc" id="L247">                    rightMostJsonbExpression);</span>
+
+<span class="fc" id="L249">            fieldList.add(aqlField);</span>
+        }
+
+<span class="fc" id="L252">        return new MultiFields(variableDefinition, fieldList, templateId);</span>
+    }
+
+    private Field&lt;?&gt; buildFieldWithCast(String itemPath, DataType castTypeAs, String alias) {
+        Field fieldPathItem;
+
+<span class="fc bfc" id="L258" title="All 2 branches covered.">        if (castTypeAs != null) {</span>
+<span class="fc" id="L259">            fieldPathItem = DSL.field(itemPath, String.class).cast(castTypeAs).as(alias);</span>
+<span class="fc" id="L260">        } else {</span>
+<span class="fc" id="L261">            fieldPathItem = DSL.field(itemPath, String.class).as(alias);</span>
+        }
+
+<span class="fc bfc" id="L264" title="All 2 branches covered.">        if (alias != null) fieldPathItem = fieldPathItem.as(alias);</span>
+
+<span class="fc" id="L266">        return fieldPathItem;</span>
+    }
+
+    @Override
+    public MultiFields whereField(String templateId, String identifier, I_VariableDefinition variableDefinition) {
+<span class="nc" id="L271">        Set&lt;String&gt; pathSet = pathResolver.pathOf(templateId, variableDefinition.getIdentifier());</span>
+
+        // traverse the set of paths and create the corresponding fields
+<span class="nc" id="L274">        List&lt;QualifiedAqlField&gt; fieldList = new ArrayList&lt;&gt;();</span>
+
+<span class="nc bnc" id="L276" title="All 2 branches missed.">        for (String path : pathSet) {</span>
+<span class="nc" id="L277">            List&lt;String&gt; itemPathArray = new ArrayList&lt;&gt;();</span>
+
+<span class="nc bnc" id="L279" title="All 2 branches missed.">            if (pathResolver.entryRoot(templateId) == null) {</span>
+<span class="nc" id="L280">                throw new IllegalArgumentException(&quot;a &quot; + NAME + &quot;/&quot; + VALUE + &quot; expression for &quot; + COMPOSITION</span>
+                        + &quot; must be specified, where clause cannot be built without&quot;);
+            }
+
+<span class="nc" id="L284">            itemPathArray.add(pathResolver.entryRoot(templateId));</span>
+<span class="nc bnc" id="L285" title="All 4 branches missed.">            if (path != null &amp;&amp; !path.startsWith(TAG_COMPOSITION)) {</span>
+<span class="nc" id="L286">                itemPathArray.addAll(new JqueryPath(PATH_PART.IDENTIFIER_PATH_PART, path, &quot;#&quot;).evaluate());</span>
+            }
+<span class="nc" id="L288">            JqueryPath jqueryPath = new JqueryPath(PATH_PART.VARIABLE_PATH_PART, variableDefinition.getPath(), &quot;#&quot;);</span>
+<span class="nc" id="L289">            itemPathArray.addAll(jqueryPath.evaluate());</span>
+
+<span class="nc" id="L291">            String jsqueryPath = itemPathArray.stream()</span>
+<span class="nc" id="L292">                    .map(p -&gt; {</span>
+<span class="nc bnc" id="L293" title="All 2 branches missed.">                        switch (p) {</span>
+                            case &quot;0&quot;: // case /name/value -&gt; /name,0,value
+                            case &quot;#&quot;:
+<span class="nc" id="L296">                                return &quot;#&quot;;</span>
+                            default:
+<span class="nc" id="L298">                                return '&quot;' + p + '&quot;';</span>
+                        }
+                    })
+<span class="nc" id="L301">                    .collect(Collectors.joining(&quot;.&quot;));</span>
+
+<span class="nc" id="L303">            Field&lt;?&gt; fieldPathItem = DSL.field(jsqueryPath, String.class);</span>
+<span class="nc" id="L304">            QualifiedAqlField qualifiedAqlField = new QualifiedAqlField(fieldPathItem);</span>
+<span class="nc" id="L305">            fieldList.add(qualifiedAqlField);</span>
+        }
+<span class="nc" id="L307">        return new MultiFields(variableDefinition, fieldList, templateId);</span>
+    }
+
+    private void resolveArrayIndex(List&lt;String&gt; itemPathArray) {
+
+<span class="fc bfc" id="L312" title="All 2 branches covered.">        for (int i = 0; i &lt; itemPathArray.size(); i++) {</span>
+<span class="fc" id="L313">            String nodeId = itemPathArray.get(i);</span>
+<span class="pc bpc" id="L314" title="1 of 2 branches missed.">            if (nodeId.contains(&quot;#&quot;)) {</span>
+<span class="nc" id="L315">                int index = retrieveIndex(nodeId);</span>
+                // change the default index of the previous one
+<span class="nc bnc" id="L317" title="All 2 branches missed.">                if (i - 1 &gt;= 0) {</span>
+<span class="nc" id="L318">                    itemPathArray.set(i - 1, Integer.toString(index));</span>
+                }
+
+<span class="nc" id="L321">                itemPathArray.set(i, nodeId);</span>
+            }
+        }
+<span class="fc" id="L324">    }</span>
+
+    private static String wrapQuery(String itemPath) {
+<span class="nc bnc" id="L327" title="All 2 branches missed.">        if (itemPath.contains(&quot;/item_count&quot;)) {</span>
+            // trim the last array index in the prefix
+            // look ahead for an index expression: ','&lt;nnn&gt;','
+<span class="nc" id="L330">            String[] segments = itemPath.split(&quot;(?=(,[0-9]*,))&quot;);</span>
+            // trim the last index expression
+<span class="nc" id="L332">            String pathPart = StringUtils.join(segments, null, 0, segments.length - 1);</span>
+<span class="nc" id="L333">            return QueryImplConstants.AQL_NODE_ITERATIVE_FUNCTION + &quot;(&quot; + CONTENT + &quot; #&gt; '{&quot; + pathPart + &quot;}')&quot;;</span>
+<span class="nc" id="L334">        } else return JsonbEntryQuery.JSONB_SELECTOR_COMPOSITION_OPEN + itemPath + JsonbEntryQuery.JSONB_SELECTOR_CLOSE;</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.7.202105040129</span></div></body></html>

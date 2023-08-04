@@ -1,0 +1,86 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../../jacoco-resources/report.gif" type="image/gif"/><title>Contains.java</title><link rel="stylesheet" href="../../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../../index.html" class="el_report">Overall Coverage</a> &gt; <a href="../index.html" class="el_bundle">service</a> &gt; <a href="index.source.html" class="el_package">org.ehrbase.aql.compiler</a> &gt; <span class="el_source">Contains.java</span></div><h1>Contains.java</h1><pre class="source lang-java linenums">/*
+ * Copyright (c) 2019 vitasystems GmbH and Hannover Medical School.
+ *
+ * This file is part of project EHRbase
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     https://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.ehrbase.aql.compiler;
+
+import java.util.Set;
+import org.antlr.v4.runtime.tree.ParseTree;
+import org.antlr.v4.runtime.tree.ParseTreeWalker;
+import org.ehrbase.aql.containment.ContainPropositions;
+import org.ehrbase.aql.containment.IdentifierMapper;
+import org.ehrbase.service.KnowledgeCacheService;
+
+/**
+ * main entry point for CONTAINS clause resolution
+ */
+public class Contains {
+
+    private ParseTree parseTree;
+    private IdentifierMapper identifierMapper;
+
+    // list of templates satisfying the CONTAINS expressions
+    private Set&lt;String&gt; templates;
+
+    private final KnowledgeCacheService knowledgeCache;
+
+<span class="fc" id="L40">    private boolean requiresTemplateWhereClause = false;</span>
+    private boolean hasContains;
+
+<span class="fc" id="L43">    public Contains(ParseTree parseTree, KnowledgeCacheService knowledgeCache) {</span>
+<span class="fc" id="L44">        this.parseTree = parseTree;</span>
+<span class="fc" id="L45">        this.knowledgeCache = knowledgeCache;</span>
+<span class="fc" id="L46">    }</span>
+
+    /**
+     * resolve CONTAINS clause:
+     * - identify the templates satisfying the clause
+     * - set the respective path into variable definitions
+     * @return
+     */
+    public Contains process() {
+<span class="fc" id="L55">        QueryCompilerPass1 queryCompilerPass1 = new QueryCompilerPass1();</span>
+<span class="fc" id="L56">        ParseTreeWalker walker = new ParseTreeWalker();</span>
+<span class="fc" id="L57">        walker.walk(queryCompilerPass1, parseTree);</span>
+
+<span class="fc" id="L59">        ContainPropositions containPropositions = queryCompilerPass1.containPropositions();</span>
+<span class="fc" id="L60">        containPropositions.evaluate(knowledgeCache);</span>
+<span class="fc" id="L61">        this.templates = containPropositions.resolvedTemplates();</span>
+<span class="fc" id="L62">        this.identifierMapper = queryCompilerPass1.getIdentifierMapper();</span>
+<span class="fc" id="L63">        this.requiresTemplateWhereClause = containPropositions.requiresTemplateWhereClause();</span>
+<span class="fc" id="L64">        this.hasContains = containPropositions.hasContains();</span>
+
+<span class="fc" id="L66">        return this;</span>
+    }
+
+    // for tests purpose
+    public Set&lt;String&gt; getTemplates() {
+<span class="fc" id="L71">        return templates;</span>
+    }
+
+    public IdentifierMapper getIdentifierMapper() {
+<span class="fc" id="L75">        return identifierMapper;</span>
+    }
+
+    public boolean requiresTemplateWhereClause() {
+<span class="fc" id="L79">        return requiresTemplateWhereClause;</span>
+    }
+
+    public boolean hasContains() {
+<span class="fc" id="L83">        return hasContains;</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.7.202105040129</span></div></body></html>

@@ -1,0 +1,79 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../../jacoco-resources/report.gif" type="image/gif"/><title>CompoXRefAccess.java</title><link rel="stylesheet" href="../../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../../index.html" class="el_report">Coverage with Unit Tests</a> &gt; <a href="../index.html" class="el_bundle">service</a> &gt; <a href="index.source.html" class="el_package">org.ehrbase.dao.access.jooq</a> &gt; <span class="el_source">CompoXRefAccess.java</span></div><h1>CompoXRefAccess.java</h1><pre class="source lang-java linenums">/*
+ * Copyright (c) 2019 vitasystems GmbH and Hannover Medical School.
+ *
+ * This file is part of project EHRbase
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     https://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.ehrbase.dao.access.jooq;
+
+import static org.ehrbase.jooq.pg.Tables.COMPO_XREF;
+
+import java.sql.Timestamp;
+import java.util.Map;
+import java.util.UUID;
+import org.ehrbase.dao.access.interfaces.I_CompoXrefAccess;
+import org.ehrbase.dao.access.interfaces.I_DomainAccess;
+import org.ehrbase.dao.access.support.DataAccess;
+import org.ehrbase.dao.access.util.TransactionTime;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+/**
+ * Deals with composition links. For example to link an ACTION with an INSTRUCTION with  or an OBSERVATION
+ * Created by christian on 9/12/2016.
+ */
+public class CompoXRefAccess extends DataAccess implements I_CompoXrefAccess {
+
+<span class="nc" id="L38">    static Logger log = LoggerFactory.getLogger(CompoXRefAccess.class);</span>
+
+    public CompoXRefAccess(I_DomainAccess domainAccess) {
+<span class="nc" id="L41">        super(domainAccess);</span>
+<span class="nc" id="L42">    }</span>
+
+    @Override
+    public Map&lt;UUID, Timestamp&gt; getLinkList(UUID masterUid) {
+<span class="nc" id="L46">        return getContext()</span>
+<span class="nc" id="L47">                .select(COMPO_XREF.CHILD_UUID, COMPO_XREF.SYS_TRANSACTION)</span>
+<span class="nc" id="L48">                .from(COMPO_XREF)</span>
+<span class="nc" id="L49">                .where(COMPO_XREF.MASTER_UUID.eq(masterUid))</span>
+<span class="nc" id="L50">                .fetch()</span>
+<span class="nc" id="L51">                .intoMap(COMPO_XREF.CHILD_UUID, COMPO_XREF.SYS_TRANSACTION);</span>
+    }
+
+    @Override
+    public UUID getLastLink(UUID masterUid) {
+<span class="nc" id="L56">        return getContext()</span>
+<span class="nc" id="L57">                .select(COMPO_XREF.CHILD_UUID)</span>
+<span class="nc" id="L58">                .from(COMPO_XREF)</span>
+<span class="nc" id="L59">                .where(COMPO_XREF.MASTER_UUID.eq(masterUid))</span>
+<span class="nc" id="L60">                .orderBy(COMPO_XREF.SYS_TRANSACTION.desc())</span>
+<span class="nc" id="L61">                .fetchOne(COMPO_XREF.CHILD_UUID);</span>
+    }
+
+    @Override
+    public int setLink(UUID masterUid, UUID childUid) {
+<span class="nc" id="L66">        Timestamp timestamp = TransactionTime.millis();</span>
+<span class="nc" id="L67">        return getContext()</span>
+<span class="nc" id="L68">                .insertInto(COMPO_XREF)</span>
+<span class="nc" id="L69">                .columns(COMPO_XREF.MASTER_UUID, COMPO_XREF.CHILD_UUID, COMPO_XREF.SYS_TRANSACTION)</span>
+<span class="nc" id="L70">                .values(masterUid, childUid, timestamp)</span>
+<span class="nc" id="L71">                .execute();</span>
+    }
+
+    @Override
+    public DataAccess getDataAccess() {
+<span class="nc" id="L76">        return this;</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.7.202105040129</span></div></body></html>

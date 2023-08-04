@@ -1,0 +1,65 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../../jacoco-resources/report.gif" type="image/gif"/><title>RMObjectAttribute.java</title><link rel="stylesheet" href="../../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../../index.html" class="el_report">Coverage with Unit Tests</a> &gt; <a href="../index.html" class="el_bundle">service</a> &gt; <a href="index.source.html" class="el_package">org.ehrbase.aql.sql.queryimpl.attribute</a> &gt; <span class="el_source">RMObjectAttribute.java</span></div><h1>RMObjectAttribute.java</h1><pre class="source lang-java linenums">/*
+ * Copyright (c) 2019 vitasystems GmbH and Hannover Medical School.
+ *
+ * This file is part of project EHRbase
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     https://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.ehrbase.aql.sql.queryimpl.attribute;
+
+import org.ehrbase.aql.sql.binding.IJoinBinder;
+import org.ehrbase.aql.sql.queryimpl.DefaultColumnId;
+import org.ehrbase.aql.sql.queryimpl.IQueryImpl;
+import org.ehrbase.aql.sql.queryimpl.attribute.composition.CompositionIdFieldSetup;
+import org.ehrbase.aql.sql.queryimpl.attribute.ehr.EhrSetup;
+import org.jooq.Field;
+
+@SuppressWarnings({&quot;java:S3740&quot;, &quot;java:S1452&quot;})
+public abstract class RMObjectAttribute implements IRMObjectAttribute, IJoinBinder {
+
+<span class="fc" id="L30">    protected FilterSetup filterSetup = new FilterSetup();</span>
+<span class="fc" id="L31">    protected CompositionIdFieldSetup compositionIdFieldSetup = new CompositionIdFieldSetup();</span>
+<span class="fc" id="L32">    protected EhrSetup ehrSetup = new EhrSetup();</span>
+
+    protected final JoinSetup joinSetup;
+    protected final FieldResolutionContext fieldContext;
+
+<span class="fc" id="L37">    protected RMObjectAttribute(FieldResolutionContext fieldContext, JoinSetup joinSetup) {</span>
+<span class="fc" id="L38">        this.fieldContext = fieldContext;</span>
+<span class="fc" id="L39">        this.joinSetup = joinSetup;</span>
+<span class="fc" id="L40">    }</span>
+
+    protected Field&lt;?&gt; as(Field field) {
+<span class="fc bfc" id="L43" title="All 2 branches covered.">        if (fieldContext.isWithAlias()) return aliased(field);</span>
+        else {
+<span class="pc bpc" id="L45" title="1 of 2 branches missed.">            if (!fieldContext.getClause().equals(IQueryImpl.Clause.WHERE)) return defaultAliased(field);</span>
+<span class="fc" id="L46">            else return field;</span>
+        }
+    }
+
+    protected Field&lt;?&gt; aliased(Field field) {
+<span class="fc" id="L51">        return field.as(effectiveAlias());</span>
+    }
+
+    protected String effectiveAlias() {
+<span class="fc bfc" id="L55" title="All 2 branches covered.">        return (fieldContext.getVariableDefinition().getAlias() == null)</span>
+<span class="fc" id="L56">                ? &quot;/&quot; + fieldContext.getColumnAlias()</span>
+<span class="fc" id="L57">                : fieldContext.getVariableDefinition().getAlias();</span>
+    }
+
+    protected Field&lt;?&gt; defaultAliased(Field field) {
+<span class="fc bfc" id="L61" title="All 2 branches covered.">        if (fieldContext.getClause().equals(IQueryImpl.Clause.WHERE)) return field;</span>
+<span class="fc" id="L62">        else return field.as(DefaultColumnId.value(fieldContext.getVariableDefinition()));</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.7.202105040129</span></div></body></html>

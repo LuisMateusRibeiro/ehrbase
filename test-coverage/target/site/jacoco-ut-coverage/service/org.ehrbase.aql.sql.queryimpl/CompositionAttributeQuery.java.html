@@ -1,0 +1,217 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../../jacoco-resources/report.gif" type="image/gif"/><title>CompositionAttributeQuery.java</title><link rel="stylesheet" href="../../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../../index.html" class="el_report">Coverage with Unit Tests</a> &gt; <a href="../index.html" class="el_bundle">service</a> &gt; <a href="index.source.html" class="el_package">org.ehrbase.aql.sql.queryimpl</a> &gt; <span class="el_source">CompositionAttributeQuery.java</span></div><h1>CompositionAttributeQuery.java</h1><pre class="source lang-java linenums">/*
+ * Copyright (c) 2019 vitasystems GmbH and Hannover Medical School.
+ *
+ * This file is part of project EHRbase
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     https://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.ehrbase.aql.sql.queryimpl;
+
+import static org.ehrbase.aql.sql.QueryProcessor.NIL_TEMPLATE;
+
+import org.ehrbase.aql.definition.I_VariableDefinition;
+import org.ehrbase.aql.definition.VariableDefinition;
+import org.ehrbase.aql.sql.PathResolver;
+import org.ehrbase.aql.sql.binding.IJoinBinder;
+import org.ehrbase.aql.sql.binding.LateralJoins;
+import org.ehrbase.aql.sql.queryimpl.attribute.AttributePath;
+import org.ehrbase.aql.sql.queryimpl.attribute.FieldResolutionContext;
+import org.ehrbase.aql.sql.queryimpl.attribute.JoinSetup;
+import org.ehrbase.aql.sql.queryimpl.attribute.composer.ComposerResolver;
+import org.ehrbase.aql.sql.queryimpl.attribute.composition.CompositionResolver;
+import org.ehrbase.aql.sql.queryimpl.attribute.composition.FullCompositionJson;
+import org.ehrbase.aql.sql.queryimpl.attribute.ehr.EhrResolver;
+import org.ehrbase.aql.sql.queryimpl.attribute.ehr.FullEhrJson;
+import org.ehrbase.aql.sql.queryimpl.attribute.eventcontext.EventContextResolver;
+import org.ehrbase.dao.access.interfaces.I_DomainAccess;
+import org.ehrbase.service.IntrospectService;
+import org.jooq.Comparator;
+import org.jooq.Field;
+import org.jooq.SelectQuery;
+import org.jooq.impl.DSL;
+
+/**
+ * map an AQL datavalue expression into a SQL field
+ * &lt;p&gt;
+ * Created by christian on 5/6/2016.
+ */
+@SuppressWarnings({&quot;java:S3776&quot;, &quot;java:S3740&quot;})
+public class CompositionAttributeQuery extends ObjectQuery implements IQueryImpl, IJoinBinder {
+
+    private String serverNodeId;
+
+<span class="fc" id="L53">    protected JoinSetup joinSetup = new JoinSetup(); // used to pass join metadata to perform binding</span>
+
+    private final IntrospectService introspectCache;
+
+    public CompositionAttributeQuery(
+            I_DomainAccess domainAccess,
+            PathResolver pathResolver,
+            String serverNodeId,
+            IntrospectService introspectCache) {
+<span class="fc" id="L62">        super(domainAccess, pathResolver);</span>
+<span class="fc" id="L63">        this.serverNodeId = serverNodeId;</span>
+<span class="fc" id="L64">        this.introspectCache = introspectCache;</span>
+<span class="fc" id="L65">    }</span>
+
+    @Override
+    public MultiFields makeField(
+            String templateId, String identifier, I_VariableDefinition variableDefinition, Clause clause)
+            throws UnknownVariableException {
+        // resolve composition attributes and/or context
+<span class="fc" id="L72">        String columnAlias = variableDefinition.getPath();</span>
+<span class="fc" id="L73">        FieldResolutionContext fieldResolutionContext = new FieldResolutionContext(</span>
+<span class="fc" id="L74">                domainAccess.getContext(),</span>
+                serverNodeId,
+                identifier,
+                variableDefinition,
+                clause,
+                pathResolver,
+                introspectCache,
+<span class="fc" id="L81">                pathResolver.entryRoot(templateId));</span>
+
+        Field retField;
+
+<span class="fc bfc" id="L85" title="All 2 branches covered.">        if (clause.equals(Clause.WHERE)) fieldResolutionContext.setWithAlias(false);</span>
+
+<span class="fc bfc" id="L87" title="All 2 branches covered.">        if (!templateId.equals(NIL_TEMPLATE)) joinSetup.setUseEntry(true);</span>
+
+<span class="fc bfc" id="L89" title="All 2 branches covered.">        if (columnAlias == null) {</span>
+<span class="pc bpc" id="L90" title="1 of 2 branches missed.">            if (clause.equals(Clause.SELECT)) {</span>
+<span class="fc bfc" id="L91" title="All 2 branches covered.">                if (pathResolver.classNameOf(variableDefinition.getIdentifier()).equals(&quot;COMPOSITION&quot;))</span>
+<span class="fc" id="L92">                    retField = new FullCompositionJson(fieldResolutionContext, joinSetup).sqlField();</span>
+<span class="fc" id="L93">                else if (pathResolver</span>
+<span class="fc" id="L94">                        .classNameOf(variableDefinition.getIdentifier())</span>
+<span class="pc bpc" id="L95" title="1 of 2 branches missed.">                        .equals(&quot;EHR&quot;)) retField = new FullEhrJson(fieldResolutionContext, joinSetup).sqlField();</span>
+                else
+<span class="nc" id="L97">                    throw new IllegalArgumentException(</span>
+                            &quot;Canonical json is not supported at this stage for this Entity, found class:&quot;
+<span class="nc" id="L99">                                    + pathResolver.classNameOf(variableDefinition.getIdentifier()));</span>
+<span class="nc" id="L100">            } else retField = null;</span>
+        } else {
+<span class="fc bfc" id="L102" title="All 2 branches covered.">            if (pathResolver.classNameOf(variableDefinition.getIdentifier()).equals(&quot;EHR&quot;)) {</span>
+<span class="fc" id="L103">                retField = new EhrResolver(fieldResolutionContext, joinSetup).sqlField(columnAlias);</span>
+<span class="fc" id="L104">            } else if (pathResolver</span>
+<span class="fc" id="L105">                            .classNameOf(variableDefinition.getIdentifier())</span>
+<span class="pc bpc" id="L106" title="1 of 2 branches missed.">                            .equals(&quot;COMPOSITION&quot;)</span>
+<span class="nc bnc" id="L107" title="All 2 branches missed.">                    || isCompositionAttributeItemStructure(templateId, variableDefinition.getIdentifier())) {</span>
+<span class="fc bfc" id="L108" title="All 2 branches covered.">                if (columnAlias.startsWith(&quot;composer&quot;))</span>
+<span class="fc" id="L109">                    retField = new ComposerResolver(fieldResolutionContext, joinSetup)</span>
+<span class="fc" id="L110">                            .sqlField(new AttributePath(&quot;composer&quot;).redux(columnAlias));</span>
+<span class="fc bfc" id="L111" title="All 2 branches covered.">                else if (columnAlias.startsWith(&quot;context&quot;))</span>
+<span class="fc" id="L112">                    retField = new EventContextResolver(fieldResolutionContext, joinSetup).sqlField(columnAlias);</span>
+                else // assume composition attribute
+<span class="fc" id="L114">                retField = new CompositionResolver(fieldResolutionContext, joinSetup).sqlField(columnAlias);</span>
+            } else
+<span class="nc" id="L116">                throw new IllegalArgumentException(&quot;INTERNAL: the following class cannot be resolved for AQL querying:&quot;</span>
+<span class="nc" id="L117">                        + (pathResolver.classNameOf(variableDefinition.getIdentifier())));</span>
+        }
+
+        // generate a lateral table for this select field
+<span class="pc bpc" id="L121" title="1 of 4 branches missed.">        if (variableDefinition.getPredicateDefinition() != null &amp;&amp; retField != null) {</span>
+<span class="fc" id="L122">            deriveLateralJoinForPredicate(variableDefinition, retField);</span>
+            // edit the return field to point to the lateral join
+            // the equivalent select field is the lateral join table '.' the pseudo variable used as ref in the join
+            // f.e. select array_433911319_3.var_433911319_4 with a join as:
+            //                    left outer join lateral (
+            //                            ...
+            //                             ) as &quot;var_433911319_4&quot;
+            //                    ) as &quot;array_433911319_3&quot;
+            //                            on true
+<span class="fc" id="L131">            String sqlToLateralJoin = variableDefinition</span>
+<span class="fc" id="L132">                            .getLastLateralJoin(NIL_TEMPLATE)</span>
+<span class="fc" id="L133">                            .getTable()</span>
+<span class="fc" id="L134">                            .getName() + &quot;.&quot; + variableDefinition.getSubstituteFieldVariable();</span>
+<span class="fc" id="L135">            retField = DSL.field(sqlToLateralJoin).as(retField.getName());</span>
+<span class="pc bpc" id="L136" title="1 of 2 branches missed.">        } else if (fieldResolutionContext.isUsingSetReturningFunction()) retField = DSL.field(DSL.select(retField));</span>
+
+<span class="fc" id="L138">        QualifiedAqlField aqlField = new QualifiedAqlField(retField);</span>
+
+<span class="fc" id="L140">        return new MultiFields(variableDefinition, aqlField, templateId);</span>
+    }
+
+    @Override
+    public MultiFields whereField(String templateId, String identifier, I_VariableDefinition variableDefinition)
+            throws UnknownVariableException {
+<span class="nc" id="L146">        return makeField(templateId, identifier, variableDefinition, Clause.WHERE);</span>
+    }
+
+    /**
+     * true if the expression contains path and then use ENTRY as primary from table
+     *
+     * @return
+     */
+    public boolean useFromEntry() {
+<span class="nc" id="L155">        return pathResolver.hasPathExpression();</span>
+    }
+
+    public boolean isCompositionAttributeItemStructure(String templateId, String identifier) {
+<span class="pc bpc" id="L159" title="1 of 2 branches missed.">        if (variableTemplatePath(templateId, identifier) == null) return false;</span>
+<span class="fc" id="L160">        return variableTemplatePath(templateId, identifier).contains(&quot;/context/other_context&quot;);</span>
+    }
+
+    public void setUseEntry(boolean b) {
+<span class="nc" id="L164">        joinSetup.setUseEntry(b);</span>
+<span class="nc" id="L165">    }</span>
+
+    public boolean isUseEntry() {
+<span class="nc" id="L168">        return joinSetup.isUseEntry();</span>
+    }
+
+    public JoinSetup getJoinSetup() {
+<span class="fc" id="L172">        return joinSetup;</span>
+    }
+
+    private void deriveLateralJoinForPredicate(I_VariableDefinition variableDefinition, Field retField)
+            throws UnknownVariableException {
+
+        // encode a pseudo variable to get the predicate in the where clause
+<span class="fc" id="L179">        VariableDefinition pseudoVar = new VariableDefinition(</span>
+<span class="fc" id="L180">                variableDefinition.getPredicateDefinition().getOperand1(),</span>
+                null,
+<span class="fc" id="L182">                variableDefinition.getIdentifier(),</span>
+                false);
+<span class="fc" id="L184">        CompositionAttributeQuery compositionAttributeQuery = new CompositionAttributeQuery(</span>
+                this.domainAccess, this.pathResolver, this.serverNodeId, this.introspectCache);
+<span class="fc" id="L186">        MultiFields wherePredicate = compositionAttributeQuery.makeField(</span>
+<span class="fc" id="L187">                NIL_TEMPLATE, variableDefinition.getIdentifier(), pseudoVar, Clause.WHERE);</span>
+
+<span class="fc" id="L189">        joinSetup.merge(compositionAttributeQuery.getJoinSetup());</span>
+
+<span class="fc" id="L191">        SelectQuery selectQuery = domainAccess.getContext().selectQuery();</span>
+
+        // generate a lateral table for this select field
+<span class="fc" id="L194">        selectQuery.addSelect(retField);</span>
+<span class="fc" id="L195">        Comparator comparator =</span>
+<span class="fc" id="L196">                comparatorFromSQL(variableDefinition.getPredicateDefinition().getOperator());</span>
+
+<span class="fc" id="L198">        selectQuery.addConditions(wherePredicate</span>
+<span class="fc" id="L199">                .getLastQualifiedField()</span>
+<span class="fc" id="L200">                .getSQLField()</span>
+<span class="fc" id="L201">                .cast(String.class)</span>
+<span class="fc" id="L202">                .compare(</span>
+                        comparator,
+<span class="fc" id="L204">                        DSL.field(variableDefinition.getPredicateDefinition().getOperand2())</span>
+<span class="fc" id="L205">                                .cast(String.class)));</span>
+
+<span class="fc" id="L207">        LateralJoins.create(NIL_TEMPLATE, selectQuery, variableDefinition, Clause.SELECT);</span>
+<span class="fc" id="L208">    }</span>
+
+    private Comparator comparatorFromSQL(String sql) {
+<span class="pc bpc" id="L211" title="1 of 2 branches missed.">        for (Comparator comparator : Comparator.values()) {</span>
+<span class="fc bfc" id="L212" title="All 2 branches covered.">            if (sql.equals(comparator.toSQL())) return comparator;</span>
+        }
+<span class="nc" id="L214">        return null;</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.7.202105040129</span></div></body></html>

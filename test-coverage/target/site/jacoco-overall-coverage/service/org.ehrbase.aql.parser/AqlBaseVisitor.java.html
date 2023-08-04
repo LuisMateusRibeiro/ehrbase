@@ -1,0 +1,373 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../../jacoco-resources/report.gif" type="image/gif"/><title>AqlBaseVisitor.java</title><link rel="stylesheet" href="../../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../../index.html" class="el_report">Overall Coverage</a> &gt; <a href="../index.html" class="el_bundle">service</a> &gt; <a href="index.source.html" class="el_package">org.ehrbase.aql.parser</a> &gt; <span class="el_source">AqlBaseVisitor.java</span></div><h1>AqlBaseVisitor.java</h1><pre class="source lang-java linenums">// Generated from java-escape by ANTLR 4.11.1
+package org.ehrbase.aql.parser;
+import org.antlr.v4.runtime.tree.AbstractParseTreeVisitor;
+
+/**
+ * This class provides an empty implementation of {@link AqlVisitor},
+ * which can be extended to create a visitor which only needs to handle a subset
+ * of the available methods.
+ *
+ * @param &lt;T&gt; The return type of the visit operation. Use {@link Void} for
+ * operations with no return type.
+ */
+@SuppressWarnings(&quot;CheckReturnValue&quot;)
+<span class="fc" id="L14">public class AqlBaseVisitor&lt;T&gt; extends AbstractParseTreeVisitor&lt;T&gt; implements AqlVisitor&lt;T&gt; {</span>
+	/**
+	 * {@inheritDoc}
+	 *
+	 * &lt;p&gt;The default implementation returns the result of calling
+	 * {@link #visitChildren} on {@code ctx}.&lt;/p&gt;
+	 */
+<span class="fc" id="L21">	@Override public T visitQuery(AqlParser.QueryContext ctx) { return visitChildren(ctx); }</span>
+	/**
+	 * {@inheritDoc}
+	 *
+	 * &lt;p&gt;The default implementation returns the result of calling
+	 * {@link #visitChildren} on {@code ctx}.&lt;/p&gt;
+	 */
+<span class="fc" id="L28">	@Override public T visitQueryExpr(AqlParser.QueryExprContext ctx) { return visitChildren(ctx); }</span>
+	/**
+	 * {@inheritDoc}
+	 *
+	 * &lt;p&gt;The default implementation returns the result of calling
+	 * {@link #visitChildren} on {@code ctx}.&lt;/p&gt;
+	 */
+<span class="fc" id="L35">	@Override public T visitSelect(AqlParser.SelectContext ctx) { return visitChildren(ctx); }</span>
+	/**
+	 * {@inheritDoc}
+	 *
+	 * &lt;p&gt;The default implementation returns the result of calling
+	 * {@link #visitChildren} on {@code ctx}.&lt;/p&gt;
+	 */
+<span class="fc" id="L42">	@Override public T visitTopExpr(AqlParser.TopExprContext ctx) { return visitChildren(ctx); }</span>
+	/**
+	 * {@inheritDoc}
+	 *
+	 * &lt;p&gt;The default implementation returns the result of calling
+	 * {@link #visitChildren} on {@code ctx}.&lt;/p&gt;
+	 */
+<span class="fc" id="L49">	@Override public T visitFunction(AqlParser.FunctionContext ctx) { return visitChildren(ctx); }</span>
+	/**
+	 * {@inheritDoc}
+	 *
+	 * &lt;p&gt;The default implementation returns the result of calling
+	 * {@link #visitChildren} on {@code ctx}.&lt;/p&gt;
+	 */
+<span class="fc" id="L56">	@Override public T visitCastFunction(AqlParser.CastFunctionContext ctx) { return visitChildren(ctx); }</span>
+	/**
+	 * {@inheritDoc}
+	 *
+	 * &lt;p&gt;The default implementation returns the result of calling
+	 * {@link #visitChildren} on {@code ctx}.&lt;/p&gt;
+	 */
+<span class="nc" id="L63">	@Override public T visitExtension(AqlParser.ExtensionContext ctx) { return visitChildren(ctx); }</span>
+	/**
+	 * {@inheritDoc}
+	 *
+	 * &lt;p&gt;The default implementation returns the result of calling
+	 * {@link #visitChildren} on {@code ctx}.&lt;/p&gt;
+	 */
+<span class="nc" id="L70">	@Override public T visitWhere(AqlParser.WhereContext ctx) { return visitChildren(ctx); }</span>
+	/**
+	 * {@inheritDoc}
+	 *
+	 * &lt;p&gt;The default implementation returns the result of calling
+	 * {@link #visitChildren} on {@code ctx}.&lt;/p&gt;
+	 */
+<span class="fc" id="L77">	@Override public T visitOrderBy(AqlParser.OrderByContext ctx) { return visitChildren(ctx); }</span>
+	/**
+	 * {@inheritDoc}
+	 *
+	 * &lt;p&gt;The default implementation returns the result of calling
+	 * {@link #visitChildren} on {@code ctx}.&lt;/p&gt;
+	 */
+<span class="fc" id="L84">	@Override public T visitLimit(AqlParser.LimitContext ctx) { return visitChildren(ctx); }</span>
+	/**
+	 * {@inheritDoc}
+	 *
+	 * &lt;p&gt;The default implementation returns the result of calling
+	 * {@link #visitChildren} on {@code ctx}.&lt;/p&gt;
+	 */
+<span class="fc" id="L91">	@Override public T visitOffset(AqlParser.OffsetContext ctx) { return visitChildren(ctx); }</span>
+	/**
+	 * {@inheritDoc}
+	 *
+	 * &lt;p&gt;The default implementation returns the result of calling
+	 * {@link #visitChildren} on {@code ctx}.&lt;/p&gt;
+	 */
+<span class="fc" id="L98">	@Override public T visitOrderBySeq(AqlParser.OrderBySeqContext ctx) { return visitChildren(ctx); }</span>
+	/**
+	 * {@inheritDoc}
+	 *
+	 * &lt;p&gt;The default implementation returns the result of calling
+	 * {@link #visitChildren} on {@code ctx}.&lt;/p&gt;
+	 */
+<span class="fc" id="L105">	@Override public T visitOrderByExpr(AqlParser.OrderByExprContext ctx) { return visitChildren(ctx); }</span>
+	/**
+	 * {@inheritDoc}
+	 *
+	 * &lt;p&gt;The default implementation returns the result of calling
+	 * {@link #visitChildren} on {@code ctx}.&lt;/p&gt;
+	 */
+<span class="fc" id="L112">	@Override public T visitSelectExpr(AqlParser.SelectExprContext ctx) { return visitChildren(ctx); }</span>
+	/**
+	 * {@inheritDoc}
+	 *
+	 * &lt;p&gt;The default implementation returns the result of calling
+	 * {@link #visitChildren} on {@code ctx}.&lt;/p&gt;
+	 */
+<span class="fc" id="L119">	@Override public T visitStdExpression(AqlParser.StdExpressionContext ctx) { return visitChildren(ctx); }</span>
+	/**
+	 * {@inheritDoc}
+	 *
+	 * &lt;p&gt;The default implementation returns the result of calling
+	 * {@link #visitChildren} on {@code ctx}.&lt;/p&gt;
+	 */
+<span class="fc" id="L126">	@Override public T visitFrom(AqlParser.FromContext ctx) { return visitChildren(ctx); }</span>
+	/**
+	 * {@inheritDoc}
+	 *
+	 * &lt;p&gt;The default implementation returns the result of calling
+	 * {@link #visitChildren} on {@code ctx}.&lt;/p&gt;
+	 */
+<span class="fc" id="L133">	@Override public T visitFromEHR(AqlParser.FromEHRContext ctx) { return visitChildren(ctx); }</span>
+	/**
+	 * {@inheritDoc}
+	 *
+	 * &lt;p&gt;The default implementation returns the result of calling
+	 * {@link #visitChildren} on {@code ctx}.&lt;/p&gt;
+	 */
+<span class="nc" id="L140">	@Override public T visitFromForeignData(AqlParser.FromForeignDataContext ctx) { return visitChildren(ctx); }</span>
+	/**
+	 * {@inheritDoc}
+	 *
+	 * &lt;p&gt;The default implementation returns the result of calling
+	 * {@link #visitChildren} on {@code ctx}.&lt;/p&gt;
+	 */
+<span class="nc" id="L147">	@Override public T visitFromExpr(AqlParser.FromExprContext ctx) { return visitChildren(ctx); }</span>
+	/**
+	 * {@inheritDoc}
+	 *
+	 * &lt;p&gt;The default implementation returns the result of calling
+	 * {@link #visitChildren} on {@code ctx}.&lt;/p&gt;
+	 */
+<span class="fc" id="L154">	@Override public T visitContainsExpression(AqlParser.ContainsExpressionContext ctx) { return visitChildren(ctx); }</span>
+	/**
+	 * {@inheritDoc}
+	 *
+	 * &lt;p&gt;The default implementation returns the result of calling
+	 * {@link #visitChildren} on {@code ctx}.&lt;/p&gt;
+	 */
+<span class="fc" id="L161">	@Override public T visitContainExpressionBool(AqlParser.ContainExpressionBoolContext ctx) { return visitChildren(ctx); }</span>
+	/**
+	 * {@inheritDoc}
+	 *
+	 * &lt;p&gt;The default implementation returns the result of calling
+	 * {@link #visitChildren} on {@code ctx}.&lt;/p&gt;
+	 */
+<span class="fc" id="L168">	@Override public T visitContains(AqlParser.ContainsContext ctx) { return visitChildren(ctx); }</span>
+	/**
+	 * {@inheritDoc}
+	 *
+	 * &lt;p&gt;The default implementation returns the result of calling
+	 * {@link #visitChildren} on {@code ctx}.&lt;/p&gt;
+	 */
+<span class="nc" id="L175">	@Override public T visitIdentifiedExpr(AqlParser.IdentifiedExprContext ctx) { return visitChildren(ctx); }</span>
+	/**
+	 * {@inheritDoc}
+	 *
+	 * &lt;p&gt;The default implementation returns the result of calling
+	 * {@link #visitChildren} on {@code ctx}.&lt;/p&gt;
+	 */
+<span class="nc" id="L182">	@Override public T visitIdentifiedEquality(AqlParser.IdentifiedEqualityContext ctx) { return visitChildren(ctx); }</span>
+	/**
+	 * {@inheritDoc}
+	 *
+	 * &lt;p&gt;The default implementation returns the result of calling
+	 * {@link #visitChildren} on {@code ctx}.&lt;/p&gt;
+	 */
+<span class="nc" id="L189">	@Override public T visitIdentifiedOperand(AqlParser.IdentifiedOperandContext ctx) { return visitChildren(ctx); }</span>
+	/**
+	 * {@inheritDoc}
+	 *
+	 * &lt;p&gt;The default implementation returns the result of calling
+	 * {@link #visitChildren} on {@code ctx}.&lt;/p&gt;
+	 */
+<span class="fc" id="L196">	@Override public T visitIdentifiedPath(AqlParser.IdentifiedPathContext ctx) { return visitChildren(ctx); }</span>
+	/**
+	 * {@inheritDoc}
+	 *
+	 * &lt;p&gt;The default implementation returns the result of calling
+	 * {@link #visitChildren} on {@code ctx}.&lt;/p&gt;
+	 */
+<span class="fc" id="L203">	@Override public T visitPredicate(AqlParser.PredicateContext ctx) { return visitChildren(ctx); }</span>
+	/**
+	 * {@inheritDoc}
+	 *
+	 * &lt;p&gt;The default implementation returns the result of calling
+	 * {@link #visitChildren} on {@code ctx}.&lt;/p&gt;
+	 */
+<span class="fc" id="L210">	@Override public T visitNodePredicateOr(AqlParser.NodePredicateOrContext ctx) { return visitChildren(ctx); }</span>
+	/**
+	 * {@inheritDoc}
+	 *
+	 * &lt;p&gt;The default implementation returns the result of calling
+	 * {@link #visitChildren} on {@code ctx}.&lt;/p&gt;
+	 */
+<span class="fc" id="L217">	@Override public T visitNodePredicateAnd(AqlParser.NodePredicateAndContext ctx) { return visitChildren(ctx); }</span>
+	/**
+	 * {@inheritDoc}
+	 *
+	 * &lt;p&gt;The default implementation returns the result of calling
+	 * {@link #visitChildren} on {@code ctx}.&lt;/p&gt;
+	 */
+<span class="fc" id="L224">	@Override public T visitNodePredicateComparable(AqlParser.NodePredicateComparableContext ctx) { return visitChildren(ctx); }</span>
+	/**
+	 * {@inheritDoc}
+	 *
+	 * &lt;p&gt;The default implementation returns the result of calling
+	 * {@link #visitChildren} on {@code ctx}.&lt;/p&gt;
+	 */
+<span class="nc" id="L231">	@Override public T visitNodePredicateRegEx(AqlParser.NodePredicateRegExContext ctx) { return visitChildren(ctx); }</span>
+	/**
+	 * {@inheritDoc}
+	 *
+	 * &lt;p&gt;The default implementation returns the result of calling
+	 * {@link #visitChildren} on {@code ctx}.&lt;/p&gt;
+	 */
+<span class="nc" id="L238">	@Override public T visitMatchesOperand(AqlParser.MatchesOperandContext ctx) { return visitChildren(ctx); }</span>
+	/**
+	 * {@inheritDoc}
+	 *
+	 * &lt;p&gt;The default implementation returns the result of calling
+	 * {@link #visitChildren} on {@code ctx}.&lt;/p&gt;
+	 */
+<span class="nc" id="L245">	@Override public T visitValueListItems(AqlParser.ValueListItemsContext ctx) { return visitChildren(ctx); }</span>
+	/**
+	 * {@inheritDoc}
+	 *
+	 * &lt;p&gt;The default implementation returns the result of calling
+	 * {@link #visitChildren} on {@code ctx}.&lt;/p&gt;
+	 */
+<span class="nc" id="L252">	@Override public T visitVersionpredicate(AqlParser.VersionpredicateContext ctx) { return visitChildren(ctx); }</span>
+	/**
+	 * {@inheritDoc}
+	 *
+	 * &lt;p&gt;The default implementation returns the result of calling
+	 * {@link #visitChildren} on {@code ctx}.&lt;/p&gt;
+	 */
+<span class="nc" id="L259">	@Override public T visitVersionpredicateOptions(AqlParser.VersionpredicateOptionsContext ctx) { return visitChildren(ctx); }</span>
+	/**
+	 * {@inheritDoc}
+	 *
+	 * &lt;p&gt;The default implementation returns the result of calling
+	 * {@link #visitChildren} on {@code ctx}.&lt;/p&gt;
+	 */
+<span class="fc" id="L266">	@Override public T visitStandardPredicate(AqlParser.StandardPredicateContext ctx) { return visitChildren(ctx); }</span>
+	/**
+	 * {@inheritDoc}
+	 *
+	 * &lt;p&gt;The default implementation returns the result of calling
+	 * {@link #visitChildren} on {@code ctx}.&lt;/p&gt;
+	 */
+<span class="nc" id="L273">	@Override public T visitJoinPredicate(AqlParser.JoinPredicateContext ctx) { return visitChildren(ctx); }</span>
+	/**
+	 * {@inheritDoc}
+	 *
+	 * &lt;p&gt;The default implementation returns the result of calling
+	 * {@link #visitChildren} on {@code ctx}.&lt;/p&gt;
+	 */
+<span class="fc" id="L280">	@Override public T visitPredicateExpr(AqlParser.PredicateExprContext ctx) { return visitChildren(ctx); }</span>
+	/**
+	 * {@inheritDoc}
+	 *
+	 * &lt;p&gt;The default implementation returns the result of calling
+	 * {@link #visitChildren} on {@code ctx}.&lt;/p&gt;
+	 */
+<span class="fc" id="L287">	@Override public T visitPredicateAnd(AqlParser.PredicateAndContext ctx) { return visitChildren(ctx); }</span>
+	/**
+	 * {@inheritDoc}
+	 *
+	 * &lt;p&gt;The default implementation returns the result of calling
+	 * {@link #visitChildren} on {@code ctx}.&lt;/p&gt;
+	 */
+<span class="fc" id="L294">	@Override public T visitPredicateEquality(AqlParser.PredicateEqualityContext ctx) { return visitChildren(ctx); }</span>
+	/**
+	 * {@inheritDoc}
+	 *
+	 * &lt;p&gt;The default implementation returns the result of calling
+	 * {@link #visitChildren} on {@code ctx}.&lt;/p&gt;
+	 */
+<span class="fc" id="L301">	@Override public T visitPredicateOperand(AqlParser.PredicateOperandContext ctx) { return visitChildren(ctx); }</span>
+	/**
+	 * {@inheritDoc}
+	 *
+	 * &lt;p&gt;The default implementation returns the result of calling
+	 * {@link #visitChildren} on {@code ctx}.&lt;/p&gt;
+	 */
+<span class="fc" id="L308">	@Override public T visitOperand(AqlParser.OperandContext ctx) { return visitChildren(ctx); }</span>
+	/**
+	 * {@inheritDoc}
+	 *
+	 * &lt;p&gt;The default implementation returns the result of calling
+	 * {@link #visitChildren} on {@code ctx}.&lt;/p&gt;
+	 */
+<span class="nc" id="L315">	@Override public T visitInvokeOperand(AqlParser.InvokeOperandContext ctx) { return visitChildren(ctx); }</span>
+	/**
+	 * {@inheritDoc}
+	 *
+	 * &lt;p&gt;The default implementation returns the result of calling
+	 * {@link #visitChildren} on {@code ctx}.&lt;/p&gt;
+	 */
+<span class="nc" id="L322">	@Override public T visitInvokeExpr(AqlParser.InvokeExprContext ctx) { return visitChildren(ctx); }</span>
+	/**
+	 * {@inheritDoc}
+	 *
+	 * &lt;p&gt;The default implementation returns the result of calling
+	 * {@link #visitChildren} on {@code ctx}.&lt;/p&gt;
+	 */
+<span class="fc" id="L329">	@Override public T visitObjectPath(AqlParser.ObjectPathContext ctx) { return visitChildren(ctx); }</span>
+	/**
+	 * {@inheritDoc}
+	 *
+	 * &lt;p&gt;The default implementation returns the result of calling
+	 * {@link #visitChildren} on {@code ctx}.&lt;/p&gt;
+	 */
+<span class="fc" id="L336">	@Override public T visitPathPart(AqlParser.PathPartContext ctx) { return visitChildren(ctx); }</span>
+	/**
+	 * {@inheritDoc}
+	 *
+	 * &lt;p&gt;The default implementation returns the result of calling
+	 * {@link #visitChildren} on {@code ctx}.&lt;/p&gt;
+	 */
+<span class="nc" id="L343">	@Override public T visitClassExpr(AqlParser.ClassExprContext ctx) { return visitChildren(ctx); }</span>
+	/**
+	 * {@inheritDoc}
+	 *
+	 * &lt;p&gt;The default implementation returns the result of calling
+	 * {@link #visitChildren} on {@code ctx}.&lt;/p&gt;
+	 */
+<span class="fc" id="L350">	@Override public T visitSimpleClassExpr(AqlParser.SimpleClassExprContext ctx) { return visitChildren(ctx); }</span>
+	/**
+	 * {@inheritDoc}
+	 *
+	 * &lt;p&gt;The default implementation returns the result of calling
+	 * {@link #visitChildren} on {@code ctx}.&lt;/p&gt;
+	 */
+<span class="fc" id="L357">	@Override public T visitArchetypedClassExpr(AqlParser.ArchetypedClassExprContext ctx) { return visitChildren(ctx); }</span>
+	/**
+	 * {@inheritDoc}
+	 *
+	 * &lt;p&gt;The default implementation returns the result of calling
+	 * {@link #visitChildren} on {@code ctx}.&lt;/p&gt;
+	 */
+<span class="nc" id="L364">	@Override public T visitVersionedClassExpr(AqlParser.VersionedClassExprContext ctx) { return visitChildren(ctx); }</span>
+	/**
+	 * {@inheritDoc}
+	 *
+	 * &lt;p&gt;The default implementation returns the result of calling
+	 * {@link #visitChildren} on {@code ctx}.&lt;/p&gt;
+	 */
+<span class="nc" id="L371">	@Override public T visitVersionClassExpr(AqlParser.VersionClassExprContext ctx) { return visitChildren(ctx); }</span>
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.7.202105040129</span></div></body></html>

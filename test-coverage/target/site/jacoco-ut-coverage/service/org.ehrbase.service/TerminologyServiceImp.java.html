@@ -1,0 +1,148 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../../jacoco-resources/report.gif" type="image/gif"/><title>TerminologyServiceImp.java</title><link rel="stylesheet" href="../../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../../index.html" class="el_report">Coverage with Unit Tests</a> &gt; <a href="../index.html" class="el_bundle">service</a> &gt; <a href="index.source.html" class="el_package">org.ehrbase.service</a> &gt; <span class="el_source">TerminologyServiceImp.java</span></div><h1>TerminologyServiceImp.java</h1><pre class="source lang-java linenums">/*
+ * Copyright (c) 2019 vitasystems GmbH and Hannover Medical School.
+ *
+ * This file is part of project EHRbase
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     https://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.ehrbase.service;
+
+import java.util.Map;
+import javax.annotation.PostConstruct;
+import org.ehrbase.openehr.sdk.terminology.openehr.CodeSetAccess;
+import org.ehrbase.openehr.sdk.terminology.openehr.OpenEHRCodeSetIdentifiers;
+import org.ehrbase.openehr.sdk.terminology.openehr.TerminologyAccess;
+import org.ehrbase.openehr.sdk.terminology.openehr.TerminologyService;
+import org.ehrbase.openehr.sdk.terminology.openehr.implementation.AttributeCodesetMapping;
+import org.ehrbase.openehr.sdk.terminology.openehr.implementation.LocalizedTerminologies;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+@Service
+@Transactional
+public class TerminologyServiceImp implements TerminologyService {
+
+    private static TerminologyServiceImp instance;
+    private LocalizedTerminologies localizedTerminologies;
+
+    @Autowired
+<span class="fc" id="L40">    public TerminologyServiceImp() throws Exception {</span>
+<span class="fc" id="L41">        localizedTerminologies = new LocalizedTerminologies();</span>
+<span class="fc" id="L42">    }</span>
+
+    public static TerminologyServiceImp getInstance() {
+<span class="nc" id="L45">        return instance;</span>
+    }
+
+    @PostConstruct
+    public void init() {
+<span class="fc" id="L50">        instance = this;</span>
+<span class="fc" id="L51">    }</span>
+
+    @Override
+    public TerminologyAccess terminology(String name) {
+<span class="fc" id="L55">        return localizedTerminologies.getDefault().terminology(name);</span>
+    }
+
+    @Override
+    public TerminologyAccess terminology(String name, String language) {
+<span class="fc" id="L60">        return localizedTerminologies.locale(language).terminology(name);</span>
+    }
+
+    @Override
+    public CodeSetAccess codeSet(String name) {
+<span class="fc" id="L65">        return localizedTerminologies.getDefault().codeSet(name);</span>
+    }
+
+    @Override
+    public CodeSetAccess codeSet(String name, String language) {
+<span class="fc" id="L70">        return localizedTerminologies.locale(language).codeSet(name);</span>
+    }
+
+    @Override
+    public CodeSetAccess codeSetForId(String name) {
+<span class="fc" id="L75">        return localizedTerminologies.getDefault().codeSetForId(OpenEHRCodeSetIdentifiers.valueOf(name));</span>
+    }
+
+    @Override
+    public CodeSetAccess codeSetForId(String name, String language) {
+<span class="fc" id="L80">        return localizedTerminologies.locale(language).codeSetForId(OpenEHRCodeSetIdentifiers.valueOf(name));</span>
+    }
+
+    @Override
+    public Boolean hasTerminology(String name) {
+<span class="fc" id="L85">        return localizedTerminologies.getDefault().hasTerminology(name);</span>
+    }
+
+    @Override
+    public Boolean hasTerminology(String name, String language) {
+<span class="fc" id="L90">        return localizedTerminologies.locale(language).hasTerminology(name);</span>
+    }
+
+    @Override
+    public Boolean hasCodeSet(String name) {
+<span class="fc" id="L95">        return localizedTerminologies.getDefault().hasCodeSet(name);</span>
+    }
+
+    @Override
+    public Boolean hasCodeSet(String name, String language) {
+<span class="fc" id="L100">        return localizedTerminologies.locale(language).hasCodeSet(name);</span>
+    }
+
+    @Override
+    public String[] terminologyIdentifiers() {
+<span class="fc" id="L105">        return localizedTerminologies.getDefault().terminologyIdentifiers().toArray(new String[] {});</span>
+    }
+
+    @Override
+    public String[] terminologyIdentifiers(String language) {
+<span class="fc" id="L110">        return localizedTerminologies.locale(language).terminologyIdentifiers().toArray(new String[] {});</span>
+    }
+
+    @Override
+    public Map&lt;String, String&gt; openehrCodeSets() {
+<span class="fc" id="L115">        return localizedTerminologies.getDefault().openehrCodeSets();</span>
+    }
+
+    @Override
+    public Map&lt;String, String&gt; openehrCodeSets(String language) {
+<span class="fc" id="L120">        return localizedTerminologies.locale(language).openehrCodeSets();</span>
+    }
+
+    @Override
+    public String[] codeSetIdentifiers() {
+<span class="fc" id="L125">        return localizedTerminologies.getDefault().codeSetIdentifiers().toArray(new String[] {});</span>
+    }
+
+    @Override
+    public String[] codeSetIdentifiers(String language) {
+<span class="fc" id="L130">        return localizedTerminologies.locale(language).codeSetIdentifiers().toArray(new String[] {});</span>
+    }
+
+    @Override
+    public String getLabelForCode(String code, String language) {
+<span class="nc" id="L135">        return localizedTerminologies.locale(language).terminology(&quot;openehr&quot;).rubricForCode(code, language);</span>
+    }
+
+    @Override
+    public AttributeCodesetMapping codesetMapping() {
+<span class="nc" id="L140">        return localizedTerminologies.codesetMapping();</span>
+    }
+
+    @Override
+    public LocalizedTerminologies localizedTerminologies() {
+<span class="nc" id="L145">        return localizedTerminologies;</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.7.202105040129</span></div></body></html>

@@ -1,0 +1,768 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../../jacoco-resources/report.gif" type="image/gif"/><title>CompositionSerializer.java</title><link rel="stylesheet" href="../../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../../index.html" class="el_report">Overall Coverage</a> &gt; <a href="../index.html" class="el_bundle">jooq-pg</a> &gt; <a href="index.source.html" class="el_package">org.ehrbase.jooq.dbencoding</a> &gt; <span class="el_source">CompositionSerializer.java</span></div><h1>CompositionSerializer.java</h1><pre class="source lang-java linenums">/*
+ * Copyright (c) 2019 vitasystems GmbH and Hannover Medical School.
+ *
+ * This file is part of project EHRbase
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     https://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.ehrbase.jooq.dbencoding;
+
+import com.google.gson.Gson;
+import com.google.gson.GsonBuilder;
+import com.nedap.archie.rm.RMObject;
+import com.nedap.archie.rm.composition.Action;
+import com.nedap.archie.rm.composition.Activity;
+import com.nedap.archie.rm.composition.AdminEntry;
+import com.nedap.archie.rm.composition.Composition;
+import com.nedap.archie.rm.composition.ContentItem;
+import com.nedap.archie.rm.composition.Evaluation;
+import com.nedap.archie.rm.composition.Instruction;
+import com.nedap.archie.rm.composition.Observation;
+import com.nedap.archie.rm.composition.Section;
+import com.nedap.archie.rm.datastructures.Cluster;
+import com.nedap.archie.rm.datastructures.Element;
+import com.nedap.archie.rm.datastructures.Event;
+import com.nedap.archie.rm.datastructures.History;
+import com.nedap.archie.rm.datastructures.Item;
+import com.nedap.archie.rm.datastructures.ItemList;
+import com.nedap.archie.rm.datastructures.ItemSingle;
+import com.nedap.archie.rm.datastructures.ItemStructure;
+import com.nedap.archie.rm.datastructures.ItemTable;
+import com.nedap.archie.rm.datastructures.ItemTree;
+import com.nedap.archie.rm.datavalues.DvText;
+import com.nedap.archie.rm.integration.GenericEntry;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import org.apache.commons.collections.map.MultiValueMap;
+import org.ehrbase.jooq.dbencoding.attributes.ActionAttributes;
+import org.ehrbase.jooq.dbencoding.attributes.ActivityAttributes;
+import org.ehrbase.jooq.dbencoding.attributes.AdminEntryAttributes;
+import org.ehrbase.jooq.dbencoding.attributes.ClusterAttributes;
+import org.ehrbase.jooq.dbencoding.attributes.ElementAttributes;
+import org.ehrbase.jooq.dbencoding.attributes.EvaluationAttributes;
+import org.ehrbase.jooq.dbencoding.attributes.EventAttributes;
+import org.ehrbase.jooq.dbencoding.attributes.HistoryAttributes;
+import org.ehrbase.jooq.dbencoding.attributes.InstructionAttributes;
+import org.ehrbase.jooq.dbencoding.attributes.ItemStructureAttributes;
+import org.ehrbase.jooq.dbencoding.attributes.ObservationAttributes;
+import org.ehrbase.jooq.dbencoding.attributes.SectionAttributes;
+import org.ehrbase.openehr.sdk.serialisation.exception.MarshalException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+/**
+ * Sequential Event Processor for Composition.
+ *
+ * &lt;p&gt;Takes an RM composition and serialize it as a Maps of Maps and Arrays with WrappedElements.
+ * since some duplicate entries have been noticed, the node id contains type:name:archetype_id
+ *
+ * @author Christian Chevalley
+ */
+public class CompositionSerializer {
+
+<span class="fc" id="L74">    public enum WalkerOutputMode {</span>
+<span class="fc" id="L75">        PATH,</span>
+<span class="fc" id="L76">        NAMED,</span>
+<span class="fc" id="L77">        EXPANDED,</span>
+<span class="fc" id="L78">        RAW</span>
+    }
+
+<span class="fc" id="L81">    private final Logger log = LoggerFactory.getLogger(this.getClass());</span>
+
+<span class="fc" id="L83">    protected ItemStack itemStack = new ItemStack();</span>
+
+    private final WalkerOutputMode tagMode; // default
+
+    public static final String TAG_META = &quot;/meta&quot;;
+    public static final String TAG_CONTENT = &quot;/content&quot;;
+    public static final String TAG_PROTOCOL = &quot;/protocol&quot;;
+    public static final String TAG_DATA = &quot;/data&quot;;
+    public static final String TAG_STATE = &quot;/state&quot;;
+    public static final String TAG_DESCRIPTION = &quot;/description&quot;;
+    public static final String TAG_TIME = &quot;/time&quot;;
+    public static final String TAG_WIDTH = &quot;/width&quot;;
+    public static final String TAG_MATH_FUNCTION = &quot;/math_function&quot;;
+    public static final String TAG_INSTRUCTION = &quot;/instruction&quot;;
+    public static final String TAG_NARRATIVE = &quot;/narrative&quot;;
+    public static final String TAG_EXPIRY_TIME = &quot;/expiry_time&quot;;
+    public static final String TAG_ITEMS = &quot;/items&quot;;
+    public static final String TAG_OTHER_CONTEXT = &quot;/context/other_context&quot;;
+    public static final String TAG_ACTIVITIES = &quot;/activities&quot;;
+    public static final String TAG_ACTIVITY = &quot;/activity&quot;;
+    public static final String TAG_VALUE = &quot;/value&quot;;
+    public static final String TAG_NULL_FLAVOUR = &quot;/null_flavour&quot;;
+    public static final String TAG_FEEDER_AUDIT = &quot;/feeder_audit&quot;;
+    public static final String TAG_EVENTS = &quot;/events&quot;;
+    public static final String TAG_ORIGIN = &quot;/origin&quot;;
+    public static final String TAG_SUMMARY = &quot;/summary&quot;;
+    public static final String TAG_TIMING = &quot;/timing&quot;;
+    public static final String TAG_COMPOSITION = &quot;/composition&quot;;
+    public static final String TAG_ENTRY = &quot;/entry&quot;;
+    public static final String TAG_EVALUATION = &quot;/evaluation&quot;;
+    public static final String TAG_OBSERVATION = &quot;/observation&quot;;
+    public static final String TAG_ACTION = &quot;/action&quot;;
+    public static final String TAG_SUBJECT = &quot;/subject&quot;;
+    public static final String TAG_LANGUAGE = &quot;/language&quot;;
+    public static final String TAG_ENCODING = &quot;/encoding&quot;;
+    public static final String TAG_ISM_TRANSITION = &quot;/ism_transition&quot;;
+    public static final String TAG_CURRENT_STATE = &quot;/current_state&quot;;
+    public static final String TAG_CAREFLOW_STEP = &quot;/careflow_step&quot;;
+    public static final String TAG_ISM_TRANSITION_REASON = &quot;/careflow_step&quot;;
+    public static final String TAG_TRANSITION = &quot;/transition&quot;;
+    public static final String TAG_WORKFLOW_ID = &quot;/workflow_id&quot;;
+    public static final String TAG_WF_DEFINITION = &quot;/wf_definition&quot;;
+    public static final String TAG_GUIDELINE_ID = &quot;/guideline_id&quot;;
+    public static final String TAG_OTHER_PARTICIPATIONS = &quot;/other_participations&quot;;
+    public static final String TAG_PROVIDER = &quot;/provider&quot;; // care entry provider
+    public static final String TAG_UID = &quot;/uid&quot;;
+    public static final String TAG_OTHER_DETAILS = &quot;/other_details&quot;;
+    public static final String TAG_INSTRUCTION_DETAILS = &quot;/instruction_details&quot;;
+    public static final String TAG_ACTIVITY_ID = &quot;/action_id&quot;;
+    public static final String TAG_INSTRUCTION_ID = &quot;/instruction_id&quot;;
+    public static final String TAG_PATH = &quot;/$PATH$&quot;;
+    public static final String TAG_CLASS = &quot;/$CLASS$&quot;;
+    public static final String TAG_NAME = &quot;/name&quot;;
+    public static final String TAG_DEFINING_CODE = &quot;/defining_code&quot;;
+    public static final String INNER_CLASS_LIST = &quot;$INNER_CLASS_LIST$&quot;;
+    public static final String TAG_ACTION_ARCHETYPE_ID = &quot;/action_archetype_id&quot;;
+    public static final String TAG_ARCHETYPE_NODE_ID = &quot;/archetype_node_id&quot;;
+    public static final String TAG_LINKS = &quot;/links&quot;;
+    public static final String DEFAULT_NARRATIVE = &quot;DEFAULT_NARRATIVE&quot;;
+    public static final String TAG_ARCHETYPE_DETAILS = &quot;/archetype_details&quot;;
+    public static final String EPOCH_OFFSET = &quot;epoch_offset&quot;;
+<span class="fc" id="L144">    public static final DvText NO_NAME = null;</span>
+
+<span class="fc" id="L146">    public CompositionSerializer() {</span>
+<span class="fc" id="L147">        this.tagMode = WalkerOutputMode.PATH;</span>
+<span class="fc" id="L148">    }</span>
+
+    /**
+     * main entry method, process a composition.
+     *
+     * @param composition
+     * @return
+     */
+    //    @Override
+    private Map&lt;String, Object&gt; traverse(Composition composition) {
+<span class="fc" id="L158">        Map&lt;String, Object&gt; ctree = PathMap.getInstance();</span>
+<span class="pc bpc" id="L159" title="1 of 2 branches missed.">        if (composition == null /* CHC 170426: no content is legit... */) {</span>
+<span class="nc" id="L160">            return null;</span>
+        }
+
+<span class="fc" id="L163">        Map&lt;String, Object&gt; ltree = MultiMap.getInstance();</span>
+
+<span class="pc bpc" id="L165" title="1 of 4 branches missed.">        if (composition.getContent() != null &amp;&amp; !composition.getContent().isEmpty()) {</span>
+<span class="fc bfc" id="L166" title="All 2 branches covered.">            for (ContentItem item : composition.getContent()) {</span>
+<span class="fc" id="L167">                ltree = new EntrySerialTree(ltree, tagMode).insert(item, TAG_CONTENT, traverse(item, TAG_CONTENT));</span>
+            }
+        }
+
+<span class="fc" id="L171">        ltree.remove(TAG_CLASS);</span>
+<span class="fc" id="L172">        ltree.put(TAG_CLASS, new SimpleClassName(composition).toString()); // force the classname</span>
+<span class="fc" id="L173">        itemStack.popStacks();</span>
+
+<span class="fc" id="L175">        ctree = new EntrySerialTree(ctree, tagMode).insert(composition, TAG_COMPOSITION, ltree);</span>
+
+<span class="fc" id="L177">        return ctree;</span>
+    }
+
+    /**
+     * domain level: Observation, evaluation, instruction, action. section, admin etc.
+     *
+     * @param item
+     * @param tag
+     * @throws Exception
+     */
+    private Map&lt;String, Object&gt; traverse(ContentItem item, String tag) {
+
+<span class="fc" id="L189">        Map&lt;String, Object&gt; retmap = null;</span>
+
+<span class="pc bpc" id="L191" title="1 of 2 branches missed.">        if (item == null) {</span>
+<span class="nc" id="L192">            return null;</span>
+        }
+
+<span class="fc" id="L195">        log.debug(</span>
+<span class="fc" id="L196">                &quot;traverse element of class: {}, tag: {}, nodeid: {}&quot;, item.getClass(), tag, item.getArchetypeNodeId());</span>
+
+<span class="pc bpc" id="L198" title="2 of 4 branches missed.">        if (item.getArchetypeNodeId() == null || item.getArchetypeNodeId().isEmpty()) {</span>
+<span class="nc" id="L199">            throw new IllegalArgumentException(</span>
+<span class="nc" id="L200">                    &quot;ContentItem mandatory attribute archetype_node_id null or empty, item:&quot; + item);</span>
+        }
+
+<span class="pc bpc" id="L203" title="2 of 4 branches missed.">        if (item.getName() == null || item.getName().getValue().isEmpty()) {</span>
+<span class="nc" id="L204">            throw new IllegalArgumentException(</span>
+<span class="nc" id="L205">                    &quot;ContentItem mandatory attribute name is null or empty, item:&quot; + item.getArchetypeNodeId());</span>
+        }
+
+<span class="fc" id="L208">        itemStack.pushStacks(</span>
+<span class="fc" id="L209">                tag + &quot;[&quot; + item.getArchetypeNodeId() + &quot;]&quot;, item.getName().getValue());</span>
+
+<span class="fc bfc" id="L211" title="All 2 branches covered.">        if (item instanceof Observation) {</span>
+<span class="fc" id="L212">            Observation observation = (Observation) item;</span>
+<span class="fc" id="L213">            Map&lt;String, Object&gt; ltree = PathMap.getInstance();</span>
+
+<span class="fc bfc" id="L215" title="All 2 branches covered.">            if (observation.getProtocol() != null) {</span>
+<span class="fc" id="L216">                Object protocol = traverse(observation.getProtocol(), TAG_PROTOCOL);</span>
+<span class="fc bfc" id="L217" title="All 2 branches covered.">                if (protocol != null) {</span>
+<span class="fc" id="L218">                    ltree = new EntrySerialTree(ltree, tagMode).insert(observation, TAG_PROTOCOL, protocol);</span>
+                }
+            }
+
+<span class="pc bpc" id="L222" title="1 of 2 branches missed.">            if (observation.getData() != null) {</span>
+<span class="fc" id="L223">                ltree = new EntrySerialTree(ltree, tagMode)</span>
+<span class="fc" id="L224">                        .insert(observation, TAG_DATA, traverse(observation.getData(), TAG_DATA));</span>
+            }
+
+<span class="pc bpc" id="L227" title="1 of 2 branches missed.">            if (observation.getState() != null) {</span>
+<span class="nc" id="L228">                ltree = new EntrySerialTree(ltree, tagMode)</span>
+<span class="nc" id="L229">                        .insert(observation, TAG_STATE, traverse(observation.getState(), TAG_STATE));</span>
+            }
+
+<span class="fc" id="L232">            ltree = new ObservationAttributes(this, itemStack, ltree).toMap(observation);</span>
+
+<span class="pc bpc" id="L234" title="1 of 2 branches missed.">            if (ltree.size() &gt; 0) {</span>
+<span class="fc" id="L235">                retmap = ltree;</span>
+            }
+
+<span class="fc bfc" id="L238" title="All 2 branches covered.">        } else if (item instanceof Evaluation) {</span>
+<span class="fc" id="L239">            Evaluation evaluation = (Evaluation) item;</span>
+<span class="fc" id="L240">            Map&lt;String, Object&gt; ltree = PathMap.getInstance();</span>
+
+<span class="fc bfc" id="L242" title="All 2 branches covered.">            if (evaluation.getProtocol() != null) {</span>
+<span class="fc" id="L243">                Object protocol = traverse(evaluation.getProtocol(), TAG_PROTOCOL);</span>
+<span class="fc bfc" id="L244" title="All 2 branches covered.">                if (protocol != null) {</span>
+<span class="fc" id="L245">                    ltree = new EntrySerialTree(ltree, tagMode).insert(evaluation, TAG_PROTOCOL, protocol);</span>
+                }
+            }
+
+<span class="pc bpc" id="L249" title="1 of 2 branches missed.">            if (evaluation.getData() != null) {</span>
+<span class="fc" id="L250">                ltree = new EntrySerialTree(ltree, tagMode)</span>
+<span class="fc" id="L251">                        .insert(evaluation, TAG_DATA, traverse(evaluation.getData(), TAG_DATA));</span>
+            }
+
+<span class="fc" id="L254">            ltree = new EvaluationAttributes(this, itemStack, ltree).toMap(evaluation);</span>
+
+<span class="pc bpc" id="L256" title="1 of 2 branches missed.">            if (ltree.size() &gt; 0) {</span>
+<span class="fc" id="L257">                retmap = ltree;</span>
+            }
+
+<span class="fc bfc" id="L260" title="All 2 branches covered.">        } else if (item instanceof Instruction) {</span>
+<span class="fc" id="L261">            Map&lt;String, Object&gt; ltree = PathMap.getInstance();</span>
+
+<span class="fc" id="L263">            Instruction instruction = (Instruction) item;</span>
+
+<span class="fc bfc" id="L265" title="All 2 branches covered.">            if (instruction.getProtocol() != null) {</span>
+<span class="fc" id="L266">                Object protocol = traverse(instruction.getProtocol(), TAG_PROTOCOL);</span>
+<span class="pc bpc" id="L267" title="1 of 2 branches missed.">                if (protocol != null) {</span>
+<span class="fc" id="L268">                    ltree = new SerialTree(ltree)</span>
+<span class="fc" id="L269">                            .insert(</span>
+<span class="fc" id="L270">                                    instruction,</span>
+<span class="fc" id="L271">                                    new NodeEncoding(tagMode)</span>
+<span class="fc" id="L272">                                            .tag(TAG_PROTOCOL, ((Instruction) item).getProtocol(), ltree),</span>
+<span class="fc" id="L273">                                    protocol);</span>
+                }
+            }
+
+<span class="fc" id="L277">            ltree = new InstructionAttributes(this, itemStack, ltree).toMap(instruction);</span>
+
+<span class="pc bpc" id="L279" title="1 of 2 branches missed.">            if (instruction.getActivities() != null) {</span>
+
+<span class="fc" id="L281">                Map&lt;String, Object&gt; activities = MultiMap.getInstance();</span>
+<span class="fc bfc" id="L282" title="All 2 branches covered.">                for (Activity activity : instruction.getActivities()) {</span>
+<span class="fc" id="L283">                    itemStack.pushStacks(</span>
+<span class="fc" id="L284">                            TAG_ACTIVITIES + &quot;[&quot; + activity.getArchetypeNodeId() + &quot;]&quot;,</span>
+<span class="fc" id="L285">                            activity.getName().getValue());</span>
+<span class="fc" id="L286">                    activities = new EntrySerialTree(activities, tagMode)</span>
+<span class="fc" id="L287">                            .insert(activity, TAG_ACTIVITIES, traverse(activity, TAG_DESCRIPTION));</span>
+<span class="fc" id="L288">                    itemStack.popStacks();</span>
+                }
+
+<span class="fc" id="L291">                ltree = new EntrySerialTree(ltree, tagMode).insert(instruction, TAG_ACTIVITIES, activities);</span>
+            }
+
+<span class="pc bpc" id="L294" title="1 of 2 branches missed.">            if (ltree.size() &gt; 0) {</span>
+<span class="fc" id="L295">                retmap = ltree;</span>
+            }
+
+<span class="fc bfc" id="L298" title="All 2 branches covered.">        } else if (item instanceof Action) {</span>
+<span class="fc" id="L299">            Map&lt;String, Object&gt; ltree = PathMap.getInstance();</span>
+
+<span class="fc" id="L301">            Action action = (Action) item;</span>
+
+<span class="fc bfc" id="L303" title="All 2 branches covered.">            if (action.getProtocol() != null) {</span>
+<span class="fc" id="L304">                Object protocol = traverse(action.getProtocol(), TAG_PROTOCOL);</span>
+<span class="pc bpc" id="L305" title="1 of 2 branches missed.">                if (protocol != null) {</span>
+<span class="fc" id="L306">                    ltree = new EntrySerialTree(ltree, tagMode).insert(action, TAG_PROTOCOL, protocol);</span>
+                }
+            }
+
+<span class="pc bpc" id="L310" title="1 of 2 branches missed.">            if (action.getDescription() != null) {</span>
+<span class="fc" id="L311">                Object description = traverse(action.getDescription(), TAG_DESCRIPTION);</span>
+<span class="pc bpc" id="L312" title="1 of 2 branches missed.">                if (description != null) {</span>
+<span class="fc" id="L313">                    ltree = new EntrySerialTree(ltree, tagMode).insert(action, TAG_DESCRIPTION, description);</span>
+                }
+<span class="fc" id="L315">            } else {</span>
+                // this should not occur except in test scenario as this is rejected by the validation
+<span class="nc bnc" id="L317" title="All 2 branches missed.">                if (log.isWarnEnabled()) {</span>
+<span class="nc" id="L318">                    log.warn(&quot;ACTION requires attribute 'description' at node: {}&quot;, itemStack.pathStackDump());</span>
+                }
+            }
+
+<span class="fc" id="L322">            ltree = new ActionAttributes(this, itemStack, ltree).toMap(action);</span>
+<span class="pc" id="L323">            ltree.computeIfAbsent(TAG_CLASS, value -&gt; new SimpleClassName(item).toString());</span>
+
+<span class="fc" id="L325">            retmap = ltree;</span>
+
+<span class="fc bfc" id="L327" title="All 2 branches covered.">        } else if (item instanceof Section) {</span>
+
+<span class="fc" id="L329">            Map&lt;String, Object&gt; ltree = MultiMap.getInstance();</span>
+
+<span class="fc bfc" id="L331" title="All 2 branches covered.">            for (ContentItem contentItem : ((Section) item).getItems()) {</span>
+<span class="fc" id="L332">                ltree = new SerialTree(ltree)</span>
+<span class="fc" id="L333">                        .insert(</span>
+<span class="fc" id="L334">                                contentItem,</span>
+<span class="fc" id="L335">                                new NodeEncoding(tagMode).tag(TAG_ITEMS, contentItem, ltree),</span>
+<span class="fc" id="L336">                                traverse(contentItem, TAG_ITEMS));</span>
+<span class="pc bpc" id="L337" title="1 of 2 branches missed.">                log.debug(&quot;ltree now: {}&quot;, ltree != null);</span>
+            }
+
+<span class="fc" id="L340">            ltree = new SectionAttributes(this, itemStack, ltree).toMap((Section) item);</span>
+
+<span class="fc" id="L342">            ltree.remove(TAG_CLASS);</span>
+<span class="fc" id="L343">            ltree.put(TAG_CLASS, new SimpleClassName(item).toString()); // force the classname</span>
+<span class="fc" id="L344">            ltree = fixLocatableAttributes(ltree);</span>
+<span class="fc" id="L345">            retmap = ltree;</span>
+
+<span class="pc bpc" id="L347" title="1 of 2 branches missed.">        } else if (item instanceof AdminEntry) {</span>
+<span class="fc" id="L348">            AdminEntry adminEntry = (AdminEntry) item;</span>
+<span class="fc" id="L349">            Map&lt;String, Object&gt; ltree = PathMap.getInstance();</span>
+
+<span class="pc bpc" id="L351" title="1 of 2 branches missed.">            if (adminEntry.getData() != null) {</span>
+<span class="fc" id="L352">                ltree = new SerialTree(ltree)</span>
+<span class="fc" id="L353">                        .insert(</span>
+<span class="fc" id="L354">                                adminEntry,</span>
+<span class="fc" id="L355">                                new NodeEncoding(tagMode).tag(TAG_DATA, adminEntry.getData(), ltree),</span>
+<span class="fc" id="L356">                                traverse(adminEntry.getData(), TAG_DATA));</span>
+            }
+
+<span class="fc" id="L359">            ltree = new AdminEntryAttributes(this, itemStack, ltree).toMap(adminEntry);</span>
+
+<span class="pc bpc" id="L361" title="1 of 2 branches missed.">            if (ltree.size() &gt; 0) {</span>
+<span class="fc" id="L362">                retmap = ltree;</span>
+            }
+
+<span class="pc bnc" id="L365" title="All 2 branches missed.">        } else if (item instanceof GenericEntry) {</span>
+<span class="nc" id="L366">            Map&lt;String, Object&gt; ltree = PathMap.getInstance();</span>
+
+<span class="nc" id="L368">            GenericEntry genericEntry = (GenericEntry) item;</span>
+
+<span class="nc" id="L370">            ltree = new SerialTree(ltree)</span>
+<span class="nc" id="L371">                    .insert(</span>
+<span class="nc" id="L372">                            genericEntry,</span>
+<span class="nc" id="L373">                            new NodeEncoding(tagMode).tag(TAG_DATA, genericEntry.getData(), ltree),</span>
+<span class="nc" id="L374">                            traverse(genericEntry.getData(), TAG_DATA));</span>
+
+<span class="nc bnc" id="L376" title="All 2 branches missed.">            if (ltree.size() &gt; 0) {</span>
+<span class="nc" id="L377">                retmap = ltree;</span>
+            }
+
+<span class="nc" id="L380">        } else {</span>
+<span class="nc" id="L381">            log.warn(&quot;This item is not handled! {}&quot;, item.getNameAsString());</span>
+        }
+
+<span class="fc" id="L384">        itemStack.popStacks();</span>
+<span class="fc" id="L385">        return retmap;</span>
+    }
+
+    private Map&lt;String, Object&gt; traverse(Activity activity, String tag) {
+<span class="pc bpc" id="L389" title="1 of 2 branches missed.">        if (activity == null) {</span>
+<span class="nc" id="L390">            return null;</span>
+        }
+
+<span class="fc" id="L393">        log.debug(&quot;traverse activity: {}&quot;, activity);</span>
+
+<span class="pc bpc" id="L395" title="1 of 2 branches missed.">        if (activity.getDescription() == null) {</span>
+<span class="nc" id="L396">            throw new IllegalArgumentException(&quot;Invalid activity, no description found:&quot; + activity.getNameAsString());</span>
+        }
+
+<span class="fc" id="L399">        Map&lt;String, Object&gt; ltree = PathMap.getInstance();</span>
+
+<span class="fc" id="L401">        ltree = new ActivityAttributes(this, itemStack, ltree).toMap(activity);</span>
+
+<span class="fc" id="L403">        itemStack.pushStacks(</span>
+<span class="fc" id="L404">                tag + &quot;[&quot; + activity.getDescription().getArchetypeNodeId() + &quot;]&quot;,</span>
+<span class="fc" id="L405">                activity.getDescription().getName().getValue());</span>
+
+<span class="pc bpc" id="L407" title="1 of 2 branches missed.">        if (log.isDebugEnabled()) {</span>
+<span class="nc" id="L408">            log.debug(</span>
+<span class="nc" id="L409">                    &quot;{}{}[{}]={}&quot;,</span>
+<span class="nc" id="L410">                    itemStack.pathStackDump(),</span>
+<span class="nc" id="L411">                    TAG_DESCRIPTION,</span>
+<span class="nc" id="L412">                    activity.getArchetypeNodeId(),</span>
+<span class="nc" id="L413">                    activity.getDescription());</span>
+        }
+
+<span class="fc" id="L416">        ltree = new EntrySerialTree(ltree, tagMode)</span>
+<span class="fc" id="L417">                .insert(</span>
+<span class="fc" id="L418">                        activity,</span>
+<span class="fc" id="L419">                        TAG_DESCRIPTION,</span>
+<span class="fc" id="L420">                        traverse(</span>
+<span class="fc" id="L421">                                activity.getDescription(),</span>
+<span class="fc" id="L422">                                null)); // don't add a /data in path for description (don't ask me why...)</span>
+
+<span class="fc" id="L424">        itemStack.popStacks();</span>
+<span class="fc" id="L425">        return ltree;</span>
+    }
+
+    /**
+     * History level in composition
+     *
+     * @param history
+     * @param tag
+     * @throws Exception
+     */
+    private Map&lt;String, Object&gt; traverse(History&lt;?&gt; history, String tag) {
+<span class="pc bpc" id="L436" title="1 of 2 branches missed.">        if (history == null) {</span>
+<span class="nc" id="L437">            return null;</span>
+        }
+
+<span class="fc" id="L440">        log.debug(&quot;traverse history: {}&quot;, history);</span>
+
+<span class="fc" id="L442">        itemStack.pushStacks(</span>
+<span class="fc" id="L443">                tag + &quot;[&quot; + history.getArchetypeNodeId() + &quot;]&quot;,</span>
+<span class="fc" id="L444">                history.getName().getValue());</span>
+
+<span class="fc" id="L446">        Map&lt;String, Object&gt; ltree = PathMap.getInstance();</span>
+
+<span class="pc bpc" id="L448" title="1 of 2 branches missed.">        if (log.isDebugEnabled()) {</span>
+<span class="nc" id="L449">            log.debug(</span>
+<span class="nc" id="L450">                    &quot;{}{}[{}]={}&quot;,</span>
+<span class="nc" id="L451">                    itemStack.pathStackDump(),</span>
+<span class="nc" id="L452">                    TAG_ORIGIN,</span>
+<span class="nc" id="L453">                    history.getArchetypeNodeId(),</span>
+<span class="nc" id="L454">                    history.getOrigin());</span>
+        }
+
+<span class="fc" id="L457">        ltree = new HistoryAttributes(this, itemStack, ltree).toMap(history);</span>
+
+<span class="pc bpc" id="L459" title="1 of 2 branches missed.">        if (history.getSummary() != null) {</span>
+<span class="nc" id="L460">            ltree = new EntrySerialTree(ltree, tagMode)</span>
+<span class="nc" id="L461">                    .insert(history, TAG_SUMMARY, traverse(history.getSummary(), TAG_SUMMARY));</span>
+        }
+
+<span class="pc bpc" id="L464" title="1 of 2 branches missed.">        if (history.getEvents() != null) {</span>
+
+<span class="fc" id="L466">            Map&lt;String, Object&gt; eventtree = MultiMap.getInstance();</span>
+
+<span class="fc bfc" id="L468" title="All 2 branches covered.">            for (Event&lt;?&gt; event : history.getEvents()) {</span>
+<span class="fc" id="L469">                itemStack.pushStacks(</span>
+<span class="fc" id="L470">                        TAG_EVENTS + &quot;[&quot; + event.getArchetypeNodeId() + &quot;]&quot;,</span>
+<span class="fc" id="L471">                        event.getName().getValue());</span>
+
+<span class="fc" id="L473">                Map&lt;String, Object&gt; subtree = PathMap.getInstance();</span>
+
+<span class="pc bpc" id="L475" title="1 of 2 branches missed.">                if (log.isDebugEnabled()) {</span>
+<span class="nc" id="L476">                    log.debug(</span>
+<span class="nc" id="L477">                            &quot;{}{}[{}]={}&quot;,</span>
+<span class="nc" id="L478">                            itemStack.pathStackDump(),</span>
+<span class="nc" id="L479">                            TAG_TIME,</span>
+<span class="nc" id="L480">                            event.getArchetypeNodeId(),</span>
+<span class="nc" id="L481">                            event.getTime());</span>
+                }
+
+<span class="fc" id="L484">                subtree = new EventAttributes(this, itemStack, subtree).toMap(event);</span>
+
+<span class="pc bpc" id="L486" title="1 of 2 branches missed.">                if (event.getData() != null) {</span>
+<span class="fc" id="L487">                    subtree = new EntrySerialTree(subtree, tagMode)</span>
+<span class="fc" id="L488">                            .insert(event, TAG_DATA, traverse(event.getData(), TAG_DATA));</span>
+                }
+<span class="fc bfc" id="L490" title="All 2 branches covered.">                if (event.getState() != null) {</span>
+<span class="fc" id="L491">                    subtree = new EntrySerialTree(subtree, tagMode)</span>
+<span class="fc" id="L492">                            .insert(event, TAG_STATE, traverse(event.getState(), TAG_STATE));</span>
+                }
+
+<span class="pc bpc" id="L495" title="1 of 2 branches missed.">                if (!subtree.containsKey(TAG_CLASS)) {</span>
+<span class="nc" id="L496">                    log.warn(&quot;Inserting class type, potentially a test case?&quot;);</span>
+<span class="nc" id="L497">                    subtree.put(TAG_CLASS, new SimpleClassName(event).toString());</span>
+                }
+
+<span class="fc" id="L500">                itemStack.popStacks();</span>
+
+<span class="fc" id="L502">                eventtree = new SerialTree(eventtree)</span>
+<span class="fc" id="L503">                        .insert(null, event, new NodeEncoding(tagMode).tag(TAG_EVENTS, event, eventtree), subtree);</span>
+            }
+
+<span class="fc" id="L506">            ltree = new EntrySerialTree(ltree, tagMode).insert(history, TAG_EVENTS, eventtree);</span>
+        }
+
+<span class="fc" id="L509">        itemStack.popStacks();</span>
+<span class="fc" id="L510">        return ltree;</span>
+    }
+
+    /**
+     * identify if the entry is a value singleton. If so, compact the entry to be &quot;KEY/Value=entry&quot; if
+     * not, use the usual convention of hash of hash...
+     *
+     * @param target
+     * @throws Exception
+     */
+    private Map&lt;String, Object&gt; compactEntry(
+            Object node, Map&lt;String, Object&gt; target, String key, Map&lt;String, Object&gt; entry) {
+        // if entry is null, ignore, the dirty bit is not set...
+<span class="pc bpc" id="L523" title="2 of 4 branches missed.">        if (entry != null &amp;&amp; !entry.isEmpty()) {</span>
+<span class="pc bpc" id="L524" title="1 of 4 branches missed.">            if (entry.keySet().size() == 1 &amp;&amp; entry.get(TAG_VALUE) != null) {</span>
+<span class="fc" id="L525">                Object o = entry.get(TAG_VALUE);</span>
+                // TAG_VALUE is not required in the properties map representation
+<span class="fc" id="L527">                target = new SerialTree(target).insert(null, null, key, o);</span>
+<span class="fc" id="L528">            } else {</span>
+<span class="fc" id="L529">                target = new SerialTree(target)</span>
+<span class="fc" id="L530">                        .insert(new SimpleClassName(node).toString(), null, key, entry); // unchanged and uncompacted</span>
+            }
+        }
+
+<span class="fc" id="L534">        return target;</span>
+    }
+
+    /**
+     * ItemStructure: single, tree or table
+     *
+     * @param item
+     * @param uppertag
+     */
+    private Map&lt;String, Object&gt; traverse(ItemStructure item, String uppertag) {
+
+<span class="fc" id="L545">        Map&lt;String, Object&gt; retmap = null;</span>
+
+<span class="fc" id="L547">        log.debug(&quot;traverse itemstructure: {}&quot;, item);</span>
+
+<span class="pc bpc" id="L549" title="1 of 2 branches missed.">        if (item == null) {</span>
+<span class="nc" id="L550">            return null;</span>
+        }
+
+<span class="fc bfc" id="L553" title="All 2 branches covered.">        if (uppertag != null) {</span>
+<span class="fc" id="L554">            itemStack.pushStacks(uppertag + &quot;[&quot; + item.getArchetypeNodeId() + &quot;]&quot;, item.getNameAsString());</span>
+        }
+
+<span class="fc bfc" id="L557" title="All 2 branches covered.">        if (item instanceof ItemSingle) {</span>
+<span class="fc" id="L558">            Map&lt;String, Object&gt; ltree = PathMap.getInstance();</span>
+
+<span class="fc" id="L560">            ItemSingle itemSingle = (ItemSingle) item;</span>
+
+<span class="pc bpc" id="L562" title="1 of 2 branches missed.">            if (itemSingle.getItem() != null) {</span>
+<span class="fc" id="L563">                ltree = compactEntry(</span>
+<span class="fc" id="L564">                        itemSingle,</span>
+<span class="fc" id="L565">                        ltree,</span>
+<span class="fc" id="L566">                        new NodeEncoding(tagMode).tag(TAG_ITEMS, itemSingle, ltree),</span>
+<span class="fc" id="L567">                        traverse(itemSingle.getItem(), TAG_ITEMS));</span>
+            }
+<span class="pc bpc" id="L569" title="1 of 2 branches missed.">            if (ltree.size() &gt; 0) {</span>
+<span class="fc" id="L570">                retmap = ltree;</span>
+            }
+<span class="fc bfc" id="L572" title="All 2 branches covered.">        } else if (item instanceof ItemList) {</span>
+<span class="fc" id="L573">            Map&lt;String, Object&gt; ltree = MultiMap.getInstance();</span>
+
+<span class="fc" id="L575">            ItemList list = (ItemList) item;</span>
+
+<span class="pc bpc" id="L577" title="1 of 2 branches missed.">            if (list.getItems() != null) {</span>
+
+<span class="fc bfc" id="L579" title="All 2 branches covered.">                for (Item listItem : list.getItems()) {</span>
+<span class="fc" id="L580">                    ltree = compactEntry(</span>
+<span class="fc" id="L581">                            listItem,</span>
+<span class="fc" id="L582">                            ltree,</span>
+<span class="fc" id="L583">                            new NodeEncoding(tagMode).tag(TAG_ITEMS, listItem, ltree),</span>
+<span class="fc" id="L584">                            traverse(listItem, TAG_ITEMS));</span>
+                }
+            }
+<span class="pc bpc" id="L587" title="1 of 2 branches missed.">            if (ltree.size() &gt; 0) {</span>
+<span class="fc" id="L588">                retmap = ltree;</span>
+            }
+
+<span class="pc bpc" id="L591" title="1 of 2 branches missed.">        } else if (item instanceof ItemTree) {</span>
+<span class="fc" id="L592">            Map&lt;String, Object&gt; ltree = MultiMap.getInstance();</span>
+
+<span class="fc" id="L594">            ItemTree tree = (ItemTree) item;</span>
+
+<span class="pc bpc" id="L596" title="1 of 2 branches missed.">            if (tree.getItems() != null) {</span>
+
+<span class="fc bfc" id="L598" title="All 2 branches covered.">                for (Item subItem : tree.getItems()) {</span>
+<span class="fc" id="L599">                    ltree = compactEntry(</span>
+<span class="fc" id="L600">                            subItem,</span>
+<span class="fc" id="L601">                            ltree,</span>
+<span class="fc" id="L602">                            new NodeEncoding(tagMode).tag(TAG_ITEMS, subItem, ltree),</span>
+<span class="fc" id="L603">                            traverse(subItem, TAG_ITEMS));</span>
+                }
+            }
+<span class="fc bfc" id="L606" title="All 2 branches covered.">            if (ltree.size() &gt; 0) {</span>
+<span class="fc" id="L607">                retmap = ltree;</span>
+            }
+
+<span class="pc bnc" id="L610" title="All 2 branches missed.">        } else if (item instanceof ItemTable) {</span>
+<span class="nc" id="L611">            Map&lt;String, Object&gt; ltree = MultiMap.getInstance();</span>
+
+<span class="nc" id="L613">            ItemTable table = (ItemTable) item;</span>
+
+<span class="nc bnc" id="L615" title="All 2 branches missed.">            if (table.getRows() != null) {</span>
+
+<span class="nc bnc" id="L617" title="All 2 branches missed.">                for (Item subItem : table.getRows()) {</span>
+<span class="nc" id="L618">                    ltree = compactEntry(</span>
+<span class="nc" id="L619">                            subItem,</span>
+<span class="nc" id="L620">                            ltree,</span>
+<span class="nc" id="L621">                            new NodeEncoding(tagMode).tag(TAG_ITEMS, subItem, ltree),</span>
+<span class="nc" id="L622">                            traverse(subItem, TAG_ITEMS));</span>
+                }
+            }
+<span class="nc bnc" id="L625" title="All 2 branches missed.">            if (ltree.size() &gt; 0) {</span>
+<span class="nc" id="L626">                retmap = ltree;</span>
+            }
+        }
+
+<span class="fc bfc" id="L630" title="All 2 branches covered.">        if (uppertag != null) {</span>
+<span class="fc" id="L631">            itemStack.popStacks();</span>
+        }
+
+<span class="fc bfc" id="L634" title="All 2 branches covered.">        if (retmap != null) {</span>
+<span class="fc bfc" id="L635" title="All 2 branches covered.">            if (retmap.containsKey(TAG_CLASS)) {</span>
+<span class="fc" id="L636">                retmap.remove(CompositionSerializer.TAG_CLASS); // this will come out as an array...</span>
+            }
+<span class="fc" id="L638">            retmap.put(TAG_CLASS, new SimpleClassName(item).toString()); // this will come out as an array...</span>
+<span class="fc" id="L639">            retmap = new ItemStructureAttributes(this, itemStack, retmap).toMap(item);</span>
+<span class="fc" id="L640">            retmap = fixLocatableAttributes(retmap);</span>
+        }
+<span class="fc" id="L642">        return retmap;</span>
+    }
+
+    private Map&lt;String, Object&gt; fixLocatableAttributes(Map&lt;String, Object&gt; map) {
+<span class="fc bfc" id="L646" title="All 2 branches covered.">        if (map instanceof MultiValueMap) {</span>
+<span class="fc" id="L647">            Map&lt;String, Object&gt; newMap = new LinkedHashMap&lt;&gt;();</span>
+
+<span class="fc" id="L649">            map.forEach((k, v) -&gt; {</span>
+<span class="fc bfc" id="L650" title="All 2 branches covered.">                if (List.of(TAG_UID, TAG_FEEDER_AUDIT, TAG_LINKS).contains(k)</span>
+<span class="pc bpc" id="L651" title="1 of 2 branches missed.">                        &amp;&amp; v instanceof List</span>
+<span class="pc bpc" id="L652" title="1 of 2 branches missed.">                        &amp;&amp; !((List&lt;?&gt;) v).isEmpty()) {</span>
+<span class="fc" id="L653">                    newMap.put(k, ((List&lt;?&gt;) v).get(0));</span>
+<span class="fc" id="L654">                } else {</span>
+<span class="fc" id="L655">                    newMap.put(k, v);</span>
+                }
+<span class="fc" id="L657">            });</span>
+
+<span class="fc" id="L659">            return newMap;</span>
+        } else {
+<span class="fc" id="L661">            return map;</span>
+        }
+    }
+
+    /**
+     * Element level, normally cannot go deeper...
+     *
+     * @param item
+     * @param tag
+     * @throws Exception
+     */
+    private Map&lt;String, Object&gt; traverse(Item item, String tag) {
+<span class="fc" id="L673">        Map&lt;String, Object&gt; retmap = PathMap.getInstance();</span>
+
+<span class="fc" id="L675">        log.debug(&quot;traverse item: {}&quot;, item);</span>
+
+<span class="pc bpc" id="L677" title="1 of 2 branches missed.">        if (item == null) {</span>
+<span class="nc" id="L678">            return null;</span>
+        }
+
+<span class="fc bfc" id="L681" title="All 2 branches covered.">        if (item instanceof Element) { // NB. Element value and null flavour are optional</span>
+<span class="fc" id="L682">            itemStack.pushStacks(tag + &quot;[&quot; + item.getArchetypeNodeId() + &quot;]&quot;, null);</span>
+<span class="fc" id="L683">            retmap = new ElementAttributes(this, itemStack, retmap).toMap((Element) item);</span>
+<span class="fc" id="L684">            itemStack.popStacks();</span>
+<span class="pc bpc" id="L685" title="1 of 2 branches missed.">        } else if (item instanceof Cluster) {</span>
+<span class="fc" id="L686">            Map&lt;String, Object&gt; ltree = MultiMap.getInstance();</span>
+<span class="fc" id="L687">            itemStack.pushStacks(tag + &quot;[&quot; + item.getArchetypeNodeId() + &quot;]&quot;, item.getNameAsString());</span>
+
+<span class="fc" id="L689">            Cluster cluster = (Cluster) item;</span>
+<span class="fc" id="L690">            boolean hasContent = false;</span>
+
+<span class="pc bpc" id="L692" title="1 of 2 branches missed.">            if (cluster.getItems() != null) {</span>
+
+                // CHC:160914: fixed issue with cluster encoding as items (generated /value {/name...
+                // /value... /$PATH$... $CLASS$})
+                // this caused inconsistencies when running AQL queries
+<span class="fc bfc" id="L697" title="All 2 branches covered.">                for (Item clusterItem : cluster.getItems()) {</span>
+<span class="fc" id="L698">                    Map&lt;String, Object&gt; clusterItems = traverse(clusterItem, TAG_ITEMS);</span>
+
+<span class="pc bpc" id="L700" title="1 of 2 branches missed.">                    if (clusterItems != null) {</span>
+<span class="fc" id="L701">                        clusterItems.computeIfPresent(</span>
+<span class="fc" id="L702">                                TAG_CLASS, (key, value) -&gt; item.getClass().getSimpleName());</span>
+<span class="fc" id="L703">                        ltree.put(</span>
+<span class="fc" id="L704">                                new NodeEncoding(tagMode).tag(TAG_ITEMS, clusterItem, ltree),</span>
+<span class="fc" id="L705">                                clusterItems.getOrDefault(TAG_VALUE, clusterItems));</span>
+                        //
+                    }
+                }
+<span class="pc bpc" id="L709" title="1 of 2 branches missed.">                if (ltree.size() &gt; 0) {</span>
+<span class="fc" id="L710">                    hasContent = true;</span>
+                }
+
+<span class="fc" id="L713">                ltree = new ClusterAttributes(this, itemStack, ltree).toMap(cluster);</span>
+
+<span class="fc" id="L715">                ltree.computeIfAbsent(TAG_CLASS, value -&gt; Cluster.class.getSimpleName());</span>
+            }
+<span class="pc bpc" id="L717" title="1 of 2 branches missed.">            if (hasContent) {</span>
+<span class="fc" id="L718">                ltree = fixLocatableAttributes(ltree);</span>
+<span class="fc" id="L719">                retmap = ltree;</span>
+<span class="fc" id="L720">            } else {</span>
+<span class="nc" id="L721">                retmap = null;</span>
+            }
+
+<span class="fc" id="L724">            itemStack.popStacks();</span>
+        }
+
+<span class="fc" id="L727">        return retmap;</span>
+    }
+
+    //    @Override
+    public String dbEncode(RMObject rmObject) {
+
+        Map&lt;String, Object&gt; objectMap;
+<span class="fc bfc" id="L734" title="All 2 branches covered.">        if (rmObject instanceof Composition) {</span>
+<span class="fc" id="L735">            objectMap = traverse((Composition) rmObject);</span>
+<span class="pc bpc" id="L736" title="1 of 2 branches missed.">        } else if (rmObject instanceof Item) {</span>
+<span class="nc" id="L737">            objectMap = traverse((Item) rmObject, TAG_ITEMS);</span>
+<span class="pc bpc" id="L738" title="1 of 2 branches missed.">        } else if (rmObject instanceof ItemStructure) {</span>
+<span class="fc" id="L739">            objectMap = traverse((ItemStructure) rmObject, TAG_ITEMS);</span>
+<span class="pc bpc" id="L740" title="1 of 2 branches missed.">            if (objectMap != null</span>
+<span class="fc bfc" id="L741" title="All 2 branches covered.">                    &amp;&amp; !objectMap.containsKey(TAG_ARCHETYPE_NODE_ID)</span>
+<span class="pc bpc" id="L742" title="1 of 2 branches missed.">                    &amp;&amp; ((ItemStructure) rmObject).getArchetypeNodeId() != null) {</span>
+<span class="nc" id="L743">                objectMap.put(</span>
+<span class="nc" id="L744">                        CompositionSerializer.TAG_ARCHETYPE_NODE_ID, ((ItemStructure) rmObject).getArchetypeNodeId());</span>
+            }
+<span class="pc bpc" id="L746" title="1 of 2 branches missed.">            if (objectMap != null</span>
+<span class="fc bfc" id="L747" title="All 2 branches covered.">                    &amp;&amp; !objectMap.containsKey(CompositionSerializer.TAG_NAME)</span>
+<span class="pc bpc" id="L748" title="1 of 2 branches missed.">                    &amp;&amp; ((ItemStructure) rmObject).getName() != null) {</span>
+<span class="nc" id="L749">                objectMap.put(CompositionSerializer.TAG_NAME, ((ItemStructure) rmObject).getName());</span>
+            }
+<span class="nc" id="L751">        } else {</span>
+<span class="nc" id="L752">            throw new MarshalException(String.format(&quot;Class %s not supported &quot;, rmObject.getClass()), null);</span>
+        }
+
+<span class="fc" id="L755">        GsonBuilder builder = EncodeUtilArchie.getGsonBuilderInstance();</span>
+<span class="fc" id="L756">        Gson gson = builder.setPrettyPrinting().create();</span>
+<span class="fc" id="L757">        return gson.toJson(objectMap);</span>
+    }
+
+    public Map&lt;String, String&gt; getLtreeMap() {
+<span class="fc" id="L761">        return itemStack.getLtreeMap();</span>
+    }
+
+    public WalkerOutputMode tagMode() {
+<span class="fc" id="L765">        return tagMode;</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.7.202105040129</span></div></body></html>

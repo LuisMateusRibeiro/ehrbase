@@ -1,0 +1,109 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../../jacoco-resources/report.gif" type="image/gif"/><title>Containment.java</title><link rel="stylesheet" href="../../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../../index.html" class="el_report">Overall Coverage</a> &gt; <a href="../index.html" class="el_bundle">service</a> &gt; <a href="index.source.html" class="el_package">org.ehrbase.aql.containment</a> &gt; <span class="el_source">Containment.java</span></div><h1>Containment.java</h1><pre class="source lang-java linenums">/*
+ * Copyright (c) 2019 vitasystems GmbH and Hannover Medical School.
+ *
+ * This file is part of project EHRbase
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     https://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.ehrbase.aql.containment;
+
+import java.io.Serializable;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.Set;
+
+/**
+ * Container for containment definition&lt;p&gt;
+ * This class is used to resolve a symbol in an AQL expression by associating its corresponding archetype Id,
+ * class type (EHR, COMPOSITION etc.). Once resolved it holds the path for a given template.
+ * &lt;/p&gt;
+ * Created by christian on 4/4/2016.
+ */
+public class Containment implements Serializable {
+
+    private String symbol;
+    private String archetypeId;
+    private String className;
+<span class="fc" id="L37">    private Map&lt;String, Set&lt;String&gt;&gt; path =</span>
+            new HashMap&lt;&gt;(); // path is identified by a templateId and the relative aql path within
+
+<span class="fc" id="L40">    public Containment(String className, String symbol, String archetypeId) {</span>
+<span class="fc" id="L41">        this.setSymbol(symbol);</span>
+<span class="fc" id="L42">        this.archetypeId = archetypeOnly(archetypeId);</span>
+<span class="fc" id="L43">        this.className = className;</span>
+<span class="fc" id="L44">    }</span>
+
+    public void setPath(String template, Set&lt;String&gt; path) {
+<span class="fc" id="L47">        this.path.put(template, path);</span>
+<span class="fc" id="L48">    }</span>
+
+    public String getSymbol() {
+<span class="fc" id="L51">        return symbol;</span>
+    }
+
+    public String getArchetypeId() {
+<span class="fc" id="L55">        return archetypeId;</span>
+    }
+
+    public Set&lt;String&gt; getPath(String templateId) {
+<span class="fc" id="L59">        return path.get(templateId);</span>
+    }
+
+    public String getClassName() {
+<span class="fc" id="L63">        return className;</span>
+    }
+
+    public void setSymbol(String symbol) {
+<span class="fc" id="L67">        this.symbol = symbol;</span>
+<span class="fc" id="L68">    }</span>
+
+    public String toString() {
+<span class="nc" id="L71">        StringBuilder sb = new StringBuilder();</span>
+<span class="nc bnc" id="L72" title="All 2 branches missed.">        sb.append(className == null ? &quot;&quot; : className);</span>
+<span class="nc" id="L73">        sb.append(&quot;::&quot;);</span>
+<span class="nc bnc" id="L74" title="All 2 branches missed.">        sb.append(getSymbol() == null ? &quot;&quot; : getSymbol());</span>
+<span class="nc" id="L75">        sb.append(&quot;::&quot;);</span>
+<span class="nc bnc" id="L76" title="All 2 branches missed.">        sb.append(archetypeId == null ? &quot;&quot; : archetypeId);</span>
+<span class="nc" id="L77">        return sb.toString();</span>
+    }
+
+    @Override
+    public boolean equals(Object o) {
+<span class="nc bnc" id="L82" title="All 2 branches missed.">        if (this == o) return true;</span>
+<span class="nc bnc" id="L83" title="All 4 branches missed.">        if (o == null || getClass() != o.getClass()) return false;</span>
+
+<span class="nc" id="L85">        Containment that = (Containment) o;</span>
+
+<span class="nc bnc" id="L87" title="All 6 branches missed.">        if (getSymbol() != null ? !getSymbol().equals(that.getSymbol()) : that.getSymbol() != null) return false;</span>
+<span class="nc bnc" id="L88" title="All 6 branches missed.">        if (archetypeId != null ? !archetypeId.equals(that.archetypeId) : that.archetypeId != null) return false;</span>
+<span class="nc bnc" id="L89" title="All 6 branches missed.">        if (className != null ? !className.equals(that.className) : that.className != null) return false;</span>
+<span class="nc bnc" id="L90" title="All 6 branches missed.">        if (path != null ? !path.equals(that.path) : that.path != null) return false;</span>
+<span class="nc" id="L91">        return true;</span>
+    }
+
+    @Override
+    public int hashCode() {
+<span class="pc bpc" id="L96" title="1 of 2 branches missed.">        int result = getSymbol() != null ? getSymbol().hashCode() : 0;</span>
+<span class="pc bpc" id="L97" title="1 of 2 branches missed.">        result = 31 * result + (archetypeId != null ? archetypeId.hashCode() : 0);</span>
+<span class="pc bpc" id="L98" title="1 of 2 branches missed.">        result = 31 * result + (className != null ? className.hashCode() : 0);</span>
+<span class="pc bpc" id="L99" title="1 of 2 branches missed.">        result = 31 * result + (path != null ? path.hashCode() : 0);</span>
+<span class="fc" id="L100">        return result;</span>
+    }
+
+    private String archetypeOnly(String archetypeId) {
+<span class="pc bpc" id="L104" title="2 of 6 branches missed.">        if (archetypeId != null &amp;&amp; archetypeId.length() &gt; 0 &amp;&amp; archetypeId.contains(&quot;[&quot;))</span>
+<span class="nc" id="L105">            return archetypeId.substring(0, archetypeId.indexOf(']')).substring(1);</span>
+<span class="fc" id="L106">        else return archetypeId;</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.7.202105040129</span></div></body></html>

@@ -1,0 +1,254 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../../jacoco-resources/report.gif" type="image/gif"/><title>TemplateStoreAccess.java</title><link rel="stylesheet" href="../../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../../index.html" class="el_report">Overall Coverage</a> &gt; <a href="../index.html" class="el_bundle">service</a> &gt; <a href="index.source.html" class="el_package">org.ehrbase.dao.access.jooq</a> &gt; <span class="el_source">TemplateStoreAccess.java</span></div><h1>TemplateStoreAccess.java</h1><pre class="source lang-java linenums">/*
+ * Copyright (c) 2019 vitasystems GmbH and Hannover Medical School.
+ *
+ * This file is part of project EHRbase
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     https://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.ehrbase.dao.access.jooq;
+
+import static org.ehrbase.jooq.pg.tables.TemplateStore.TEMPLATE_STORE;
+
+import java.io.ByteArrayInputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
+import java.sql.Timestamp;
+import java.time.OffsetDateTime;
+import java.time.ZoneId;
+import java.util.List;
+import java.util.Optional;
+import java.util.Set;
+import java.util.UUID;
+import java.util.stream.Collectors;
+import javax.xml.namespace.QName;
+import org.apache.xmlbeans.XmlException;
+import org.apache.xmlbeans.XmlOptions;
+import org.ehrbase.api.exception.InternalServerException;
+import org.ehrbase.api.exception.UnprocessableEntityException;
+import org.ehrbase.dao.access.interfaces.I_DomainAccess;
+import org.ehrbase.dao.access.interfaces.I_TemplateStoreAccess;
+import org.ehrbase.dao.access.support.DataAccess;
+import org.ehrbase.dao.access.util.TransactionTime;
+import org.ehrbase.ehr.knowledge.TemplateMetaData;
+import org.ehrbase.jooq.pg.Routines;
+import org.ehrbase.jooq.pg.tables.records.AdminGetTemplateUsageRecord;
+import org.ehrbase.jooq.pg.tables.records.TemplateStoreRecord;
+import org.jooq.Record1;
+import org.jooq.Record2;
+import org.jooq.Result;
+import org.openehr.schemas.v1.OPERATIONALTEMPLATE;
+
+public class TemplateStoreAccess extends DataAccess implements I_TemplateStoreAccess {
+
+    private TemplateStoreRecord templateStoreRecord;
+
+    public TemplateStoreAccess(I_DomainAccess domainAccess, OPERATIONALTEMPLATE operationaltemplate, Short sysTenant) {
+<span class="nc" id="L57">        super(domainAccess);</span>
+<span class="nc" id="L58">        templateStoreRecord = domainAccess.getContext().newRecord(TEMPLATE_STORE);</span>
+<span class="nc" id="L59">        templateStoreRecord.setSysTenant(sysTenant);</span>
+<span class="nc" id="L60">        setTemplate(operationaltemplate);</span>
+<span class="nc" id="L61">    }</span>
+
+    // internal minimal constructor - needs proper initialization before following usage
+    private TemplateStoreAccess(I_DomainAccess domainAccess) {
+<span class="nc" id="L65">        super(domainAccess);</span>
+<span class="nc" id="L66">    }</span>
+
+    @Override
+    public UUID commit(Timestamp transactionTime) {
+<span class="nc" id="L70">        templateStoreRecord.setSysTransaction(transactionTime);</span>
+<span class="nc" id="L71">        templateStoreRecord.store();</span>
+<span class="nc" id="L72">        return templateStoreRecord.getId();</span>
+    }
+
+    @Override
+    public UUID commit() {
+<span class="nc" id="L77">        return commit(TransactionTime.millis());</span>
+    }
+
+    @Override
+    public Boolean update(Timestamp transactionTime) {
+<span class="nc" id="L82">        return update(transactionTime, false);</span>
+    }
+
+    @Override
+    public Boolean update(Timestamp transactionTime, boolean force) {
+<span class="nc" id="L87">        boolean updated = false;</span>
+
+<span class="nc bnc" id="L89" title="All 4 branches missed.">        if (force || templateStoreRecord.changed()) {</span>
+
+<span class="nc bnc" id="L91" title="All 2 branches missed.">            if (!templateStoreRecord.changed()) {</span>
+                // hack: force tell jOOQ to perform update whatever...
+<span class="nc" id="L93">                templateStoreRecord.changed(true);</span>
+            }
+<span class="nc" id="L95">            templateStoreRecord.setSysTransaction(transactionTime);</span>
+
+<span class="nc bnc" id="L97" title="All 2 branches missed.">            updated = templateStoreRecord.update() == 1;</span>
+        }
+
+<span class="nc" id="L100">        return updated;</span>
+    }
+
+    @Override
+    public Boolean update() {
+<span class="nc" id="L105">        return update(TransactionTime.millis(), false);</span>
+    }
+
+    @Override
+    public Boolean update(Boolean force) {
+<span class="nc" id="L110">        return update(TransactionTime.millis(), force);</span>
+    }
+
+    @Override
+    public Integer delete() {
+<span class="nc" id="L115">        int count = 0;</span>
+<span class="nc" id="L116">        count += templateStoreRecord.delete();</span>
+<span class="nc" id="L117">        return count;</span>
+    }
+
+    @Override
+    public DataAccess getDataAccess() {
+<span class="nc" id="L122">        return this;</span>
+    }
+
+    @Override
+    public OPERATIONALTEMPLATE getTemplate() {
+
+<span class="nc" id="L128">        return Optional.ofNullable(templateStoreRecord)</span>
+<span class="nc" id="L129">                .map(TemplateStoreRecord::getContent)</span>
+<span class="nc" id="L130">                .map(TemplateStoreAccess::buildOperationaltemplate)</span>
+<span class="nc" id="L131">                .orElse(null);</span>
+    }
+
+    private static OPERATIONALTEMPLATE buildOperationaltemplate(String content) {
+<span class="nc" id="L135">        InputStream inputStream = new ByteArrayInputStream(content.getBytes(StandardCharsets.UTF_8));</span>
+
+        org.openehr.schemas.v1.TemplateDocument document;
+        try {
+<span class="nc" id="L139">            document = org.openehr.schemas.v1.TemplateDocument.Factory.parse(inputStream);</span>
+<span class="nc" id="L140">        } catch (XmlException | IOException e) {</span>
+<span class="nc" id="L141">            throw new InternalServerException(e.getMessage());</span>
+        }
+
+<span class="nc" id="L144">        return document.getTemplate();</span>
+    }
+
+    @Override
+    public void setTemplate(OPERATIONALTEMPLATE template) {
+<span class="nc" id="L149">        templateStoreRecord.setId(UUID.fromString(template.getUid().getValue()));</span>
+<span class="nc" id="L150">        templateStoreRecord.setTemplateId(template.getTemplateId().getValue());</span>
+<span class="nc" id="L151">        XmlOptions opts = new XmlOptions();</span>
+<span class="nc" id="L152">        opts.setSaveSyntheticDocumentElement(new QName(&quot;http://schemas.openehr.org/v1&quot;, &quot;template&quot;));</span>
+<span class="nc" id="L153">        templateStoreRecord.setContent(template.xmlText(opts));</span>
+<span class="nc" id="L154">    }</span>
+
+    public static I_TemplateStoreAccess retrieveInstanceByTemplateId(I_DomainAccess domainAccess, String templateId) {
+<span class="nc" id="L157">        TemplateStoreAccess templateStoreAccess = new TemplateStoreAccess(domainAccess);</span>
+<span class="nc" id="L158">        templateStoreAccess.templateStoreRecord =</span>
+<span class="nc" id="L159">                domainAccess.getContext().fetchOne(TEMPLATE_STORE, TEMPLATE_STORE.TEMPLATE_ID.eq(templateId));</span>
+<span class="nc" id="L160">        return templateStoreAccess;</span>
+    }
+
+    public static List&lt;TemplateMetaData&gt; fetchAll(I_DomainAccess domainAccess) {
+<span class="nc" id="L164">        Result&lt;Record2&lt;String, Timestamp&gt;&gt; records = domainAccess</span>
+<span class="nc" id="L165">                .getContext()</span>
+<span class="nc" id="L166">                .select(TEMPLATE_STORE.CONTENT, TEMPLATE_STORE.SYS_TRANSACTION)</span>
+<span class="nc" id="L167">                .from(TEMPLATE_STORE)</span>
+<span class="nc" id="L168">                .fetch();</span>
+<span class="nc" id="L169">        return records.parallelStream().map(TemplateStoreAccess::buildMetadata).collect(Collectors.toList());</span>
+    }
+
+    public static Set&lt;String&gt; fetchAllTemplateIds(I_DomainAccess domainAccess) {
+<span class="nc" id="L173">        Result&lt;Record1&lt;String&gt;&gt; records = domainAccess</span>
+<span class="nc" id="L174">                .getContext()</span>
+<span class="nc" id="L175">                .select(TEMPLATE_STORE.TEMPLATE_ID)</span>
+<span class="nc" id="L176">                .from(TEMPLATE_STORE)</span>
+<span class="nc" id="L177">                .fetch();</span>
+<span class="nc" id="L178">        return records.parallelStream().map(Record1::component1).collect(Collectors.toSet());</span>
+    }
+
+    /**
+     * Replaces the old content of a template with the new provided content in the database storage.
+     * The target template id must be provided within the new template. This is a destructive
+     * operation thus the old template will be checked against Compositions if there are any usages of
+     * the template to avoid data inconsistencies.
+     *
+     * @param domainAccess - Database connection context
+     * @param template     - New template data to store
+     * @return - Updated template XML content
+     */
+    public static String adminUpdateTemplate(I_DomainAccess domainAccess, OPERATIONALTEMPLATE template) {
+
+        // Check if template is used anymore
+<span class="nc" id="L194">        Result&lt;AdminGetTemplateUsageRecord&gt; usingCompositions = Routines.adminGetTemplateUsage(</span>
+<span class="nc" id="L195">                domainAccess.getContext().configuration(),</span>
+<span class="nc" id="L196">                template.getTemplateId().getValue());</span>
+
+<span class="nc bnc" id="L198" title="All 2 branches missed.">        if (usingCompositions.isNotEmpty()) {</span>
+            // There are compositions using this template -&gt; Return list of uuids
+<span class="nc" id="L200">            throw new UnprocessableEntityException(String.format(</span>
+<span class="nc" id="L201">                    &quot;Cannot delete template %s since the following compositions are still using it %s&quot;,</span>
+<span class="nc" id="L202">                    template.getTemplateId().getValue(), usingCompositions.toString()));</span>
+        } else {
+<span class="nc" id="L204">            XmlOptions opts = new XmlOptions();</span>
+<span class="nc" id="L205">            opts.setSaveSyntheticDocumentElement(new QName(&quot;http://schemas.openehr.org/v1&quot;, &quot;template&quot;));</span>
+            // Replace template with db function
+<span class="nc" id="L207">            return Routines.adminUpdateTemplate(</span>
+<span class="nc" id="L208">                    domainAccess.getContext().configuration(),</span>
+<span class="nc" id="L209">                    template.getTemplateId().getValue(),</span>
+<span class="nc" id="L210">                    template.xmlText(opts));</span>
+        }
+    }
+
+    /**
+     * Removes the template identified by its template_id from database and returns if the operation
+     * succeeded.
+     *
+     * @param domainAccess - Database access instance
+     * @param templateId   - Target template_id, e.g. &quot;IDCR - Problem List.v1&quot;
+     * @return - Deletion succeeded or not
+     */
+    public static boolean deleteTemplate(I_DomainAccess domainAccess, String templateId) {
+
+        // Check if template is used in any composition
+<span class="nc" id="L225">        Result&lt;AdminGetTemplateUsageRecord&gt; usingCompositions =</span>
+<span class="nc" id="L226">                Routines.adminGetTemplateUsage(domainAccess.getContext().configuration(), templateId);</span>
+<span class="nc bnc" id="L227" title="All 2 branches missed.">        if (usingCompositions.isNotEmpty()) {</span>
+            // There are compositions using this template -&gt; Return list of uuids
+<span class="nc" id="L229">            throw new UnprocessableEntityException(String.format(</span>
+<span class="nc" id="L230">                    &quot;Cannot delete template %s since the following compositions are still using it %s&quot;,</span>
+<span class="nc" id="L231">                    templateId, usingCompositions.toString()));</span>
+        } else {
+            // Template no longer used -&gt; Delete
+<span class="nc bnc" id="L234" title="All 2 branches missed.">            return Routines.adminDeleteTemplate(domainAccess.getContext().configuration(), templateId) &gt; 0;</span>
+        }
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    public static int adminDeleteAllTemplates(I_DomainAccess domainAccess) {
+
+<span class="nc" id="L243">        return Routines.adminDeleteAllTemplates(domainAccess.getContext().configuration());</span>
+    }
+
+    private static TemplateMetaData buildMetadata(Record2&lt;String, Timestamp&gt; r) {
+<span class="nc" id="L247">        TemplateMetaData templateMetaData = new TemplateMetaData();</span>
+<span class="nc" id="L248">        templateMetaData.setOperationaltemplate(TemplateStoreAccess.buildOperationaltemplate(r.component1()));</span>
+        // @TODO read from DB
+<span class="nc" id="L250">        templateMetaData.setCreatedOn(OffsetDateTime.ofInstant(r.component2().toInstant(), ZoneId.systemDefault()));</span>
+<span class="nc" id="L251">        return templateMetaData;</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.7.202105040129</span></div></body></html>

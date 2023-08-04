@@ -1,0 +1,72 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../../jacoco-resources/report.gif" type="image/gif"/><title>AqlErrorHandlerNoRecovery.java</title><link rel="stylesheet" href="../../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../../index.html" class="el_report">Coverage with Unit Tests</a> &gt; <a href="../index.html" class="el_bundle">service</a> &gt; <a href="index.source.html" class="el_package">org.ehrbase.aql.compiler</a> &gt; <span class="el_source">AqlErrorHandlerNoRecovery.java</span></div><h1>AqlErrorHandlerNoRecovery.java</h1><pre class="source lang-java linenums">/*
+ * Copyright (c) 2019 vitasystems GmbH and Hannover Medical School.
+ *
+ * This file is part of project EHRbase
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     https://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.ehrbase.aql.compiler;
+
+import java.util.BitSet;
+import org.antlr.v4.runtime.*;
+import org.antlr.v4.runtime.atn.ATNConfigSet;
+import org.antlr.v4.runtime.dfa.DFA;
+import org.antlr.v4.runtime.misc.ParseCancellationException;
+
+/**
+ * Utility class to handle specific errors during parsing&lt;br&gt;
+ * Allows to return more meaningful messages during AQL parsing
+ * Created by christian on 4/15/2016.
+ */
+<span class="fc" id="L31">public class AqlErrorHandlerNoRecovery extends BaseErrorListener {</span>
+
+<span class="fc" id="L33">    public static final AqlErrorHandlerNoRecovery INSTANCE = new AqlErrorHandlerNoRecovery();</span>
+    public static final boolean REPORT_SYNTAX_ERRORS = true;
+
+    @Override
+    public void syntaxError(
+            Recognizer&lt;?, ?&gt; recognizer,
+            Object offendingSymbol,
+            int line,
+            int charPositionInLine,
+            String msg,
+            RecognitionException e)
+            throws ParseCancellationException {
+        if (!REPORT_SYNTAX_ERRORS) {
+            return;
+        }
+
+<span class="fc" id="L49">        String sourceName = recognizer.getInputStream().getSourceName();</span>
+<span class="pc bpc" id="L50" title="1 of 2 branches missed.">        if (!sourceName.isEmpty()) {</span>
+<span class="fc" id="L51">            sourceName = String.format(&quot;%s:%d:%d: &quot;, sourceName, line, charPositionInLine);</span>
+        }
+
+<span class="fc" id="L54">        throw new ParseCancellationException(</span>
+<span class="pc bpc" id="L55" title="1 of 2 branches missed.">                &quot;AQL Parse exception: &quot; + (sourceName.isEmpty() ? &quot;source:&quot; + sourceName : &quot;&quot;) + &quot;line &quot; + line</span>
+                        + &quot;: char &quot; + charPositionInLine + &quot; &quot; + msg);
+    }
+
+    @Override
+    public void reportAmbiguity(
+            Parser recognizer,
+            DFA dfa,
+            int startIndex,
+            int stopIndex,
+            boolean exact,
+            BitSet ambigAlts,
+            ATNConfigSet configs) {
+
+        //        System.out.println(&quot;Ambiguous&quot;);
+<span class="nc" id="L70">    }</span>
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.7.202105040129</span></div></body></html>

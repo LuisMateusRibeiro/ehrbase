@@ -1,0 +1,172 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../../jacoco-resources/report.gif" type="image/gif"/><title>EntryAttributeMapper.java</title><link rel="stylesheet" href="../../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../../index.html" class="el_report">Overall Coverage</a> &gt; <a href="../index.html" class="el_bundle">service</a> &gt; <a href="index.source.html" class="el_package">org.ehrbase.aql.sql.queryimpl</a> &gt; <span class="el_source">EntryAttributeMapper.java</span></div><h1>EntryAttributeMapper.java</h1><pre class="source lang-java linenums">/*
+ * Copyright (c) 2019 vitasystems GmbH and Hannover Medical School.
+ *
+ * This file is part of project EHRbase
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     https://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.ehrbase.aql.sql.queryimpl;
+
+import static org.ehrbase.aql.sql.queryimpl.attribute.GenericJsonPath.OTHER_CONTEXT;
+import static org.ehrbase.aql.sql.queryimpl.attribute.GenericJsonPath.OTHER_DETAILS;
+import static org.ehrbase.jooq.dbencoding.CompositionSerializer.TAG_UID;
+
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
+import org.apache.commons.lang3.StringUtils;
+import org.ehrbase.jooq.dbencoding.attributes.EntryAttributes;
+import org.ehrbase.jooq.dbencoding.attributes.LocatableAttributes;
+
+/**
+ * Map a datavalue UML expression from an ARCHETYPED structure into its RM/JSON representation
+ * see http://www.openehr.org/releases/trunk/UML/ for field identification
+ * Created by christian on 5/11/2016.
+ */
+@SuppressWarnings({&quot;java:S3776&quot;, &quot;java:S3740&quot;})
+public class EntryAttributeMapper {
+
+    public static final String ISM_TRANSITION = &quot;ism_transition&quot;;
+    public static final String NAME = &quot;name&quot;;
+    public static final String TIME = &quot;time&quot;;
+    public static final String ORIGIN = &quot;origin&quot;;
+    public static final String TIMING = &quot;timing&quot;;
+    public static final String OTHER_PARTICIPATIONS = &quot;other_participations&quot;;
+    public static final String SLASH_VALUE = &quot;/value&quot;;
+    public static final String VALUE = &quot;value&quot;;
+    public static final String DEFINING_CODE = &quot;defining_code&quot;;
+    public static final String SLASH = &quot;/&quot;;
+    public static final String COMMA = &quot;,&quot;;
+    public static final String LOWER = &quot;lower&quot;;
+    public static final String UPPER = &quot;upper&quot;;
+    public static final String INTERVAL = &quot;interval&quot;;
+    public static final String MAPPINGS = &quot;mappings&quot;;
+    public static final String FEEDER_AUDIT = &quot;feeder_audit&quot;;
+    public static final String CONTEXT = &quot;context&quot;;
+
+    private EntryAttributeMapper() {}
+
+    private static Integer firstOccurence(int offset, List&lt;String&gt; list) {
+<span class="fc bfc" id="L60" title="All 2 branches covered.">        for (int i = offset; i &lt; list.size(); i++) {</span>
+<span class="fc bfc" id="L61" title="All 2 branches covered.">            if (list.get(i).equals(EntryAttributeMapper.VALUE)) return i;</span>
+        }
+<span class="fc" id="L63">        return null;</span>
+    }
+
+    /**
+     * do a simple toCamelCase translation... and prefix all with /value :-)
+     *
+     * @param attribute
+     * @return
+     */
+    public static String map(String attribute) {
+<span class="fc" id="L73">        boolean inOtherParticipations = false;</span>
+
+<span class="pc bpc" id="L75" title="1 of 2 branches missed.">        if (attribute.equals(OTHER_CONTEXT)) return OTHER_CONTEXT; // conventionally</span>
+
+<span class="fc" id="L77">        List&lt;String&gt; fields = new ArrayList&lt;&gt;(Arrays.asList(attribute.split(SLASH)));</span>
+<span class="pc bpc" id="L78" title="1 of 2 branches missed.">        if (!fields.get(0).equals(OTHER_CONTEXT)) fields.remove(0);</span>
+
+<span class="fc" id="L80">        int floor = 1;</span>
+
+<span class="fc bfc" id="L82" title="All 2 branches covered.">        if (fields.isEmpty())</span>
+<span class="fc" id="L83">            return null; // this happens when a non specified value is queried f.e. the whole json body</span>
+
+        // deals with the tricky ones first...
+<span class="pc bpc" id="L86" title="1 of 2 branches missed.">        if (fields.get(0).equals(OTHER_PARTICIPATIONS)) {</span>
+<span class="nc" id="L87">            inOtherParticipations = true; // to avoid adding an index to access name array struct</span>
+<span class="fc bfc" id="L88" title="All 2 branches covered.">        } else if (fields.get(0).equals(NAME)) {</span>
+<span class="fc" id="L89">            fields.add(</span>
+                    1, &quot;0&quot;); // name is now formatted as /name -&gt; array of values! Required to deal with cluster items
+<span class="pc bpc" id="L91" title="1 of 4 branches missed.">        } else if (fields.size() &gt;= 2 &amp;&amp; fields.get(1).equals(MAPPINGS)) {</span>
+<span class="nc" id="L92">            fields.add(2, &quot;0&quot;); // mappings is now formatted as /mappings -&gt; array of values!</span>
+<span class="fc bfc" id="L93" title="All 2 branches covered.">        } else if (fields.get(0).equals(TIME)</span>
+<span class="pc bpc" id="L94" title="1 of 2 branches missed.">                || fields.get(0).equals(ORIGIN)</span>
+<span class="pc bpc" id="L95" title="1 of 2 branches missed.">                || fields.get(0).equals(TIMING)) {</span>
+<span class="pc bpc" id="L96" title="3 of 4 branches missed.">            if (fields.size() &gt; 1 &amp;&amp; fields.get(1).equals(VALUE)) {</span>
+<span class="nc" id="L97">                fields.add(VALUE); // time is formatted with 2 values: string value and epoch_offset</span>
+<span class="nc" id="L98">                fields.set(1, SLASH_VALUE);</span>
+            } else {
+<span class="fc" id="L100">                fields.add(1, SLASH_VALUE);</span>
+            }
+<span class="pc bpc" id="L102" title="1 of 2 branches missed.">        } else if (LocatableAttributes.isLocatableAttribute(&quot;/&quot; + fields.get(0))) {</span>
+<span class="nc" id="L103">            fields = setLocatableField(fields);</span>
+<span class="pc bpc" id="L104" title="1 of 2 branches missed.">        } else if (EntryAttributes.isEntryAttribute(&quot;/&quot; + fields.get(0))) {</span>
+<span class="nc" id="L105">            fields = setEntryAttributeField(fields);</span>
+        } else { // this deals with the &quot;/value,value&quot;
+<span class="fc" id="L107">            Integer match = firstOccurence(0, fields);</span>
+
+<span class="fc bfc" id="L109" title="All 2 branches covered.">            if (match != null) { // deals with &quot;/value/value&quot;</span>
+<span class="fc bfc" id="L110" title="All 2 branches covered.">                if (match != 0) {</span>
+                    // deals with name/value (name value is contained into a list conventionally)
+<span class="fc bfc" id="L112" title="All 2 branches covered.">                    if (match &gt; 1</span>
+<span class="fc" id="L113">                            &amp;&amp; fields.get(match - 1)</span>
+<span class="pc bpc" id="L114" title="1 of 2 branches missed.">                                    .matches(&quot;name|time|current_state|transition|careflow_step|reason|terminology_id&quot;))</span>
+<span class="fc" id="L115">                        fields.set(match, VALUE);</span>
+                    else
+                        // usual /value
+<span class="fc" id="L118">                        fields.set(match, SLASH_VALUE);</span>
+
+<span class="pc bpc" id="L120" title="1 of 2 branches missed.">                } else if (match + 1 &lt; fields.size() - 1) {</span>
+<span class="nc" id="L121">                    Integer first = firstOccurence(match + 1, fields);</span>
+<span class="nc bnc" id="L122" title="All 4 branches missed.">                    if (first != null &amp;&amp; first == match + 1) fields.set(match + 1, SLASH_VALUE);</span>
+                }
+            }
+        }
+
+        // prefix the first element
+<span class="fc" id="L128">        fields.set(0, SLASH + fields.get(0));</span>
+
+        // deals with the remainder of the array
+<span class="fc bfc" id="L131" title="All 2 branches covered.">        for (int i = floor; i &lt; fields.size(); i++) {</span>
+
+<span class="pc bpc" id="L133" title="1 of 4 branches missed.">            if (fields.get(i).equalsIgnoreCase(&quot;NAME&quot;) &amp;&amp; !inOtherParticipations) {</span>
+                // whenever the canonical json for name is queried
+<span class="fc" id="L135">                fields.set(i, &quot;/name,0&quot;);</span>
+<span class="fc" id="L136">            } else fields.set(i, fields.get(i));</span>
+        }
+
+<span class="fc" id="L139">        return StringUtils.join(fields, COMMA);</span>
+    }
+
+    private static List&lt;String&gt; setLocatableField(List&lt;String&gt; fields) {
+<span class="nc bnc" id="L143" title="All 2 branches missed.">        if ((&quot;/&quot; + fields.get(0)).equals(TAG_UID)) {</span>
+<span class="nc" id="L144">            fields.add(1, SLASH_VALUE);</span>
+        }
+
+<span class="nc" id="L147">        boolean inItemStruct = false;</span>
+<span class="nc" id="L148">        boolean inNameAttribute = false;</span>
+
+<span class="nc bnc" id="L150" title="All 2 branches missed.">        for (int i = 0; i &lt; fields.size(); i++) {</span>
+<span class="nc bnc" id="L151" title="All 4 branches missed.">            if (fields.get(i).contains(&quot;[&quot;) &amp;&amp; !fields.get(i).startsWith(OTHER_DETAILS)) {</span>
+<span class="nc" id="L152">                fields.set(i, &quot;/&quot; + fields.get(i));</span>
+<span class="nc" id="L153">                inItemStruct = true;</span>
+            }
+<span class="nc bnc" id="L155" title="All 2 branches missed.">            if (fields.get(i).equals(NAME)) {</span>
+<span class="nc" id="L156">                inNameAttribute = true;</span>
+            }
+<span class="nc bnc" id="L158" title="All 4 branches missed.">            if (fields.get(i).equals(VALUE) &amp;&amp; inItemStruct) {</span>
+<span class="nc bnc" id="L159" title="All 2 branches missed.">                fields.set(i, (inNameAttribute ? &quot;&quot; : &quot;/&quot;) + fields.get(i));</span>
+<span class="nc bnc" id="L160" title="All 2 branches missed.">                if (inNameAttribute) inNameAttribute = false;</span>
+<span class="nc" id="L161">                inItemStruct = false;</span>
+            }
+        }
+
+<span class="nc" id="L165">        return fields;</span>
+    }
+
+    private static List&lt;String&gt; setEntryAttributeField(List&lt;String&gt; fields) {
+<span class="nc" id="L169">        return fields;</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.7.202105040129</span></div></body></html>

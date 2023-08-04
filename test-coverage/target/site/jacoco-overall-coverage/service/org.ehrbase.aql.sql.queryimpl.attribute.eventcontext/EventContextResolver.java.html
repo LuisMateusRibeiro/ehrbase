@@ -1,0 +1,135 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../../jacoco-resources/report.gif" type="image/gif"/><title>EventContextResolver.java</title><link rel="stylesheet" href="../../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../../index.html" class="el_report">Overall Coverage</a> &gt; <a href="../index.html" class="el_bundle">service</a> &gt; <a href="index.source.html" class="el_package">org.ehrbase.aql.sql.queryimpl.attribute.eventcontext</a> &gt; <span class="el_source">EventContextResolver.java</span></div><h1>EventContextResolver.java</h1><pre class="source lang-java linenums">/*
+ * Copyright (c) 2019 vitasystems GmbH and Hannover Medical School.
+ *
+ * This file is part of project EHRbase
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     https://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.ehrbase.aql.sql.queryimpl.attribute.eventcontext;
+
+import static org.ehrbase.jooq.pg.Tables.EVENT_CONTEXT;
+
+import org.ehrbase.aql.sql.queryimpl.attribute.*;
+import org.ehrbase.aql.sql.queryimpl.attribute.eventcontext.facility.FacilityResolver;
+import org.ehrbase.aql.sql.queryimpl.attribute.eventcontext.participations.ParticipationsJson;
+import org.ehrbase.aql.sql.queryimpl.attribute.setting.SettingResolver;
+import org.jooq.Field;
+
+@SuppressWarnings({&quot;java:S3776&quot;, &quot;java:S3740&quot;, &quot;java:S1452&quot;})
+public class EventContextResolver extends AttributeResolver {
+    public static final String CONTEXT = &quot;context&quot;;
+    public static final String START_TIME = &quot;start_time&quot;;
+    public static final String END_TIME = &quot;end_time&quot;;
+    public static final String HEALTH_CARE_FACILITY = &quot;health_care_facility&quot;;
+    public static final String EXTERNAL_REF = &quot;external_ref&quot;;
+
+    public static final String OTHER_CONTEXT = &quot;/other_context&quot;;
+    public static final String CONTEXT_OTHER_CONTEXT = CONTEXT + OTHER_CONTEXT;
+    public static final String CONTEXT_PARTICIPATIONS = CONTEXT + &quot;/participations&quot;;
+
+    public static final String CONTEXT_HEALTH_CARE_FACILITY = CONTEXT + &quot;/&quot; + HEALTH_CARE_FACILITY;
+    public static final String HEALTH_CARE_FACILITY_EXTERNAL_REF = HEALTH_CARE_FACILITY + &quot;/&quot; + EXTERNAL_REF;
+    public static final String CONTEXT_HEALTH_CARE_FACILITY_EXTERNAL_REF =
+            CONTEXT + &quot;/&quot; + HEALTH_CARE_FACILITY_EXTERNAL_REF;
+    public static final String CONTEXT_HEALTH_CARE_FACILITY_EXTERNAL_REF_ID =
+            CONTEXT_HEALTH_CARE_FACILITY_EXTERNAL_REF + &quot;/id&quot;;
+    public static final String HEALTH_CARE_FACILITY_EXTERNAL_REF_ID = HEALTH_CARE_FACILITY_EXTERNAL_REF + &quot;/id&quot;;
+
+    public static final String CONTEXT_FACILITY = CONTEXT + &quot;/facility&quot;;
+    public static final String CONTEXT_SETTING = CONTEXT + &quot;/setting&quot;;
+
+    public static final String CONTEXT_START_TIME = CONTEXT + &quot;/&quot; + START_TIME;
+    public static final String CONTEXT_START_TIME_VALUE = CONTEXT_START_TIME + &quot;/value&quot;;
+    public static final String CONTEXT_END_TIME = CONTEXT + &quot;/&quot; + END_TIME;
+    public static final String CONTEXT_END_TIME_VALUE = CONTEXT_END_TIME + &quot;/value&quot;;
+
+    public static final String CONTEXT_LOCATION = CONTEXT + &quot;/location&quot;;
+
+    public EventContextResolver(FieldResolutionContext fieldResolutionContext, JoinSetup joinSetup) {
+<span class="fc" id="L59">        super(fieldResolutionContext, joinSetup);</span>
+<span class="fc" id="L60">    }</span>
+
+    public Field&lt;?&gt; sqlField(String path) {
+
+<span class="pc bpc" id="L64" title="1 of 2 branches missed.">        if (path.startsWith(CONTEXT_OTHER_CONTEXT)) {</span>
+<span class="nc" id="L65">            return new ContextOtherContext(fieldResolutionContext, joinSetup)</span>
+<span class="nc" id="L66">                    .forTableField(NULL_FIELD)</span>
+<span class="nc" id="L67">                    .sqlField();</span>
+        }
+
+<span class="pc bpc" id="L70" title="1 of 2 branches missed.">        if (path.startsWith(CONTEXT_PARTICIPATIONS)) {</span>
+<span class="nc" id="L71">            return new ParticipationsJson(fieldResolutionContext, joinSetup)</span>
+<span class="nc" id="L72">                    .forJsonPath(new AttributePath(CONTEXT_PARTICIPATIONS).redux(path))</span>
+<span class="nc" id="L73">                    .sqlField();</span>
+        }
+
+<span class="pc bpc" id="L76" title="1 of 2 branches missed.">        if (path.equals(CONTEXT_HEALTH_CARE_FACILITY_EXTERNAL_REF)) {</span>
+<span class="nc" id="L77">            return new EventContextJson(fieldResolutionContext, joinSetup)</span>
+<span class="nc" id="L78">                    .forJsonPath(HEALTH_CARE_FACILITY_EXTERNAL_REF)</span>
+<span class="nc" id="L79">                    .sqlField();</span>
+        }
+
+<span class="pc bpc" id="L82" title="1 of 2 branches missed.">        if (path.equals(CONTEXT_HEALTH_CARE_FACILITY_EXTERNAL_REF_ID)) {</span>
+<span class="nc" id="L83">            return new EventContextJson(fieldResolutionContext, joinSetup)</span>
+<span class="nc" id="L84">                    .forJsonPath(HEALTH_CARE_FACILITY_EXTERNAL_REF_ID)</span>
+<span class="nc" id="L85">                    .sqlField();</span>
+        }
+
+<span class="pc bpc" id="L88" title="1 of 2 branches missed.">        if (path.startsWith(CONTEXT_HEALTH_CARE_FACILITY)) {</span>
+<span class="nc" id="L89">            return new FacilityResolver(fieldResolutionContext, joinSetup)</span>
+<span class="nc" id="L90">                    .sqlField(new AttributePath(CONTEXT_HEALTH_CARE_FACILITY).redux(path));</span>
+        }
+
+<span class="pc bpc" id="L93" title="1 of 2 branches missed.">        if (path.startsWith(CONTEXT_FACILITY)) {</span>
+<span class="nc" id="L94">            return new FacilityResolver(fieldResolutionContext, joinSetup)</span>
+<span class="nc" id="L95">                    .sqlField(new AttributePath(CONTEXT_HEALTH_CARE_FACILITY).redux(path));</span>
+        }
+
+<span class="pc bpc" id="L98" title="1 of 2 branches missed.">        if (path.startsWith(CONTEXT_SETTING)) {</span>
+<span class="nc" id="L99">            return new SettingResolver(fieldResolutionContext, joinSetup)</span>
+<span class="nc" id="L100">                    .sqlField(new AttributePath(CONTEXT_SETTING).redux(path));</span>
+        }
+
+<span class="pc bpc" id="L103" title="6 of 7 branches missed.">        switch (path) {</span>
+            case CONTEXT:
+<span class="nc" id="L105">                return new EventContextJson(fieldResolutionContext, joinSetup)</span>
+<span class="nc" id="L106">                        .forTableField(NULL_FIELD)</span>
+<span class="nc" id="L107">                        .sqlField();</span>
+            case CONTEXT_START_TIME:
+<span class="nc" id="L109">                return new EventContextJson(fieldResolutionContext, joinSetup)</span>
+<span class="nc" id="L110">                        .forJsonPath(START_TIME)</span>
+<span class="nc" id="L111">                        .forTableField(EVENT_CONTEXT.START_TIME)</span>
+<span class="nc" id="L112">                        .sqlField();</span>
+            case CONTEXT_START_TIME_VALUE:
+<span class="fc" id="L114">                return new TemporalWithTimeZone(fieldResolutionContext, joinSetup)</span>
+<span class="fc" id="L115">                        .forTableField(EVENT_CONTEXT.START_TIME)</span>
+<span class="fc" id="L116">                        .sqlField();</span>
+            case CONTEXT_END_TIME:
+<span class="nc" id="L118">                return new EventContextJson(fieldResolutionContext, joinSetup)</span>
+<span class="nc" id="L119">                        .forJsonPath(END_TIME)</span>
+<span class="nc" id="L120">                        .forTableField(EVENT_CONTEXT.END_TIME)</span>
+<span class="nc" id="L121">                        .sqlField();</span>
+            case CONTEXT_END_TIME_VALUE:
+<span class="nc" id="L123">                return new TemporalWithTimeZone(fieldResolutionContext, joinSetup)</span>
+<span class="nc" id="L124">                        .forTableField(EVENT_CONTEXT.END_TIME)</span>
+<span class="nc" id="L125">                        .sqlField();</span>
+            case CONTEXT_LOCATION:
+<span class="nc" id="L127">                return new SimpleEventContextAttribute(fieldResolutionContext, joinSetup)</span>
+<span class="nc" id="L128">                        .forTableField(EVENT_CONTEXT.LOCATION)</span>
+<span class="nc" id="L129">                        .sqlField();</span>
+            default:
+<span class="nc" id="L131">                throw new IllegalStateException(&quot;Unhandled path:&quot; + path);</span>
+        }
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.7.202105040129</span></div></body></html>

@@ -1,0 +1,133 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../../jacoco-resources/report.gif" type="image/gif"/><title>FieldResolutionContext.java</title><link rel="stylesheet" href="../../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../../index.html" class="el_report">Overall Coverage</a> &gt; <a href="../index.html" class="el_bundle">service</a> &gt; <a href="index.source.html" class="el_package">org.ehrbase.aql.sql.queryimpl.attribute</a> &gt; <span class="el_source">FieldResolutionContext.java</span></div><h1>FieldResolutionContext.java</h1><pre class="source lang-java linenums">/*
+ * Copyright (c) 2019 vitasystems GmbH and Hannover Medical School.
+ *
+ * This file is part of project EHRbase
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     https://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.ehrbase.aql.sql.queryimpl.attribute;
+
+import org.ehrbase.aql.definition.I_VariableDefinition;
+import org.ehrbase.aql.sql.PathResolver;
+import org.ehrbase.aql.sql.queryimpl.IQueryImpl;
+import org.ehrbase.service.IntrospectService;
+import org.jooq.DSLContext;
+
+@SuppressWarnings(&quot;java:S107&quot;)
+public class FieldResolutionContext {
+
+    private final String columnAlias;
+    private final String identifier;
+    private final I_VariableDefinition variableDefinition;
+    private boolean withAlias;
+    private final IQueryImpl.Clause clause;
+    private final DSLContext context;
+    private final String serverNodeId;
+    private final PathResolver pathResolver;
+    private final IntrospectService introspectCache;
+    private final String entryRoot;
+<span class="fc" id="L39">    private boolean jsonDatablock = false;</span>
+<span class="fc" id="L40">    private boolean isUsingSetReturningFunction = false;</span>
+    private String rmType;
+
+<span class="fc" id="L43">    public FieldResolutionContext(</span>
+            DSLContext context,
+            String serverNodeId,
+            String identifier,
+            I_VariableDefinition variableDefinition,
+            IQueryImpl.Clause clause,
+            PathResolver pathResolver,
+            IntrospectService introspectCache,
+            String entryRoot) {
+<span class="fc" id="L52">        this.identifier = identifier;</span>
+<span class="fc" id="L53">        this.variableDefinition = variableDefinition;</span>
+<span class="fc bfc" id="L54" title="All 2 branches covered.">        this.withAlias = clause.equals(IQueryImpl.Clause.SELECT)</span>
+<span class="pc bpc" id="L55" title="1 of 4 branches missed.">                &amp;&amp; (variableDefinition.getPath() != null || variableDefinition.getAlias() != null);</span>
+<span class="fc" id="L56">        this.clause = clause;</span>
+<span class="fc" id="L57">        this.context = context;</span>
+<span class="fc" id="L58">        this.serverNodeId = serverNodeId;</span>
+<span class="fc" id="L59">        this.pathResolver = pathResolver;</span>
+<span class="fc" id="L60">        this.entryRoot = entryRoot;</span>
+<span class="fc" id="L61">        this.introspectCache = introspectCache;</span>
+<span class="fc" id="L62">        columnAlias = variableDefinition.getPath();</span>
+<span class="fc" id="L63">    }</span>
+
+    public String getColumnAlias() {
+<span class="fc" id="L66">        return columnAlias;</span>
+    }
+
+    public String getIdentifier() {
+<span class="nc" id="L70">        return identifier;</span>
+    }
+
+    public I_VariableDefinition getVariableDefinition() {
+<span class="fc" id="L74">        return variableDefinition;</span>
+    }
+
+    public String getRmType() {
+<span class="nc" id="L78">        return rmType;</span>
+    }
+
+    public void setRmType(String rmType) {
+<span class="fc" id="L82">        this.rmType = rmType;</span>
+<span class="fc" id="L83">    }</span>
+
+    public boolean isWithAlias() {
+<span class="fc" id="L86">        return withAlias;</span>
+    }
+
+    public IQueryImpl.Clause getClause() {
+<span class="fc" id="L90">        return clause;</span>
+    }
+
+    public DSLContext getContext() {
+<span class="fc" id="L94">        return context;</span>
+    }
+
+    public String getServerNodeId() {
+<span class="fc" id="L98">        return serverNodeId;</span>
+    }
+
+    public PathResolver getPathResolver() {
+<span class="fc" id="L102">        return pathResolver;</span>
+    }
+
+    public IntrospectService getIntrospectCache() {
+<span class="nc" id="L106">        return introspectCache;</span>
+    }
+
+    public String getEntryRoot() {
+<span class="nc" id="L110">        return entryRoot;</span>
+    }
+
+    public boolean isJsonDatablock() {
+<span class="nc" id="L114">        return jsonDatablock;</span>
+    }
+
+    public void setJsonDatablock(boolean jsonDatablock) {
+<span class="fc" id="L118">        this.jsonDatablock = jsonDatablock;</span>
+<span class="fc" id="L119">    }</span>
+
+    public void setWithAlias(boolean b) {
+<span class="fc" id="L122">        withAlias = b;</span>
+<span class="fc" id="L123">    }</span>
+
+    public boolean isUsingSetReturningFunction() {
+<span class="fc" id="L126">        return isUsingSetReturningFunction;</span>
+    }
+
+    public void setUsingSetReturningFunction(boolean usingSetReturningFunction) {
+<span class="fc" id="L130">        isUsingSetReturningFunction = usingSetReturningFunction;</span>
+<span class="fc" id="L131">    }</span>
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.7.202105040129</span></div></body></html>

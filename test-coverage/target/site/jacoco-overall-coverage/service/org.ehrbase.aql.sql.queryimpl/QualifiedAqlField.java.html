@@ -1,0 +1,72 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../../jacoco-resources/report.gif" type="image/gif"/><title>QualifiedAqlField.java</title><link rel="stylesheet" href="../../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../../index.html" class="el_report">Overall Coverage</a> &gt; <a href="../index.html" class="el_bundle">service</a> &gt; <a href="index.source.html" class="el_package">org.ehrbase.aql.sql.queryimpl</a> &gt; <span class="el_source">QualifiedAqlField.java</span></div><h1>QualifiedAqlField.java</h1><pre class="source lang-java linenums">/*
+ * Copyright (c) 2020 vitasystems GmbH and Hannover Medical School.
+ *
+ * This file is part of project EHRbase
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     https://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.ehrbase.aql.sql.queryimpl;
+
+import org.jooq.Field;
+
+public class QualifiedAqlField {
+
+<span class="fc" id="L24">    protected String itemType = null; // the actual data type as specified in the template</span>
+<span class="fc" id="L25">    protected String itemCategory =</span>
+<span class="fc" id="L26">            null; // the category of the object as per the WebTemplate (f.e. CLUSTER, ELEMENT ...)</span>
+    private Field&lt;?&gt; field; // the actual field
+    private String
+            rightMostJsonbExpression; // whenever we use lateral we have to separate the lateral sql from the select
+    // part
+
+<span class="fc" id="L32">    public QualifiedAqlField(Field&lt;?&gt; field) {</span>
+<span class="fc" id="L33">        this.field = field;</span>
+<span class="fc" id="L34">    }</span>
+
+<span class="fc" id="L36">    public QualifiedAqlField(Field&lt;?&gt; field, String itemType, String itemCategory, String rightMostJsonbExpression) {</span>
+<span class="fc" id="L37">        this.field = field;</span>
+<span class="fc" id="L38">        this.itemType = itemType;</span>
+<span class="fc" id="L39">        this.itemCategory = itemCategory;</span>
+<span class="fc" id="L40">        this.rightMostJsonbExpression = rightMostJsonbExpression;</span>
+<span class="fc" id="L41">    }</span>
+
+    public Field&lt;?&gt; getSQLField() {
+<span class="fc" id="L44">        return field;</span>
+    }
+
+    public void setField(Field&lt;?&gt; field) {
+<span class="fc" id="L48">        this.field = field;</span>
+<span class="fc" id="L49">    }</span>
+
+    public QualifiedAqlField duplicate() {
+<span class="fc" id="L52">        return new QualifiedAqlField(</span>
+<span class="fc" id="L53">                this.getSQLField(), this.itemType, this.itemCategory, this.rightMostJsonbExpression);</span>
+    }
+
+    public boolean isQualified() {
+<span class="nc bnc" id="L57" title="All 4 branches missed.">        return itemType != null &amp;&amp; itemCategory != null;</span>
+    }
+
+    public String getItemType() {
+<span class="fc" id="L61">        return itemType;</span>
+    }
+
+    public String getRightMostJsonbExpression() {
+<span class="fc" id="L65">        return rightMostJsonbExpression;</span>
+    }
+
+    public boolean hasRightMostJsonbExpression() {
+<span class="fc bfc" id="L69" title="All 2 branches covered.">        return rightMostJsonbExpression != null;</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.7.202105040129</span></div></body></html>

@@ -1,0 +1,216 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../../jacoco-resources/report.gif" type="image/gif"/><title>IterativeNode.java</title><link rel="stylesheet" href="../../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../../index.html" class="el_report">Overall Coverage</a> &gt; <a href="../index.html" class="el_bundle">service</a> &gt; <a href="index.source.html" class="el_package">org.ehrbase.aql.sql.queryimpl</a> &gt; <span class="el_source">IterativeNode.java</span></div><h1>IterativeNode.java</h1><pre class="source lang-java linenums">/*
+ * Copyright (c) 2019 vitasystems GmbH and Hannover Medical School.
+ *
+ * This file is part of project EHRbase
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     https://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.ehrbase.aql.sql.queryimpl;
+
+import static org.ehrbase.aql.sql.queryimpl.IterativeNodeConstants.ENV_AQL_ARRAY_DEPTH;
+import static org.ehrbase.aql.sql.queryimpl.IterativeNodeConstants.ENV_AQL_ARRAY_IGNORE_NODE;
+import static org.ehrbase.aql.sql.queryimpl.QueryImplConstants.AQL_NODE_ITERATIVE_MARKER;
+
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
+import java.util.Optional;
+import java.util.Set;
+import java.util.SortedSet;
+import java.util.TreeSet;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+import java.util.stream.Collectors;
+import org.apache.commons.lang3.ArrayUtils;
+import org.apache.commons.lang3.StringUtils;
+import org.ehrbase.dao.access.interfaces.I_DomainAccess;
+import org.ehrbase.ehr.util.LocatableHelper;
+import org.ehrbase.service.IntrospectService;
+
+/**
+ * Created by christian on 5/9/2018.
+ */
+<span class="pc bpc" id="L43" title="1 of 2 branches missed.">@SuppressWarnings({&quot;java:S3776&quot;, &quot;java:S3740&quot;, &quot;java:S1452&quot;, &quot;java:S1075&quot;, &quot;java:S135&quot;})</span>
+public class IterativeNode implements IIterativeNode {
+    public static final String SLASH = &quot;/&quot;;
+    public static final String ACTIVITIES = &quot;/activities&quot;;
+    public static final String COMPOSITION = &quot;/composition&quot;;
+    public static final String EVENTS = &quot;/events&quot;;
+    public static final String CONTENT = &quot;/content&quot;;
+
+    private Optional&lt;Pattern&gt; ignorePattern;
+    private final List&lt;String&gt; unbounded;
+    private final int depth;
+    private final I_DomainAccess domainAccess;
+
+<span class="fc" id="L56">    public IterativeNode(I_DomainAccess domainAccess, String templateId, IntrospectService introspectCache) {</span>
+<span class="fc" id="L57">        this.domainAccess = domainAccess;</span>
+<span class="fc" id="L58">        unbounded = introspectCache.multiValued(templateId);</span>
+<span class="fc" id="L59">        ignorePattern = initIgnorePattern();</span>
+<span class="fc" id="L60">        depth = initAqlDepth();</span>
+<span class="fc" id="L61">    }</span>
+
+    /**
+     * check if node at path is iterative (max &gt; 1)
+     *
+     * @param segmentedPath
+     * @return
+     */
+    int[] iterativeAt(List&lt;String&gt; segmentedPath) {
+<span class="pc bpc" id="L70" title="1 of 2 branches missed.">        if (unbounded.isEmpty()) {</span>
+<span class="nc" id="L71">            return null;</span>
+        }
+
+<span class="fc" id="L74">        SortedSet&lt;Integer&gt; retarray = new TreeSet&lt;&gt;();</span>
+
+<span class="fc bfc" id="L76" title="All 2 branches covered.">        for (int i = unbounded.size() - 1; i &gt;= 0; i--) {</span>
+<span class="fc" id="L77">            String aqlPath = unbounded.get(i);</span>
+
+<span class="fc" id="L79">            List&lt;String&gt; aqlPathSegments = LocatableHelper.dividePathIntoSegments(aqlPath);</span>
+
+            // check if this path is not excluded
+<span class="fc" id="L82">            boolean ignoreThisAqlPath = ignorePattern</span>
+<span class="fc" id="L83">                    .map(p -&gt; p.matcher(aqlPathSegments.get(aqlPathSegments.size() - 1)))</span>
+<span class="fc" id="L84">                    .map(Matcher::matches)</span>
+<span class="fc" id="L85">                    .orElse(false);</span>
+
+<span class="pc bpc" id="L87" title="1 of 2 branches missed.">            if (ignoreThisAqlPath) {</span>
+<span class="nc" id="L88">                continue;</span>
+            }
+
+<span class="fc" id="L91">            String path = compact(segmentedPath).stream().collect(Collectors.joining(SLASH, SLASH, &quot;&quot;));</span>
+
+<span class="pc bpc" id="L93" title="1 of 4 branches missed.">            if (path.startsWith(aqlPath) &amp;&amp; !StringUtils.endsWithAny(aqlPath, &quot;value&quot;, &quot;name&quot;)) {</span>
+<span class="fc" id="L94">                int pos = aqlPathInJsonbArray(aqlPathSegments, segmentedPath);</span>
+<span class="fc" id="L95">                retarray.add(pos);</span>
+<span class="pc bpc" id="L96" title="1 of 2 branches missed.">                if (retarray.size() &gt;= depth) break;</span>
+            }
+        }
+
+<span class="fc" id="L100">        return retarray.stream().mapToInt(Integer::intValue).toArray();</span>
+    }
+
+    List&lt;String&gt; clipInIterativeMarkers(List&lt;String&gt; segmentedPath, int[] clipPos) {
+
+<span class="fc" id="L105">        List&lt;String&gt; resultingPath = new ArrayList&lt;&gt;(segmentedPath);</span>
+
+        // reverse order so adding entries does not move pending positions
+<span class="fc" id="L108">        ArrayUtils.reverse(clipPos);</span>
+
+<span class="fc" id="L110">        Arrays.stream(clipPos).forEach(pos -&gt; {</span>
+<span class="pc bpc" id="L111" title="1 of 2 branches missed.">            if (pos == resultingPath.size()) {</span>
+<span class="nc" id="L112">                resultingPath.add(AQL_NODE_ITERATIVE_MARKER);</span>
+            } else {
+<span class="fc" id="L114">                String segment = resultingPath.get(pos);</span>
+<span class="fc bfc" id="L115" title="All 2 branches covered.">                if (segment.equals(QueryImplConstants.AQL_NODE_NAME_PREDICATE_MARKER)) {</span>
+                    // skip
+<span class="pc bpc" id="L117" title="1 of 2 branches missed.">                } else if (segment.equals(&quot;0&quot;)) {</span>
+                    // substitution
+<span class="fc" id="L119">                    resultingPath.set(pos, AQL_NODE_ITERATIVE_MARKER);</span>
+                } else {
+<span class="nc" id="L121">                    resultingPath.add(pos, AQL_NODE_ITERATIVE_MARKER);</span>
+                }
+            }
+<span class="fc" id="L124">        });</span>
+<span class="fc" id="L125">        return resultingPath;</span>
+    }
+
+    public List&lt;String&gt; insertIterativeMarkers(List&lt;String&gt; segmentedPath) {
+<span class="fc" id="L129">        int[] pos = iterativeAt(segmentedPath);</span>
+<span class="pc bpc" id="L130" title="1 of 2 branches missed.">        if (pos == null) {</span>
+<span class="nc" id="L131">            return null;</span>
+        }
+<span class="pc bpc" id="L133" title="1 of 2 branches missed.">        if (ArrayUtils.isEmpty(pos)) {</span>
+<span class="nc" id="L134">            return segmentedPath;</span>
+        }
+<span class="fc" id="L136">        return clipInIterativeMarkers(segmentedPath, pos);</span>
+    }
+
+    /**
+     * make the path usable to perform JsonPath queries
+     *
+     * @param segmentedPath
+     * @return
+     */
+    static List&lt;String&gt; compact(List&lt;String&gt; segmentedPath) {
+<span class="fc" id="L146">        return segmentedPath.stream()</span>
+<span class="fc bfc" id="L147" title="All 2 branches covered.">                .filter(item -&gt; !StringUtils.isNumeric(item))</span>
+<span class="fc bfc" id="L148" title="All 2 branches covered.">                .filter(item -&gt; !item.startsWith(COMPOSITION))</span>
+                // skip structure containers that are specific to DB encoding (that is:
+                // /events/events[openEHR...])
+                // this also applies to /activities
+<span class="fc bfc" id="L152" title="All 2 branches covered.">                .filter(item -&gt; !Set.of(EVENTS, ACTIVITIES).contains(item))</span>
+<span class="fc" id="L153">                .map(item -&gt; StringUtils.removeStart(item, SLASH))</span>
+<span class="fc" id="L154">                .collect(Collectors.toList());</span>
+    }
+
+    static int aqlPathInJsonbArray(List&lt;String&gt; aqlSegmented, List&lt;String&gt; jsonbSegmented) {
+<span class="fc" id="L158">        int jsonbIndex = 0;</span>
+<span class="fc" id="L159">        int aqlSegIndex = 0;</span>
+
+<span class="fc bfc" id="L161" title="All 2 branches covered.">        for (; aqlSegIndex &lt; aqlSegmented.size(); jsonbIndex++) {</span>
+<span class="fc" id="L162">            String segment = jsonbSegmented.get(jsonbIndex);</span>
+<span class="pc bpc" id="L163" title="1 of 4 branches missed.">            if (segment.startsWith(IterativeNode.COMPOSITION) || StringUtils.isNumeric(segment)) {</span>
+<span class="nc" id="L164">                continue;</span>
+            }
+<span class="pc bpc" id="L166" title="1 of 2 branches missed.">            if (StringUtils.isNumeric(segment)) {</span>
+<span class="nc" id="L167">                continue;</span>
+            }
+<span class="pc bpc" id="L169" title="1 of 2 branches missed.">            if (Set.of(EVENTS, ACTIVITIES).contains(segment)) {</span>
+                // skip this structural item
+<span class="nc" id="L171">                continue;</span>
+            }
+
+            try {
+<span class="pc bpc" id="L175" title="1 of 2 branches missed.">                if (segment.startsWith(SLASH)) {</span>
+<span class="pc bpc" id="L176" title="2 of 4 branches missed.">                    assert segment.substring(1).equals(aqlSegmented.get(aqlSegIndex));</span>
+                } else {
+<span class="nc bnc" id="L178" title="All 4 branches missed.">                    assert segment.equals(aqlSegmented.get(aqlSegIndex));</span>
+                }
+<span class="nc" id="L180">            } catch (AssertionError e1) {</span>
+<span class="nc" id="L181">                throw new AssertionError(&quot;Drift in locating array marker: aql:&quot; + aqlSegmented.get(aqlSegIndex)</span>
+                        + &quot;, jsonb:&quot; + segment + &quot;, @index:&quot; + jsonbIndex);
+<span class="fc" id="L183">            }</span>
+<span class="fc" id="L184">            aqlSegIndex++;</span>
+        }
+<span class="fc" id="L186">        return jsonbIndex;</span>
+    }
+
+    private Optional&lt;Pattern&gt; initIgnorePattern() {
+<span class="fc" id="L190">        String ignoreIterativeNode = System.getenv(ENV_AQL_ARRAY_IGNORE_NODE);</span>
+<span class="pc bpc" id="L191" title="1 of 2 branches missed.">        if (ignoreIterativeNode == null) {</span>
+<span class="fc" id="L192">            ignoreIterativeNode = domainAccess.getServerConfig().getAqlIterationSkipList();</span>
+<span class="pc bpc" id="L193" title="1 of 2 branches missed.">            if (StringUtils.isBlank(ignoreIterativeNode)) {</span>
+<span class="nc" id="L194">                ignoreIterativeNode = CONTENT + &quot;,&quot; + EVENTS;</span>
+            }
+        }
+
+<span class="fc" id="L198">        return Optional.ofNullable(ignoreIterativeNode)</span>
+<span class="fc" id="L199">                .filter(StringUtils::isNotBlank)</span>
+<span class="fc" id="L200">                .map(String::trim)</span>
+<span class="fc" id="L201">                .map(s -&gt; s.replace(',', '|'))</span>
+<span class="fc" id="L202">                .map(s -&gt; &quot;^(&quot; + s + &quot;).*&quot;)</span>
+<span class="fc" id="L203">                .map(Pattern::compile);</span>
+    }
+
+    private int initAqlDepth() {
+<span class="pc bpc" id="L207" title="1 of 2 branches missed.">        if (System.getenv(ENV_AQL_ARRAY_DEPTH) != null) {</span>
+<span class="nc" id="L208">            return Integer.parseInt(System.getenv(ENV_AQL_ARRAY_DEPTH));</span>
+<span class="pc bpc" id="L209" title="1 of 2 branches missed.">        } else if (domainAccess.getServerConfig().getAqlDepth() != null) {</span>
+<span class="fc" id="L210">            return domainAccess.getServerConfig().getAqlDepth();</span>
+        } else {
+<span class="nc" id="L212">            return 1;</span>
+        }
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.7.202105040129</span></div></body></html>

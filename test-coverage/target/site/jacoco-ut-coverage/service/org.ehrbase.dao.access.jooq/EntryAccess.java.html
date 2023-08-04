@@ -1,0 +1,609 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../../jacoco-resources/report.gif" type="image/gif"/><title>EntryAccess.java</title><link rel="stylesheet" href="../../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../../index.html" class="el_report">Coverage with Unit Tests</a> &gt; <a href="../index.html" class="el_bundle">service</a> &gt; <a href="index.source.html" class="el_package">org.ehrbase.dao.access.jooq</a> &gt; <span class="el_source">EntryAccess.java</span></div><h1>EntryAccess.java</h1><pre class="source lang-java linenums">/*
+ * Copyright (c) 2019 vitasystems GmbH and Hannover Medical School.
+ *
+ * This file is part of project EHRbase
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     https://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.ehrbase.dao.access.jooq;
+
+import static org.ehrbase.jooq.pg.Tables.ENTRY;
+import static org.ehrbase.jooq.pg.Tables.ENTRY_HISTORY;
+import static org.ehrbase.jooq.pg.Tables.TERRITORY;
+
+import com.nedap.archie.rm.archetyped.Archetyped;
+import com.nedap.archie.rm.archetyped.FeederAudit;
+import com.nedap.archie.rm.archetyped.Link;
+import com.nedap.archie.rm.archetyped.TemplateId;
+import com.nedap.archie.rm.composition.Action;
+import com.nedap.archie.rm.composition.AdminEntry;
+import com.nedap.archie.rm.composition.Composition;
+import com.nedap.archie.rm.composition.Evaluation;
+import com.nedap.archie.rm.composition.EventContext;
+import com.nedap.archie.rm.composition.Instruction;
+import com.nedap.archie.rm.composition.Observation;
+import com.nedap.archie.rm.composition.Section;
+import com.nedap.archie.rm.datatypes.CodePhrase;
+import com.nedap.archie.rm.datavalues.DvCodedText;
+import com.nedap.archie.rm.datavalues.DvText;
+import com.nedap.archie.rm.generic.PartyProxy;
+import com.nedap.archie.rm.support.identification.ArchetypeID;
+import com.nedap.archie.rm.support.identification.ObjectVersionId;
+import com.nedap.archie.rm.support.identification.TerminologyId;
+import com.nedap.archie.rm.support.identification.UIDBasedId;
+import java.sql.Timestamp;
+import java.util.EnumMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.UUID;
+import org.ehrbase.api.exception.InternalServerException;
+import org.ehrbase.dao.access.interfaces.I_CompositionAccess;
+import org.ehrbase.dao.access.interfaces.I_ContextAccess;
+import org.ehrbase.dao.access.interfaces.I_DomainAccess;
+import org.ehrbase.dao.access.interfaces.I_EntryAccess;
+import org.ehrbase.dao.access.jooq.party.PersistedPartyProxy;
+import org.ehrbase.dao.access.support.DataAccess;
+import org.ehrbase.dao.access.support.SafeNav;
+import org.ehrbase.jooq.dbencoding.RawJson;
+import org.ehrbase.jooq.dbencoding.rmobject.FeederAuditEncoding;
+import org.ehrbase.jooq.dbencoding.rmobject.LinksEncoding;
+import org.ehrbase.jooq.pg.enums.EntryType;
+import org.ehrbase.jooq.pg.tables.records.EntryHistoryRecord;
+import org.ehrbase.jooq.pg.tables.records.EntryRecord;
+import org.ehrbase.jooq.pg.udt.records.DvCodedTextRecord;
+import org.ehrbase.service.RecordedDvCodedText;
+import org.ehrbase.service.RecordedDvText;
+import org.jooq.Condition;
+import org.jooq.JSONB;
+import org.jooq.Record;
+import org.jooq.UpdateQuery;
+import org.jooq.impl.DSL;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+/**
+ * Operations on the Entry part of a Composition (Entry is archetyped).
+ *
+ * @author Christian Chevalley
+ * @author Jake Smolka
+ * @author Luis Marco-Ruiz
+ * @since 1.0.0
+ */
+public class EntryAccess extends DataAccess implements I_EntryAccess {
+
+<span class="nc" id="L85">    private final Logger logger = LoggerFactory.getLogger(getClass());</span>
+
+    public static final String DB_INCONSISTENCY = &quot;DB inconsistency:&quot;;
+
+    private EntryRecord entryRecord;
+
+    private Composition composition;
+
+    /**
+     * Constructor with convenient {@link I_DomainAccess} parameter, for better readability.
+     *
+     * @param domainAccess  Current domain access object
+     * @param templateId    Template ID of this entry
+     * @param sequence      Sequence number of this entry
+     * @param compositionId Linked composition ID
+     * @param composition   Object representation of linked composition
+     */
+    public EntryAccess(
+            I_DomainAccess domainAccess,
+            String templateId,
+            Integer sequence,
+            UUID compositionId,
+            Composition composition,
+            Short sysTenant) {
+<span class="nc" id="L109">        super(</span>
+<span class="nc" id="L110">                domainAccess.getContext(),</span>
+<span class="nc" id="L111">                domainAccess.getKnowledgeManager(),</span>
+<span class="nc" id="L112">                domainAccess.getIntrospectService(),</span>
+<span class="nc" id="L113">                domainAccess.getServerConfig());</span>
+<span class="nc" id="L114">        setFields(templateId, sequence, compositionId, composition, sysTenant);</span>
+<span class="nc" id="L115">    }</span>
+
+    private EntryAccess(I_DomainAccess domainAccess) {
+<span class="nc" id="L118">        super(domainAccess);</span>
+<span class="nc" id="L119">    }</span>
+
+    public static String fetchTemplateIdByCompositionId(I_DomainAccess domainAccess, UUID compositionId) {
+<span class="nc" id="L122">        return domainAccess</span>
+<span class="nc" id="L123">                .getContext()</span>
+<span class="nc" id="L124">                .select(ENTRY.TEMPLATE_ID)</span>
+<span class="nc" id="L125">                .from(ENTRY)</span>
+<span class="nc" id="L126">                .where(ENTRY.COMPOSITION_ID.equal(compositionId))</span>
+<span class="nc" id="L127">                .fetchOptional(ENTRY.TEMPLATE_ID)</span>
+<span class="nc" id="L128">                .orElse(null);</span>
+    }
+
+    /**
+     * @throws IllegalArgumentException if DB is inconsistent or operation fails
+     */
+    public static I_EntryAccess retrieveInstanceInComposition(
+            I_DomainAccess domainAccess, I_CompositionAccess compositionAccess) {
+
+<span class="nc" id="L137">        Optional&lt;EntryRecord&gt; existingEntry =</span>
+<span class="nc" id="L138">                domainAccess.getContext().fetchOptional(ENTRY, ENTRY.COMPOSITION_ID.eq(compositionAccess.getId()));</span>
+<span class="nc bnc" id="L139" title="All 2 branches missed.">        if (existingEntry.isEmpty()) {</span>
+<span class="nc" id="L140">            return null;</span>
+        }
+
+        // build the list of parameters to recreate the composition
+<span class="nc" id="L144">        Map&lt;SystemValue, Object&gt; values = new EnumMap&lt;&gt;(SystemValue.class);</span>
+<span class="nc" id="L145">        values.put(</span>
+<span class="nc" id="L146">                SystemValue.COMPOSER,</span>
+<span class="nc" id="L147">                new PersistedPartyProxy(domainAccess).retrieve(compositionAccess.getComposerId()));</span>
+
+        // optional handling for persistent compositions that do not have a context
+<span class="nc" id="L150">        Optional&lt;I_ContextAccess&gt; opContextAccess =</span>
+<span class="nc" id="L151">                compositionAccess.getContextId().map(id -&gt; I_ContextAccess.retrieveInstance(domainAccess, id));</span>
+<span class="nc" id="L152">        opContextAccess.ifPresent(context -&gt; values.put(SystemValue.CONTEXT, context.mapRmEventContext()));</span>
+
+<span class="nc" id="L154">        values.put(</span>
+<span class="nc" id="L155">                SystemValue.LANGUAGE,</span>
+<span class="nc" id="L156">                new CodePhrase(new TerminologyId(&quot;ISO_639-1&quot;), compositionAccess.getLanguageCode()));</span>
+<span class="nc" id="L157">        String territory2letters = domainAccess</span>
+<span class="nc" id="L158">                .getContext()</span>
+<span class="nc" id="L159">                .fetchSingle(TERRITORY, TERRITORY.CODE.eq(compositionAccess.getTerritoryCode()))</span>
+<span class="nc" id="L160">                .getTwoletter();</span>
+
+<span class="nc" id="L162">        values.put(SystemValue.TERRITORY, new CodePhrase(new TerminologyId(&quot;ISO_3166-1&quot;), territory2letters));</span>
+
+<span class="nc bnc" id="L164" title="All 2 branches missed.">        if (compositionAccess.getFeederAudit() != null) {</span>
+<span class="nc" id="L165">            values.put(SystemValue.FEEDER_AUDIT, new FeederAuditEncoding().fromDB(compositionAccess.getFeederAudit()));</span>
+        }
+
+<span class="nc bnc" id="L168" title="All 2 branches missed.">        if (compositionAccess.getLinks() != null) {</span>
+<span class="nc" id="L169">            values.put(SystemValue.LINKS, new LinksEncoding().fromDB(compositionAccess.getLinks()));</span>
+        }
+
+        try {
+<span class="nc" id="L173">            EntryAccess entryAccess = new EntryAccess(domainAccess);</span>
+
+            // set the record UID in the composition with matching version number
+<span class="nc" id="L176">            Integer version = I_CompositionAccess.getLastVersionNumber(domainAccess, compositionAccess.getId());</span>
+<span class="nc" id="L177">            values.put(</span>
+<span class="nc" id="L178">                    SystemValue.UID,</span>
+<span class="nc" id="L179">                    new ObjectVersionId(compositionAccess.getId().toString() + &quot;::&quot;</span>
+<span class="nc" id="L180">                            + domainAccess.getServerConfig().getNodename() + &quot;::&quot; + version));</span>
+
+<span class="nc" id="L182">            EntryRecord entryRecord = existingEntry.get();</span>
+<span class="nc" id="L183">            entryAccess.entryRecord = entryRecord;</span>
+<span class="nc" id="L184">            String value = entryRecord.getEntry().data();</span>
+<span class="nc" id="L185">            entryAccess.composition = new RawJson().unmarshal(value, Composition.class);</span>
+
+            // continuing optional handling for persistent compositions
+<span class="nc" id="L188">            opContextAccess</span>
+<span class="nc" id="L189">                    .map(I_ContextAccess::mapRmEventContext)</span>
+<span class="nc" id="L190">                    .ifPresent(ec -&gt; values.put(SystemValue.CONTEXT, ec));</span>
+<span class="nc" id="L191">            values.put(SystemValue.CATEGORY, new RecordedDvCodedText().fromDB(entryRecord, ENTRY.CATEGORY));</span>
+<span class="nc" id="L192">            setCompositionAttributes(entryAccess.composition, values);</span>
+<span class="nc" id="L193">            buildArchetypeDetails(entryAccess);</span>
+
+<span class="nc" id="L195">            return entryAccess;</span>
+<span class="nc" id="L196">        } catch (Exception e) {</span>
+<span class="nc" id="L197">            throw new IllegalArgumentException(DB_INCONSISTENCY + e);</span>
+        }
+    }
+
+    private static void buildArchetypeDetails(EntryAccess entryAccess) {
+<span class="nc" id="L202">        Archetyped archetypeDetails = new Archetyped();</span>
+<span class="nc" id="L203">        TemplateId templateId = new TemplateId();</span>
+<span class="nc" id="L204">        templateId.setValue(entryAccess.getTemplateId());</span>
+<span class="nc" id="L205">        archetypeDetails.setTemplateId(templateId);</span>
+<span class="nc" id="L206">        archetypeDetails.setArchetypeId(new ArchetypeID(entryAccess.getArchetypeId()));</span>
+<span class="nc" id="L207">        archetypeDetails.setRmVersion(entryAccess.getRmVersion());</span>
+<span class="nc" id="L208">        entryAccess.composition.setArchetypeDetails(archetypeDetails);</span>
+<span class="nc" id="L209">    }</span>
+
+    public static I_EntryAccess retrieveInstanceInCompositionVersion(
+            I_DomainAccess domainAccess, I_CompositionAccess compositionHistoryAccess, int version) {
+
+<span class="nc" id="L214">        Condition condition = ENTRY_HISTORY</span>
+<span class="nc" id="L215">                .COMPOSITION_ID</span>
+<span class="nc" id="L216">                .eq(compositionHistoryAccess.getId())</span>
+<span class="nc" id="L217">                .and(ENTRY_HISTORY.SYS_TRANSACTION.eq(compositionHistoryAccess.getSysTransaction()));</span>
+
+<span class="nc" id="L219">        Optional&lt;EntryHistoryRecord&gt; existingEntryHistory =</span>
+<span class="nc" id="L220">                domainAccess.getContext().fetchOptional(ENTRY_HISTORY, condition);</span>
+<span class="nc bnc" id="L221" title="All 2 branches missed.">        if (existingEntryHistory.isEmpty()) {</span>
+<span class="nc" id="L222">            return null;</span>
+        }
+
+        // build the list of parameters to recreate the composition
+<span class="nc" id="L226">        Map&lt;SystemValue, Object&gt; values = new EnumMap&lt;&gt;(SystemValue.class);</span>
+<span class="nc" id="L227">        values.put(</span>
+<span class="nc" id="L228">                SystemValue.COMPOSER,</span>
+<span class="nc" id="L229">                new PersistedPartyProxy(domainAccess).retrieve(compositionHistoryAccess.getComposerId()));</span>
+
+<span class="nc" id="L231">        EventContext context = I_ContextAccess.retrieveHistoricalEventContext(</span>
+<span class="nc" id="L232">                domainAccess, compositionHistoryAccess.getId(), compositionHistoryAccess.getSysTransaction());</span>
+<span class="nc bnc" id="L233" title="All 2 branches missed.">        if (context == null) { // unchanged context use the current one!</span>
+            // also optional handling of context, because persistent compositions don't have a context
+<span class="nc" id="L235">            compositionHistoryAccess.getContextId().ifPresent(uuid -&gt; I_ContextAccess.retrieveInstance(</span>
+<span class="nc" id="L236">                            domainAccess, uuid)</span>
+<span class="nc" id="L237">                    .mapRmEventContext());</span>
+        }
+<span class="nc" id="L239">        values.put(SystemValue.CONTEXT, context);</span>
+
+<span class="nc" id="L241">        values.put(</span>
+<span class="nc" id="L242">                SystemValue.LANGUAGE,</span>
+<span class="nc" id="L243">                new CodePhrase(new TerminologyId(&quot;ISO_639-1&quot;), compositionHistoryAccess.getLanguageCode()));</span>
+<span class="nc" id="L244">        String territory2letters = domainAccess</span>
+<span class="nc" id="L245">                .getContext()</span>
+<span class="nc" id="L246">                .fetchSingle(TERRITORY, TERRITORY.CODE.eq(compositionHistoryAccess.getTerritoryCode()))</span>
+<span class="nc" id="L247">                .getTwoletter();</span>
+<span class="nc" id="L248">        values.put(SystemValue.TERRITORY, new CodePhrase(new TerminologyId(&quot;ISO_3166-1&quot;), territory2letters));</span>
+
+<span class="nc" id="L250">        values.put(</span>
+<span class="nc" id="L251">                SystemValue.FEEDER_AUDIT, new FeederAuditEncoding().fromDB(compositionHistoryAccess.getFeederAudit()));</span>
+
+        try {
+<span class="nc" id="L254">            EntryAccess entryAccess = new EntryAccess(domainAccess);</span>
+
+            // set the record UID in the composition
+<span class="nc" id="L257">            UUID compositionId = compositionHistoryAccess.getId();</span>
+<span class="nc" id="L258">            values.put(</span>
+<span class="nc" id="L259">                    SystemValue.UID,</span>
+<span class="nc" id="L260">                    new ObjectVersionId(compositionId.toString() + &quot;::&quot;</span>
+<span class="nc" id="L261">                            + domainAccess.getServerConfig().getNodename() + &quot;::&quot; + version));</span>
+
+<span class="nc" id="L263">            EntryHistoryRecord entryHistoryRecord = existingEntryHistory.get();</span>
+<span class="nc" id="L264">            entryAccess.entryRecord = domainAccess.getContext().newRecord(ENTRY);</span>
+<span class="nc" id="L265">            entryAccess.entryRecord.setSysTenant(entryHistoryRecord.getSysTenant());</span>
+<span class="nc" id="L266">            entryAccess.entryRecord.from(entryHistoryRecord);</span>
+<span class="nc" id="L267">            entryAccess.composition =</span>
+<span class="nc" id="L268">                    new RawJson().unmarshal(entryHistoryRecord.getEntry().data(), Composition.class);</span>
+
+<span class="nc" id="L270">            DvCodedTextRecord category = entryHistoryRecord.getCategory();</span>
+
+            //            SafeNav&lt;DvCodedText&gt; safeDvCodedText = SafeNav
+            //                .of(category)
+            //                .get(c -&gt; c.getValue())
+            //                .get(s -&gt; new DvCodedText(s, (CodePhrase) null))
+            //                .use(SafeNav.of(category).get(c -&gt; c.getDefiningCode()).get(d -&gt; d.getCodeString()))
+            //                .get((s, d) -&gt; {d.setDefiningCode(new CodePhrase(s)); return d;})
+            //            values.put(SystemValue.CATEGORY, safeDvCodedText.get())
+<span class="nc" id="L279">            SafeNav&lt;DvCodedText&gt; safeDvCodedText = SafeNav.of(category)</span>
+<span class="nc" id="L280">                    .get(c -&gt; new DvCodedText(c.getValue(), c.getDefiningCode().getCodeString()));</span>
+<span class="nc" id="L281">            values.put(SystemValue.CATEGORY, safeDvCodedText.get());</span>
+
+<span class="nc" id="L283">            setCompositionAttributes(entryAccess.composition, values);</span>
+<span class="nc" id="L284">            buildArchetypeDetails(entryAccess);</span>
+
+<span class="nc" id="L286">            return entryAccess;</span>
+<span class="nc" id="L287">        } catch (Exception e) {</span>
+<span class="nc" id="L288">            throw new IllegalArgumentException(DB_INCONSISTENCY + e);</span>
+        }
+    }
+
+    private static void setCompositionAttributes(Composition composition, Map&lt;SystemValue, Object&gt; values) {
+
+<span class="nc bnc" id="L294" title="All 2 branches missed.">        if (values == null) {</span>
+<span class="nc" id="L295">            return;</span>
+        }
+
+<span class="nc bnc" id="L298" title="All 2 branches missed.">        for (Map.Entry&lt;SystemValue, Object&gt; systemValue : values.entrySet()) {</span>
+<span class="nc bnc" id="L299" title="All 11 branches missed.">            switch (systemValue.getKey()) {</span>
+                case CATEGORY:
+<span class="nc" id="L301">                    composition.setCategory((DvCodedText) systemValue.getValue());</span>
+<span class="nc" id="L302">                    break;</span>
+                case LANGUAGE:
+<span class="nc" id="L304">                    composition.setLanguage((CodePhrase) systemValue.getValue());</span>
+<span class="nc" id="L305">                    break;</span>
+                case TERRITORY:
+<span class="nc" id="L307">                    composition.setTerritory((CodePhrase) systemValue.getValue());</span>
+<span class="nc" id="L308">                    break;</span>
+                case COMPOSER:
+<span class="nc" id="L310">                    composition.setComposer((PartyProxy) systemValue.getValue());</span>
+<span class="nc" id="L311">                    break;</span>
+                case UID:
+<span class="nc" id="L313">                    composition.setUid((UIDBasedId) systemValue.getValue());</span>
+<span class="nc" id="L314">                    break;</span>
+                case CONTEXT:
+<span class="nc" id="L316">                    composition.setContext((EventContext) systemValue.getValue());</span>
+<span class="nc" id="L317">                    break;</span>
+                case NAME:
+<span class="nc" id="L319">                    composition.setName((DvText) systemValue.getValue());</span>
+<span class="nc" id="L320">                    break;</span>
+
+                case RM_VERSION:
+<span class="nc" id="L323">                    composition.getArchetypeDetails().setRmVersion((String) systemValue.getValue());</span>
+<span class="nc" id="L324">                    break;</span>
+
+                case FEEDER_AUDIT:
+<span class="nc" id="L327">                    composition.setFeederAudit((FeederAudit) systemValue.getValue());</span>
+<span class="nc" id="L328">                    break;</span>
+
+                case LINKS:
+<span class="nc" id="L331">                    composition.setLinks((List&lt;Link&gt;) systemValue.getValue());</span>
+<span class="nc" id="L332">                    break;</span>
+
+                default:
+<span class="nc" id="L335">                    throw new IllegalArgumentException(</span>
+<span class="nc" id="L336">                            &quot;Could not handle composition attribute:&quot; + systemValue.getKey());</span>
+            }
+        }
+<span class="nc" id="L339">    }</span>
+
+    /**
+     * set the EntryRecord with fields from composition:&lt;br&gt;
+     * &lt;ul&gt;
+     * &lt;li&gt;category&lt;/li&gt;
+     * &lt;li&gt;item type&lt;/li&gt;
+     * &lt;li&gt;archetype node Id&lt;/li&gt;
+     * &lt;li&gt;entry content (json)&lt;/li&gt;
+     * &lt;/ul&gt;
+     *
+     * @param entryRecord Target {@link EntryRecord}
+     * @param composition input data in {@link Composition} representation
+     */
+    private void setCompositionFields(EntryRecord entryRecord, Composition composition) {
+
+<span class="nc" id="L355">        entryRecord.setCategory(entryRecord.getCategory());</span>
+
+<span class="nc bnc" id="L357" title="All 4 branches missed.">        if (composition.getContent() != null &amp;&amp; !composition.getContent().isEmpty()) {</span>
+<span class="nc" id="L358">            Object node = composition.getContent().get(0);</span>
+
+<span class="nc bnc" id="L360" title="All 2 branches missed.">            if (node instanceof Section) {</span>
+<span class="nc" id="L361">                entryRecord.setItemType(EntryType.valueOf(&quot;section&quot;));</span>
+<span class="nc bnc" id="L362" title="All 2 branches missed.">            } else if (node instanceof Evaluation</span>
+<span class="nc bnc" id="L363" title="All 2 branches missed.">                    || node instanceof Observation</span>
+<span class="nc bnc" id="L364" title="All 2 branches missed.">                    || node instanceof Instruction</span>
+<span class="nc bnc" id="L365" title="All 2 branches missed.">                    || node instanceof Action) {</span>
+<span class="nc" id="L366">                entryRecord.setItemType(EntryType.valueOf(&quot;care_entry&quot;));</span>
+<span class="nc bnc" id="L367" title="All 2 branches missed.">            } else if (node instanceof AdminEntry) {</span>
+<span class="nc" id="L368">                entryRecord.setItemType(EntryType.valueOf(&quot;admin&quot;));</span>
+            }
+<span class="nc" id="L370">        } else {</span>
+<span class="nc" id="L371">            entryRecord.setItemType(EntryType.valueOf(&quot;admin&quot;));</span>
+        }
+
+<span class="nc" id="L374">        entryRecord.setArchetypeId(composition.getArchetypeNodeId());</span>
+
+<span class="nc" id="L376">        RawJson rawJson = new RawJson();</span>
+<span class="nc" id="L377">        entryRecord.setEntry(JSONB.valueOf(rawJson.marshal(composition)));</span>
+<span class="nc" id="L378">    }</span>
+
+    /**
+     * Sets the field of a new Entry record (as part of the calling {@link EntryAccess} instance) with
+     * given parameters. The Composition of the calling {@link EntryAccess} will be updated with the
+     * given {@link Composition} as a result.
+     *
+     * @param templateId    ID of template
+     * @param sequence      Sequence number
+     * @param compositionId ID of composition
+     * @param composition   {@link Composition} object with more information for the entry
+     */
+    private void setFields(
+            String templateId, Integer sequence, UUID compositionId, Composition composition, Short sysTenant) {
+
+<span class="nc" id="L393">        entryRecord = getContext().newRecord(ENTRY);</span>
+
+<span class="nc" id="L395">        entryRecord.setTemplateId(templateId);</span>
+<span class="nc" id="L396">        entryRecord.setSequence(sequence);</span>
+<span class="nc" id="L397">        entryRecord.setCompositionId(compositionId);</span>
+<span class="nc" id="L398">        entryRecord.setRmVersion(composition.getArchetypeDetails().getRmVersion());</span>
+<span class="nc" id="L399">        entryRecord.setSysTenant(sysTenant);</span>
+<span class="nc" id="L400">        new RecordedDvCodedText().toDB(entryRecord, ENTRY.CATEGORY, composition.getCategory());</span>
+<span class="nc" id="L401">        setCompositionFields(entryRecord, composition);</span>
+
+<span class="nc" id="L403">        setCompositionName(composition.getName());</span>
+
+<span class="nc" id="L405">        this.composition = composition;</span>
+<span class="nc" id="L406">    }</span>
+
+    @Override
+    public Composition getComposition() {
+<span class="nc" id="L410">        return composition;</span>
+    }
+
+    @Override
+    public UUID commit(Timestamp transactionTime) {
+
+        // use jOOQ
+<span class="nc" id="L417">        Record result = getContext()</span>
+<span class="nc" id="L418">                .insertInto(</span>
+<span class="nc" id="L419">                        ENTRY,</span>
+<span class="nc" id="L420">                        ENTRY.SEQUENCE,</span>
+<span class="nc" id="L421">                        ENTRY.COMPOSITION_ID,</span>
+<span class="nc" id="L422">                        ENTRY.TEMPLATE_ID,</span>
+<span class="nc" id="L423">                        ENTRY.ITEM_TYPE,</span>
+<span class="nc" id="L424">                        ENTRY.ARCHETYPE_ID,</span>
+<span class="nc" id="L425">                        ENTRY.CATEGORY,</span>
+<span class="nc" id="L426">                        ENTRY.ENTRY_,</span>
+<span class="nc" id="L427">                        ENTRY.SYS_TRANSACTION,</span>
+<span class="nc" id="L428">                        ENTRY.NAME,</span>
+<span class="nc" id="L429">                        ENTRY.RM_VERSION,</span>
+<span class="nc" id="L430">                        ENTRY.SYS_TENANT)</span>
+<span class="nc" id="L431">                .values(</span>
+<span class="nc" id="L432">                        DSL.val(getSequence()),</span>
+<span class="nc" id="L433">                        DSL.val(getCompositionId()),</span>
+<span class="nc" id="L434">                        DSL.val(getTemplateId()),</span>
+<span class="nc" id="L435">                        DSL.val(EntryType.valueOf(getItemType())),</span>
+<span class="nc" id="L436">                        DSL.val(getArchetypeId()),</span>
+<span class="nc" id="L437">                        DSL.val(getCategory()),</span>
+<span class="nc" id="L438">                        DSL.val(getEntryJson()),</span>
+<span class="nc" id="L439">                        DSL.val(transactionTime),</span>
+<span class="nc" id="L440">                        DSL.val(getCompositionName()),</span>
+<span class="nc" id="L441">                        DSL.val(getRmVersion()),</span>
+                        // we do not expose the namespace
+<span class="nc" id="L443">                        DSL.val(entryRecord.getSysTenant()))</span>
+<span class="nc" id="L444">                .returning(ENTRY.ID)</span>
+<span class="nc" id="L445">                .fetchOne();</span>
+
+<span class="nc" id="L447">        return result.getValue(ENTRY.ID);</span>
+    }
+
+    /**
+     * @throws InternalServerException because inherited interface function isn't implemented in this
+     *                                 class
+     * @deprecated
+     */
+    @Deprecated(forRemoval = true)
+    @Override
+    public UUID commit() {
+<span class="nc" id="L458">        throw new InternalServerException(&quot;INTERNAL: commit without transaction time is not legal&quot;);</span>
+    }
+
+    @Override
+    public Boolean update(Timestamp transactionTime) {
+<span class="nc" id="L463">        return update(transactionTime, false);</span>
+    }
+
+    @Override
+    public Boolean update(Timestamp transactionTime, boolean force) {
+<span class="nc" id="L468">        logger.debug(&quot;updating entry with force flag: {} and changed flag: {}&quot;, force, entryRecord.changed());</span>
+
+<span class="nc bnc" id="L470" title="All 4 branches missed.">        if (!(force || entryRecord.changed())) {</span>
+<span class="nc" id="L471">            logger.debug(&quot;No updateComposition took place, returning...&quot;);</span>
+<span class="nc" id="L472">            return false;</span>
+        }
+
+        // ignore the temporal field since it is maintained by an external trigger!
+<span class="nc" id="L476">        entryRecord.changed(ENTRY.SYS_PERIOD, false);</span>
+
+<span class="nc" id="L478">        UpdateQuery&lt;?&gt; updateQuery = getContext().updateQuery(ENTRY);</span>
+<span class="nc" id="L479">        updateQuery.addValue(ENTRY.COMPOSITION_ID, getCompositionId());</span>
+<span class="nc" id="L480">        updateQuery.addValue(ENTRY.SEQUENCE, DSL.field(DSL.val(getSequence())));</span>
+<span class="nc" id="L481">        updateQuery.addValue(ENTRY.TEMPLATE_ID, DSL.field(DSL.val(getTemplateId())));</span>
+
+<span class="nc" id="L483">        updateQuery.addValue(ENTRY.ITEM_TYPE, DSL.field(DSL.val(EntryType.valueOf(getItemType()))));</span>
+<span class="nc" id="L484">        updateQuery.addValue(ENTRY.ARCHETYPE_ID, DSL.field(DSL.val(getArchetypeId())));</span>
+<span class="nc" id="L485">        updateQuery.addValue(ENTRY.CATEGORY, DSL.field(DSL.val(getCategory())));</span>
+<span class="nc" id="L486">        updateQuery.addValue(ENTRY.ENTRY_, DSL.field(DSL.val(getEntryJson())));</span>
+<span class="nc" id="L487">        updateQuery.addValue(ENTRY.SYS_TRANSACTION, DSL.field(DSL.val(transactionTime)));</span>
+<span class="nc" id="L488">        updateQuery.addValue(ENTRY.NAME, DSL.field(DSL.val(getCompositionName())));</span>
+<span class="nc" id="L489">        updateQuery.addValue(ENTRY.RM_VERSION, DSL.field(DSL.val(getRmVersion())));</span>
+<span class="nc" id="L490">        updateQuery.addConditions(ENTRY.ID.eq(getId()));</span>
+
+<span class="nc" id="L492">        logger.debug(&quot;Update done...&quot;);</span>
+
+<span class="nc bnc" id="L494" title="All 2 branches missed.">        return updateQuery.execute() &gt; 0;</span>
+    }
+
+    /**
+     * @throws InternalServerException because inherited interface function isn't implemented in this
+     *                                 class
+     * @deprecated
+     */
+    @Deprecated(forRemoval = true)
+    @Override
+    public Boolean update() {
+<span class="nc" id="L505">        throw new InternalServerException(</span>
+<span class="nc" id="L506">                &quot;INTERNAL: Invalid updateComposition call to updateComposition without Transaction time and/or force flag arguments&quot;);</span>
+    }
+
+    /**
+     * @throws InternalServerException because inherited interface function isn't implemented in this
+     *                                 class
+     * @deprecated
+     */
+    @Deprecated(forRemoval = true)
+    @Override
+    public Boolean update(Boolean force) {
+<span class="nc" id="L517">        throw new InternalServerException(</span>
+<span class="nc" id="L518">                &quot;INTERNAL: Invalid updateComposition call to updateComposition without Transaction time and/or force flag arguments&quot;);</span>
+    }
+
+    @Override
+    public Integer delete() {
+
+<span class="nc bnc" id="L524" title="All 2 branches missed.">        if (entryRecord != null) {</span>
+<span class="nc" id="L525">            return entryRecord.delete();</span>
+        }
+
+<span class="nc" id="L528">        return 0;</span>
+    }
+
+    @Override
+    public UUID getId() {
+<span class="nc" id="L533">        return entryRecord.getId();</span>
+    }
+
+    @Override
+    public JSONB getEntryJson() {
+<span class="nc" id="L538">        return entryRecord.getEntry();</span>
+    }
+
+    @Override
+    public DvCodedTextRecord getCategory() {
+<span class="nc" id="L543">        return entryRecord.getCategory();</span>
+    }
+
+    public DvCodedTextRecord getCompositionName() {
+<span class="nc" id="L547">        return entryRecord.getName();</span>
+    }
+
+    public void setCompositionName(DvText compositionName) {
+<span class="nc" id="L551">        new RecordedDvText().toDB(entryRecord, ENTRY.NAME, compositionName);</span>
+<span class="nc" id="L552">    }</span>
+
+    @Override
+    public UUID getCompositionId() {
+<span class="nc" id="L556">        return entryRecord.getCompositionId();</span>
+    }
+
+    @Override
+    public void setCompositionId(UUID compositionId) {
+<span class="nc" id="L561">        entryRecord.setCompositionId(compositionId);</span>
+<span class="nc" id="L562">    }</span>
+
+    @Override
+    public String getTemplateId() {
+<span class="nc" id="L566">        return entryRecord.getTemplateId();</span>
+    }
+
+    @Override
+    public void setTemplateId(String templateId) {
+<span class="nc" id="L571">        entryRecord.setTemplateId(templateId);</span>
+<span class="nc" id="L572">    }</span>
+
+    @Override
+    public Integer getSequence() {
+<span class="nc" id="L576">        return entryRecord.getSequence();</span>
+    }
+
+    @Override
+    public void setSequence(Integer sequence) {
+<span class="nc" id="L581">        entryRecord.setSequence(sequence);</span>
+<span class="nc" id="L582">    }</span>
+
+    @Override
+    public String getArchetypeId() {
+<span class="nc" id="L586">        return entryRecord.getArchetypeId();</span>
+    }
+
+    @Override
+    public String getRmVersion() {
+<span class="nc" id="L591">        return entryRecord.getRmVersion();</span>
+    }
+
+    @Override
+    public String getItemType() {
+<span class="nc" id="L596">        return entryRecord.getItemType().getLiteral();</span>
+    }
+
+    @Override
+    public void setCompositionData(Composition composition) {
+<span class="nc" id="L601">        setCompositionFields(entryRecord, composition);</span>
+<span class="nc" id="L602">    }</span>
+
+    @Override
+    public DataAccess getDataAccess() {
+<span class="nc" id="L606">        return this;</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.7.202105040129</span></div></body></html>

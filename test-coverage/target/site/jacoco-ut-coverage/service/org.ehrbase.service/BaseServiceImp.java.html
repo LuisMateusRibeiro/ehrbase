@@ -1,0 +1,81 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../../jacoco-resources/report.gif" type="image/gif"/><title>BaseServiceImp.java</title><link rel="stylesheet" href="../../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../../index.html" class="el_report">Coverage with Unit Tests</a> &gt; <a href="../index.html" class="el_bundle">service</a> &gt; <a href="index.source.html" class="el_package">org.ehrbase.service</a> &gt; <span class="el_source">BaseServiceImp.java</span></div><h1>BaseServiceImp.java</h1><pre class="source lang-java linenums">/*
+ * Copyright (c) 2019 vitasystems GmbH and Hannover Medical School.
+ *
+ * This file is part of project EHRbase
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     https://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.ehrbase.service;
+
+import java.util.UUID;
+import org.ehrbase.api.definitions.ServerConfig;
+import org.ehrbase.api.service.BaseService;
+import org.ehrbase.dao.access.interfaces.I_DomainAccess;
+import org.ehrbase.dao.access.interfaces.I_SystemAccess;
+import org.ehrbase.dao.access.support.ServiceDataAccess;
+import org.jooq.DSLContext;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Lazy;
+
+public class BaseServiceImp implements BaseService {
+
+    public static final String DEMOGRAPHIC = &quot;DEMOGRAPHIC&quot;;
+    public static final String PARTY = &quot;PARTY&quot;;
+
+    private final ServerConfig serverConfig;
+    private final KnowledgeCacheService knowledgeCacheService;
+    private final DSLContext context;
+
+    private UUID systemId;
+
+    @Lazy
+    @Autowired
+    private IUserService userService;
+
+<span class="nc" id="L45">    public BaseServiceImp(KnowledgeCacheService knowledgeCacheService, DSLContext context, ServerConfig serverConfig) {</span>
+<span class="nc" id="L46">        this.knowledgeCacheService = knowledgeCacheService;</span>
+<span class="nc" id="L47">        this.context = context;</span>
+<span class="nc" id="L48">        this.serverConfig = serverConfig;</span>
+<span class="nc" id="L49">    }</span>
+
+    protected I_DomainAccess getDataAccess() {
+<span class="nc" id="L52">        return new ServiceDataAccess(context, knowledgeCacheService, knowledgeCacheService, this.serverConfig);</span>
+    }
+
+    /**
+     * Get default system UUID.&lt;br&gt; Internally makes use of configured local system's node name.
+     *
+     * @return Default system UUID.
+     */
+    public UUID getSystemUuid() {
+<span class="nc bnc" id="L61" title="All 2 branches missed.">        if (systemId == null) {</span>
+<span class="nc" id="L62">            systemId = I_SystemAccess.createOrRetrieveLocalSystem(getDataAccess());</span>
+        }
+<span class="nc" id="L64">        return systemId;</span>
+    }
+
+    /**
+     * Get default user UUID, derived from authenticated user via Spring Security.&lt;br&gt; Internally
+     * checks and retrieves the matching user UUID, if it already exists with given info.
+     *
+     * @return UUID of default user, derived from authenticated user.
+     */
+    protected UUID getCurrentUserId() {
+<span class="nc" id="L74">        return userService.getCurrentUserId();</span>
+    }
+
+    public ServerConfig getServerConfig() {
+<span class="nc" id="L78">        return this.serverConfig;</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.7.202105040129</span></div></body></html>

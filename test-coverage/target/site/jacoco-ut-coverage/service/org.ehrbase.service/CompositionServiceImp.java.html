@@ -1,0 +1,799 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../../jacoco-resources/report.gif" type="image/gif"/><title>CompositionServiceImp.java</title><link rel="stylesheet" href="../../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../../index.html" class="el_report">Coverage with Unit Tests</a> &gt; <a href="../index.html" class="el_bundle">service</a> &gt; <a href="index.source.html" class="el_package">org.ehrbase.service</a> &gt; <span class="el_source">CompositionServiceImp.java</span></div><h1>CompositionServiceImp.java</h1><pre class="source lang-java linenums">/*
+ * Copyright (c) 2019-2022 vitasystems GmbH and Hannover Medical School.
+ *
+ * This file is part of project EHRbase
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     https://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.ehrbase.service;
+
+import static org.ehrbase.jooq.pg.Tables.COMPOSITION;
+import static org.ehrbase.jooq.pg.Tables.COMPOSITION_HISTORY;
+
+import com.nedap.archie.rm.changecontrol.OriginalVersion;
+import com.nedap.archie.rm.composition.Composition;
+import com.nedap.archie.rm.datatypes.CodePhrase;
+import com.nedap.archie.rm.datavalues.DvCodedText;
+import com.nedap.archie.rm.datavalues.quantity.datetime.DvDateTime;
+import com.nedap.archie.rm.ehr.VersionedComposition;
+import com.nedap.archie.rm.generic.Attestation;
+import com.nedap.archie.rm.generic.AuditDetails;
+import com.nedap.archie.rm.generic.RevisionHistory;
+import com.nedap.archie.rm.generic.RevisionHistoryItem;
+import com.nedap.archie.rm.support.identification.HierObjectId;
+import com.nedap.archie.rm.support.identification.ObjectRef;
+import com.nedap.archie.rm.support.identification.ObjectVersionId;
+import java.sql.Timestamp;
+import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Optional;
+import java.util.UUID;
+import org.ehrbase.api.definitions.ServerConfig;
+import org.ehrbase.api.exception.InternalServerException;
+import org.ehrbase.api.exception.InvalidApiParameterException;
+import org.ehrbase.api.exception.ObjectNotFoundException;
+import org.ehrbase.api.exception.PreconditionFailedException;
+import org.ehrbase.api.exception.UnexpectedSwitchCaseException;
+import org.ehrbase.api.exception.UnprocessableEntityException;
+import org.ehrbase.api.exception.ValidationException;
+import org.ehrbase.api.service.CompositionService;
+import org.ehrbase.api.service.EhrService;
+import org.ehrbase.api.service.TenantService;
+import org.ehrbase.api.service.ValidationService;
+import org.ehrbase.dao.access.interfaces.I_AttestationAccess;
+import org.ehrbase.dao.access.interfaces.I_CompositionAccess;
+import org.ehrbase.dao.access.interfaces.I_ConceptAccess.ContributionChangeType;
+import org.ehrbase.dao.access.interfaces.I_DomainAccess;
+import org.ehrbase.dao.access.interfaces.I_EntryAccess;
+import org.ehrbase.dao.access.jooq.AttestationAccess;
+import org.ehrbase.openehr.sdk.response.dto.ehrscape.CompositionDto;
+import org.ehrbase.openehr.sdk.response.dto.ehrscape.CompositionFormat;
+import org.ehrbase.openehr.sdk.response.dto.ehrscape.StructuredString;
+import org.ehrbase.openehr.sdk.response.dto.ehrscape.StructuredStringFormat;
+import org.ehrbase.openehr.sdk.serialisation.flatencoding.FlatFormat;
+import org.ehrbase.openehr.sdk.serialisation.flatencoding.FlatJasonProvider;
+import org.ehrbase.openehr.sdk.serialisation.jsonencoding.CanonicalJson;
+import org.ehrbase.openehr.sdk.serialisation.xmlencoding.CanonicalXML;
+import org.ehrbase.openehr.sdk.webtemplate.model.WebTemplate;
+import org.ehrbase.openehr.sdk.webtemplate.templateprovider.TemplateProvider;
+import org.jooq.DSLContext;
+import org.openehr.schemas.v1.OPERATIONALTEMPLATE;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+/**
+ * {@link CompositionService} implementation.
+ *
+ * @author Jake Smolka
+ * @author Luis Marco-Ruiz
+ * @author Stefan Spiska
+ * @since 1.0.0
+ */
+@Service
+@Transactional
+public class CompositionServiceImp extends BaseServiceImp implements CompositionService {
+
+<span class="nc" id="L93">    private final Logger logger = LoggerFactory.getLogger(this.getClass());</span>
+
+    private final ValidationService validationService;
+    private final KnowledgeCacheService knowledgeCacheService;
+    private final EhrService ehrService;
+    private final TenantService tenantService;
+
+    public CompositionServiceImp(
+            KnowledgeCacheService knowledgeCacheService,
+            ValidationService validationService,
+            EhrService ehrService,
+            DSLContext context,
+            ServerConfig serverConfig,
+            TenantService tenantService) {
+
+<span class="nc" id="L108">        super(knowledgeCacheService, context, serverConfig);</span>
+<span class="nc" id="L109">        this.validationService = validationService;</span>
+<span class="nc" id="L110">        this.ehrService = ehrService;</span>
+<span class="nc" id="L111">        this.knowledgeCacheService = knowledgeCacheService;</span>
+<span class="nc" id="L112">        this.tenantService = tenantService;</span>
+<span class="nc" id="L113">    }</span>
+
+    @Override
+    public Optional&lt;UUID&gt; create(UUID ehrId, Composition objData, UUID systemId, UUID committerId, String description) {
+
+<span class="nc" id="L118">        UUID compositionId = createInternal(ehrId, objData, systemId, committerId, description, null, null);</span>
+<span class="nc" id="L119">        return Optional.of(compositionId);</span>
+    }
+
+    @Override
+    public Optional&lt;UUID&gt; create(UUID ehrId, Composition objData, UUID contribution, UUID audit) {
+<span class="nc" id="L124">        UUID compositionId = createInternal(ehrId, objData, null, null, null, contribution, audit);</span>
+<span class="nc" id="L125">        return Optional.of(compositionId);</span>
+    }
+
+    @Override
+    public Optional&lt;UUID&gt; create(UUID ehrId, Composition objData) {
+<span class="nc" id="L130">        return create(ehrId, objData, getSystemUuid(), getCurrentUserId(), null);</span>
+    }
+
+    /**
+     * Creation of a new composition. With optional custom contribution, or one will be created.
+     *
+     * @param ehrId          ID of EHR
+     * @param composition    RMObject instance of the given Composition to be created
+     * @param systemId       Audit system; or NULL if contribution is given
+     * @param committerId    Audit committer; or NULL if contribution is given
+     * @param description    (Optional) Audit description; or NULL if contribution is given
+     * @param contributionId NULL if is not needed, or ID of given custom contribution
+     * @param audit
+     * @return ID of created composition
+     * @throws InternalServerException when creation failed
+     */
+    private UUID createInternal(
+            UUID ehrId,
+            Composition composition,
+            UUID systemId,
+            UUID committerId,
+            String description,
+            UUID contributionId,
+            UUID audit) {
+
+        // pre-step: check for existing and modifiable ehr
+<span class="nc" id="L156">        ehrService.checkEhrExistsAndIsModifiable(ehrId);</span>
+
+        // pre-step: validate
+        try {
+<span class="nc" id="L160">            validationService.check(composition);</span>
+
+<span class="nc" id="L162">        } catch (org.ehrbase.openehr.sdk.validation.ValidationException e) {</span>
+<span class="nc" id="L163">            throw new UnprocessableEntityException(e.getMessage());</span>
+<span class="nc" id="L164">        } catch (UnprocessableEntityException | ValidationException e) {</span>
+<span class="nc" id="L165">            throw e;</span>
+<span class="nc" id="L166">        } catch (IllegalArgumentException e) {</span>
+<span class="nc" id="L167">            throw new ValidationException(e);</span>
+<span class="nc" id="L168">        } catch (Exception e) {</span>
+<span class="nc" id="L169">            throw new InternalServerException(e);</span>
+        }
+
+<span class="nc bnc" id="L172" title="All 2 branches missed.">        if (composition.getUid() instanceof ObjectVersionId objectVersionId) {</span>
+
+<span class="nc bnc" id="L174" title="All 2 branches missed.">            if (!&quot;1&quot;.equals(objectVersionId.getVersionTreeId().getValue())) {</span>
+<span class="nc" id="L175">                throw new PreconditionFailedException(</span>
+<span class="nc" id="L176">                        &quot;Provided Id %s has a invalid Version. Expect Version 1&quot;.formatted(composition.getUid()));</span>
+            }
+
+<span class="nc" id="L179">            if (!Objects.equals(</span>
+<span class="nc" id="L180">                    getDataAccess().getServerConfig().getNodename(),</span>
+<span class="nc bnc" id="L181" title="All 2 branches missed.">                    objectVersionId.getCreatingSystemId().getValue())) {</span>
+<span class="nc" id="L182">                throw new PreconditionFailedException(&quot;Mismatch of creating_system_id: %s !=: %s&quot;</span>
+<span class="nc" id="L183">                        .formatted(</span>
+<span class="nc" id="L184">                                objectVersionId.getCreatingSystemId().getValue(),</span>
+<span class="nc" id="L185">                                getDataAccess().getServerConfig().getNodename()));</span>
+            }
+
+<span class="nc" id="L188">            I_DomainAccess domainAccess = getDataAccess();</span>
+<span class="nc" id="L189">            UUID versionedObjectId =</span>
+<span class="nc" id="L190">                    UUID.fromString(objectVersionId.getObjectId().getValue());</span>
+
+<span class="nc bnc" id="L192" title="All 2 branches missed.">            if (domainAccess.getContext().fetchExists(COMPOSITION, COMPOSITION.ID.eq(versionedObjectId))</span>
+<span class="nc" id="L193">                    || domainAccess</span>
+<span class="nc" id="L194">                            .getContext()</span>
+<span class="nc bnc" id="L195" title="All 2 branches missed.">                            .fetchExists(COMPOSITION_HISTORY, COMPOSITION_HISTORY.ID.eq(versionedObjectId))) {</span>
+
+<span class="nc" id="L197">                throw new PreconditionFailedException(&quot;Provided Id %s already exists&quot;.formatted(composition.getUid()));</span>
+            }
+
+<span class="nc bnc" id="L200" title="All 2 branches missed.">        } else if (composition.getUid() != null) {</span>
+<span class="nc" id="L201">            throw new PreconditionFailedException(</span>
+<span class="nc" id="L202">                    &quot;Provided Id %s is not a ObjectVersionId&quot;.formatted(composition.getUid()));</span>
+        }
+
+        // actual creation
+        final UUID compositionId;
+<span class="nc" id="L207">        Short sysTenant = tenantService.getCurrentSysTenant();</span>
+        try {
+<span class="nc" id="L209">            var compositionAccess = I_CompositionAccess.getNewInstance(getDataAccess(), composition, ehrId, sysTenant);</span>
+<span class="nc" id="L210">            var entryAccess = I_EntryAccess.getNewInstance(</span>
+<span class="nc" id="L211">                    getDataAccess(),</span>
+<span class="nc" id="L212">                    Objects.requireNonNull(composition.getArchetypeDetails().getTemplateId())</span>
+<span class="nc" id="L213">                            .getValue(),</span>
+<span class="nc" id="L214">                    0,</span>
+<span class="nc" id="L215">                    compositionAccess.getId(),</span>
+<span class="nc" id="L216">                    composition,</span>
+<span class="nc" id="L217">                    sysTenant);</span>
+<span class="nc" id="L218">            compositionAccess.setContent(entryAccess);</span>
+<span class="nc bnc" id="L219" title="All 2 branches missed.">            if (contributionId != null) { // in case of custom contribution, set it and invoke commit that allows custom</span>
+                // contributions
+<span class="nc" id="L221">                compositionAccess.setContributionId(contributionId);</span>
+<span class="nc" id="L222">                compositionId = compositionAccess.commit(LocalDateTime.now(), contributionId, audit);</span>
+<span class="nc" id="L223">            } else { // else, invoke commit that ad hoc creates a new contribution for the composition</span>
+<span class="nc bnc" id="L224" title="All 4 branches missed.">                if (committerId == null || systemId == null) { // mandatory fields</span>
+<span class="nc" id="L225">                    throw new InternalServerException(</span>
+<span class="nc" id="L226">                            &quot;Error on internal contribution handling for composition creation.&quot;);</span>
+                }
+<span class="nc" id="L228">                compositionId = compositionAccess.commit(LocalDateTime.now(), committerId, systemId, description);</span>
+            }
+<span class="nc" id="L230">        } catch (IllegalArgumentException e) {</span>
+<span class="nc" id="L231">            throw e;</span>
+<span class="nc" id="L232">        } catch (Exception e) {</span>
+<span class="nc" id="L233">            throw new InternalServerException(e);</span>
+        }
+
+<span class="nc" id="L236">        logger.debug(&quot;Composition created: id={}&quot;, compositionId);</span>
+
+<span class="nc" id="L238">        return compositionId;</span>
+    }
+
+    @Override
+    public Optional&lt;UUID&gt; update(
+            UUID ehrId,
+            ObjectVersionId targetObjId,
+            Composition objData,
+            UUID systemId,
+            UUID committerId,
+            String description) {
+
+<span class="nc" id="L250">        var compoId = internalUpdate(</span>
+<span class="nc" id="L251">                ehrId,</span>
+<span class="nc" id="L252">                UUID.fromString(targetObjId.getObjectId().getValue()),</span>
+<span class="nc" id="L253">                objData,</span>
+<span class="nc" id="L254">                systemId,</span>
+<span class="nc" id="L255">                committerId,</span>
+<span class="nc" id="L256">                description,</span>
+<span class="nc" id="L257">                null,</span>
+<span class="nc" id="L258">                null);</span>
+
+<span class="nc" id="L260">        return Optional.of(compoId);</span>
+    }
+
+    @Override
+    public Optional&lt;UUID&gt; update(
+            UUID ehrId, ObjectVersionId targetObjId, Composition objData, UUID contribution, UUID audit) {
+
+<span class="nc" id="L267">        var compoId = internalUpdate(</span>
+<span class="nc" id="L268">                ehrId,</span>
+<span class="nc" id="L269">                UUID.fromString(targetObjId.getObjectId().getValue()),</span>
+<span class="nc" id="L270">                objData,</span>
+<span class="nc" id="L271">                null,</span>
+<span class="nc" id="L272">                null,</span>
+<span class="nc" id="L273">                null,</span>
+<span class="nc" id="L274">                contribution,</span>
+<span class="nc" id="L275">                audit);</span>
+<span class="nc" id="L276">        return Optional.of(compoId);</span>
+    }
+
+    @Override
+    public Optional&lt;UUID&gt; update(UUID ehrId, ObjectVersionId targetObjId, Composition objData) {
+<span class="nc" id="L281">        return update(ehrId, targetObjId, objData, getSystemUuid(), getCurrentUserId(), null);</span>
+    }
+
+    /**
+     * Update of an existing composition. With optional custom contribution, or existing one will be
+     * updated.
+     *
+     * @param compositionId  ID of existing composition
+     * @param composition    RMObject instance of the given Composition which represents the new version
+     * @param systemId       Audit system; or NULL if contribution is given
+     * @param committerId    Audit committer; or NULL if contribution is given
+     * @param description    (Optional) Audit description; or NULL if contribution is given
+     * @param contributionId NULL if new one should be created; or ID of given custom contribution
+     * @param audit
+     * @return UUID pointing to updated composition
+     */
+    private UUID internalUpdate(
+            UUID ehrId,
+            UUID compositionId,
+            Composition composition,
+            UUID systemId,
+            UUID committerId,
+            String description,
+            UUID contributionId,
+            UUID audit) {
+
+        // pre-step: check ehr exists and is modifiable
+<span class="nc" id="L308">        ehrService.checkEhrExistsAndIsModifiable(ehrId);</span>
+
+        boolean result;
+        try {
+<span class="nc" id="L312">            var compositionAccess = I_CompositionAccess.retrieveInstance(getDataAccess(), compositionId);</span>
+<span class="nc bnc" id="L313" title="All 2 branches missed.">            if (compositionAccess == null) {</span>
+<span class="nc" id="L314">                throw new ObjectNotFoundException(</span>
+<span class="nc" id="L315">                        I_CompositionAccess.class.getName(), &quot;Could not find composition: &quot; + compositionId);</span>
+            }
+            // check that the  composition is actually in the ehr
+<span class="nc" id="L318">            checkCompositionIsInEhr(ehrId, compositionAccess);</span>
+
+            // validate RM composition
+<span class="nc" id="L321">            validationService.check(composition);</span>
+
+            // Check if template ID is not the same in existing and given data -&gt; error
+<span class="nc" id="L324">            String existingTemplateId = compositionAccess.getContent().getTemplateId();</span>
+<span class="nc" id="L325">            String inputTemplateId =</span>
+<span class="nc" id="L326">                    composition.getArchetypeDetails().getTemplateId().getValue();</span>
+<span class="nc bnc" id="L327" title="All 2 branches missed.">            if (!existingTemplateId.equals(inputTemplateId)) {</span>
+                // check if base template ID doesn't match  (template ID schema: &quot;$NAME.$LANG.v$VER&quot;)
+<span class="nc bnc" id="L329" title="All 2 branches missed.">                if (!existingTemplateId.split(&quot;\\.&quot;)[0].equals(inputTemplateId.split(&quot;\\.&quot;)[0])) {</span>
+<span class="nc" id="L330">                    throw new InvalidApiParameterException(&quot;Can't update composition to have different template.&quot;);</span>
+                }
+                // if base matches, check if given template ID is just a new version of the correct template
+<span class="nc" id="L333">                int existingTemplateIdVersion =</span>
+<span class="nc" id="L334">                        Integer.parseInt(existingTemplateId.split(&quot;\\.v&quot;)[1]);</span>
+<span class="nc" id="L335">                int inputTemplateIdVersion =</span>
+<span class="nc" id="L336">                        Integer.parseInt(inputTemplateId.substring(inputTemplateId.lastIndexOf(&quot;\\.v&quot;) + 1));</span>
+<span class="nc bnc" id="L337" title="All 2 branches missed.">                if (inputTemplateIdVersion &lt; existingTemplateIdVersion) {</span>
+<span class="nc" id="L338">                    throw new InvalidApiParameterException(</span>
+<span class="nc" id="L339">                            &quot;Can't update composition with wrong template version bump.&quot;);</span>
+                }
+            }
+
+            // to keep reference to entry to update: pull entry out of composition access and replace
+            // composition content with input, then write back to the original access
+<span class="nc" id="L345">            I_EntryAccess content = compositionAccess.getContent();</span>
+<span class="nc" id="L346">            content.setCompositionData(composition);</span>
+<span class="nc" id="L347">            compositionAccess.setContent(content);</span>
+<span class="nc" id="L348">            compositionAccess.setComposition(composition);</span>
+<span class="nc bnc" id="L349" title="All 2 branches missed.">            if (contributionId != null) { // if custom contribution should be set</span>
+<span class="nc" id="L350">                compositionAccess.setContributionId(contributionId);</span>
+<span class="nc" id="L351">                result = compositionAccess.update(LocalDateTime.now(), contributionId, audit);</span>
+<span class="nc" id="L352">            } else { // else existing one will be updated</span>
+<span class="nc bnc" id="L353" title="All 4 branches missed.">                if (committerId == null || systemId == null) {</span>
+<span class="nc" id="L354">                    throw new InternalServerException(</span>
+<span class="nc" id="L355">                            &quot;Failed to update composition, missing mandatory audit meta data.&quot;);</span>
+                }
+<span class="nc" id="L357">                result = compositionAccess.update(</span>
+<span class="nc" id="L358">                        LocalDateTime.now(), committerId, systemId, description, ContributionChangeType.MODIFICATION);</span>
+            }
+
+<span class="nc" id="L361">        } catch (ObjectNotFoundException</span>
+                | InvalidApiParameterException
+<span class="nc" id="L363">                        e) { // otherwise exceptions would always get sucked up by the catch below</span>
+<span class="nc" id="L364">            throw e;</span>
+<span class="nc" id="L365">        } catch (Exception e) {</span>
+<span class="nc" id="L366">            throw new InternalServerException(e);</span>
+        }
+
+<span class="nc bnc" id="L369" title="All 2 branches missed.">        if (!result) {</span>
+<span class="nc" id="L370">            throw new InternalServerException(&quot;Update failed on composition:&quot; + compositionId);</span>
+        }
+<span class="nc" id="L372">        return compositionId;</span>
+    }
+
+    private void checkCompositionIsInEhr(UUID ehrId, I_CompositionAccess compositionAccess) {
+<span class="nc bnc" id="L376" title="All 2 branches missed.">        if (!ehrId.equals(compositionAccess.getEhrid())) {</span>
+<span class="nc" id="L377">            throw new ObjectNotFoundException(</span>
+<span class="nc" id="L378">                    &quot;COMPOSITION&quot;,</span>
+<span class="nc" id="L379">                    String.format(</span>
+<span class="nc" id="L380">                            &quot;EHR with id %s does not contain composition with id %s&quot;,</span>
+<span class="nc" id="L381">                            ehrId, compositionAccess.getEhrid()));</span>
+        }
+<span class="nc" id="L383">    }</span>
+
+    @Override
+    public void delete(UUID ehrId, ObjectVersionId targetObjId, UUID systemId, UUID committerId, String description) {
+<span class="nc" id="L387">        internalDelete(</span>
+<span class="nc" id="L388">                ehrId,</span>
+<span class="nc" id="L389">                UUID.fromString(targetObjId.getObjectId().getValue()),</span>
+<span class="nc" id="L390">                systemId,</span>
+<span class="nc" id="L391">                committerId,</span>
+<span class="nc" id="L392">                description,</span>
+<span class="nc" id="L393">                null,</span>
+<span class="nc" id="L394">                null);</span>
+<span class="nc" id="L395">    }</span>
+
+    @Override
+    public void delete(UUID ehrId, ObjectVersionId targetObjId, UUID contribution, UUID audit) {
+<span class="nc" id="L399">        internalDelete(</span>
+<span class="nc" id="L400">                ehrId, UUID.fromString(targetObjId.getObjectId().getValue()), null, null, null, contribution, audit);</span>
+<span class="nc" id="L401">    }</span>
+
+    @Override
+    public void delete(UUID ehrId, ObjectVersionId targetObjId) {
+<span class="nc" id="L405">        delete(ehrId, targetObjId, getSystemUuid(), getCurrentUserId(), null);</span>
+<span class="nc" id="L406">    }</span>
+
+    /**
+     * Deletion of an existing composition. With optional custom contribution, or existing one will be
+     * updated.
+     *
+     * @param compositionId  ID of existing composition
+     * @param systemId       Audit system; or NULL if contribution is given
+     * @param committerId    Audit committer; or NULL if contribution is given
+     * @param description    (Optional) Audit description; or NULL if contribution is given
+     * @param contributionId NULL if is not needed, or ID of given custom contribution
+     * @param audit
+     */
+    private void internalDelete(
+            UUID ehrId,
+            UUID compositionId,
+            UUID systemId,
+            UUID committerId,
+            String description,
+            UUID contributionId,
+            UUID audit) {
+
+        // pre-step: check if ehr exists and is modifiable
+<span class="nc" id="L429">        ehrService.checkEhrExistsAndIsModifiable(ehrId);</span>
+
+        I_CompositionAccess compositionAccess;
+        try {
+<span class="nc" id="L433">            compositionAccess = I_CompositionAccess.retrieveInstance(getDataAccess(), compositionId);</span>
+<span class="nc" id="L434">        } catch (Exception e) {</span>
+<span class="nc" id="L435">            throw new ObjectNotFoundException(</span>
+<span class="nc" id="L436">                    I_CompositionAccess.class.getName(), &quot;Error while retrieving composition&quot;, e);</span>
+        }
+<span class="nc bnc" id="L438" title="All 2 branches missed.">        if (compositionAccess == null) {</span>
+<span class="nc" id="L439">            throw new ObjectNotFoundException(</span>
+<span class="nc" id="L440">                    I_CompositionAccess.class.getName(), &quot;Could not find composition:&quot; + compositionId);</span>
+        }
+        // check that the  composition is actually in the ehr
+<span class="nc" id="L443">        checkCompositionIsInEhr(ehrId, compositionAccess);</span>
+
+        int result;
+<span class="nc bnc" id="L446" title="All 2 branches missed.">        if (contributionId != null) { // if custom contribution should be set</span>
+<span class="nc" id="L447">            compositionAccess.setContributionId(contributionId);</span>
+            try {
+<span class="nc" id="L449">                result = compositionAccess.delete(LocalDateTime.now(), contributionId, audit);</span>
+<span class="nc" id="L450">            } catch (Exception e) {</span>
+<span class="nc" id="L451">                throw new InternalServerException(e);</span>
+            }
+        } else { // if not continue with standard delete
+            try {
+<span class="nc bnc" id="L455" title="All 4 branches missed.">                if (committerId == null || systemId == null) {</span>
+<span class="nc" id="L456">                    throw new InternalServerException(</span>
+<span class="nc" id="L457">                            &quot;Failed to update composition, missing mandatory audit meta data.&quot;);</span>
+                }
+<span class="nc" id="L459">                result = compositionAccess.delete(LocalDateTime.now(), committerId, systemId, description);</span>
+<span class="nc" id="L460">            } catch (Exception e) {</span>
+<span class="nc" id="L461">                throw new InternalServerException(e);</span>
+            }
+        }
+<span class="nc bnc" id="L464" title="All 2 branches missed.">        if (result &lt;= 0) {</span>
+<span class="nc" id="L465">            throw new InternalServerException(&quot;Delete failed on composition:&quot; + compositionAccess.getId());</span>
+        }
+<span class="nc" id="L467">    }</span>
+
+    @Override
+    public Optional&lt;Composition&gt; retrieve(UUID ehrId, UUID compositionId, Integer version)
+            throws InternalServerException {
+
+        // check that the ehr exists
+<span class="nc" id="L474">        ehrService.checkEhrExists(ehrId);</span>
+
+        final I_CompositionAccess compositionAccess;
+<span class="nc bnc" id="L477" title="All 2 branches missed.">        if (version != null) {</span>
+<span class="nc" id="L478">            compositionAccess = I_CompositionAccess.retrieveCompositionVersion(getDataAccess(), compositionId, version);</span>
+<span class="nc" id="L479">        } else { // default to latest version</span>
+<span class="nc" id="L480">            compositionAccess = I_CompositionAccess.retrieveCompositionVersion(</span>
+<span class="nc" id="L481">                    getDataAccess(), compositionId, getLastVersionNumber(compositionId));</span>
+        }
+
+        // check that the composition is actually in the ehr
+<span class="nc bnc" id="L485" title="All 2 branches missed.">        if (compositionAccess != null) {</span>
+<span class="nc" id="L486">            checkCompositionIsInEhr(ehrId, compositionAccess);</span>
+        }
+<span class="nc" id="L488">        return getComposition(compositionAccess);</span>
+    }
+
+    @Override
+    public UUID getEhrId(UUID compositionId) {
+<span class="nc" id="L493">        return I_CompositionAccess.getEhrId(getDataAccess(), compositionId);</span>
+    }
+
+    private Optional&lt;Composition&gt; getComposition(I_CompositionAccess compositionAccess) {
+<span class="nc" id="L497">        return Optional.ofNullable(compositionAccess)</span>
+<span class="nc" id="L498">                .map(I_CompositionAccess::getContent)</span>
+<span class="nc" id="L499">                .map(I_EntryAccess::getComposition);</span>
+    }
+
+    /**
+     * Public serializer entry point which will be called with composition dto fetched from database
+     * and the desired target serialized string format. Will parse the composition dto into target
+     * format either with a custom lambda expression for desired target format
+     *
+     * @param composition Composition dto from database
+     * @param format      Target format
+     * @return Structured string with string of data and content format
+     */
+    @Override
+    public StructuredString serialize(CompositionDto composition, CompositionFormat format) {
+        final StructuredString compositionString;
+<span class="nc bnc" id="L514" title="All 5 branches missed.">        switch (format) {</span>
+            case XML:
+<span class="nc" id="L516">                compositionString = new StructuredString(</span>
+<span class="nc" id="L517">                        new CanonicalXML().marshal(composition.getComposition(), false), StructuredStringFormat.XML);</span>
+<span class="nc" id="L518">                break;</span>
+            case JSON:
+<span class="nc" id="L520">                compositionString = new StructuredString(</span>
+<span class="nc" id="L521">                        new CanonicalJson().marshal(composition.getComposition()), StructuredStringFormat.JSON);</span>
+<span class="nc" id="L522">                break;</span>
+            case FLAT:
+<span class="nc" id="L524">                compositionString = new StructuredString(</span>
+<span class="nc" id="L525">                        new FlatJasonProvider(new TemplateProvider() {</span>
+                                    @Override
+                                    public Optional&lt;OPERATIONALTEMPLATE&gt; find(String s) {
+<span class="nc" id="L528">                                        return knowledgeCacheService.retrieveOperationalTemplate(s);</span>
+                                    }
+
+                                    @Override
+                                    public Optional&lt;WebTemplate&gt; buildIntrospect(String templateId) {
+<span class="nc" id="L533">                                        return Optional.ofNullable(</span>
+<span class="nc" id="L534">                                                knowledgeCacheService.getQueryOptMetaData(templateId));</span>
+                                    }
+                                })
+<span class="nc" id="L537">                                .buildFlatJson(FlatFormat.SIM_SDT, composition.getTemplateId())</span>
+<span class="nc" id="L538">                                .marshal(composition.getComposition()),</span>
+<span class="nc" id="L539">                        StructuredStringFormat.JSON);</span>
+<span class="nc" id="L540">                break;</span>
+            case STRUCTURED:
+<span class="nc" id="L542">                compositionString = new StructuredString(</span>
+<span class="nc" id="L543">                        new FlatJasonProvider(new TemplateProvider() {</span>
+                                    @Override
+                                    public Optional&lt;OPERATIONALTEMPLATE&gt; find(String s) {
+<span class="nc" id="L546">                                        return knowledgeCacheService.retrieveOperationalTemplate(s);</span>
+                                    }
+
+                                    @Override
+                                    public Optional&lt;WebTemplate&gt; buildIntrospect(String templateId) {
+<span class="nc" id="L551">                                        return Optional.ofNullable(</span>
+<span class="nc" id="L552">                                                knowledgeCacheService.getQueryOptMetaData(templateId));</span>
+                                    }
+                                })
+<span class="nc" id="L555">                                .buildFlatJson(FlatFormat.STRUCTURED, composition.getTemplateId())</span>
+<span class="nc" id="L556">                                .marshal(composition.getComposition()),</span>
+<span class="nc" id="L557">                        StructuredStringFormat.JSON);</span>
+<span class="nc" id="L558">                break;</span>
+            default:
+<span class="nc" id="L560">                throw new UnexpectedSwitchCaseException(format);</span>
+        }
+<span class="nc" id="L562">        return compositionString;</span>
+    }
+
+    public Composition buildComposition(String content, CompositionFormat format, String templateId) {
+        final Composition composition;
+<span class="nc bnc" id="L567" title="All 5 branches missed.">        switch (format) {</span>
+            case XML:
+<span class="nc" id="L569">                composition = new CanonicalXML().unmarshal(content, Composition.class);</span>
+<span class="nc" id="L570">                break;</span>
+            case JSON:
+<span class="nc" id="L572">                composition = new CanonicalJson().unmarshal(content, Composition.class);</span>
+<span class="nc" id="L573">                break;</span>
+            case FLAT:
+<span class="nc" id="L575">                composition = new FlatJasonProvider(new TemplateProvider() {</span>
+                            @Override
+                            public Optional&lt;OPERATIONALTEMPLATE&gt; find(String s) {
+<span class="nc" id="L578">                                return knowledgeCacheService.retrieveOperationalTemplate(s);</span>
+                            }
+
+                            @Override
+                            public Optional&lt;WebTemplate&gt; buildIntrospect(String templateId) {
+<span class="nc" id="L583">                                return Optional.ofNullable(knowledgeCacheService.getQueryOptMetaData(templateId));</span>
+                            }
+                        })
+<span class="nc" id="L586">                        .buildFlatJson(FlatFormat.SIM_SDT, templateId)</span>
+<span class="nc" id="L587">                        .unmarshal(content);</span>
+<span class="nc" id="L588">                break;</span>
+            case STRUCTURED:
+<span class="nc" id="L590">                composition = new FlatJasonProvider(new TemplateProvider() {</span>
+                            @Override
+                            public Optional&lt;OPERATIONALTEMPLATE&gt; find(String s) {
+<span class="nc" id="L593">                                return knowledgeCacheService.retrieveOperationalTemplate(s);</span>
+                            }
+
+                            @Override
+                            public Optional&lt;WebTemplate&gt; buildIntrospect(String templateId) {
+<span class="nc" id="L598">                                return Optional.ofNullable(knowledgeCacheService.getQueryOptMetaData(templateId));</span>
+                            }
+                        })
+<span class="nc" id="L601">                        .buildFlatJson(FlatFormat.STRUCTURED, templateId)</span>
+<span class="nc" id="L602">                        .unmarshal(content);</span>
+<span class="nc" id="L603">                break;</span>
+            default:
+<span class="nc" id="L605">                throw new UnexpectedSwitchCaseException(format);</span>
+        }
+<span class="nc" id="L607">        return composition;</span>
+    }
+
+    @Override
+    public Integer getLastVersionNumber(UUID compositionId) throws InternalServerException {
+        try {
+<span class="nc" id="L613">            return I_CompositionAccess.getLastVersionNumber(getDataAccess(), compositionId);</span>
+<span class="nc" id="L614">        } catch (Exception e) {</span>
+<span class="nc" id="L615">            throw new InternalServerException(e);</span>
+        }
+    }
+
+    @Override
+    public Integer getVersionByTimestamp(UUID compositionId, LocalDateTime timestamp) {
+        int version;
+        try {
+<span class="nc" id="L623">            version = I_CompositionAccess.getVersionFromTimeStamp(</span>
+<span class="nc" id="L624">                    getDataAccess(), compositionId, Timestamp.valueOf(timestamp));</span>
+<span class="nc" id="L625">        } catch (ObjectNotFoundException e) {</span>
+<span class="nc" id="L626">            throw e;</span>
+<span class="nc" id="L627">        } catch (Exception e) {</span>
+<span class="nc" id="L628">            throw new InternalServerException(e);</span>
+        }
+<span class="nc bnc" id="L630" title="All 2 branches missed.">        if (version &lt;= 0) {</span>
+<span class="nc" id="L631">            throw new InternalServerException(&quot;Invalid version number calculated.&quot;);</span>
+        } else {
+<span class="nc" id="L633">            return version;</span>
+        }
+    }
+
+    @Override
+    public String getTemplateIdFromInputComposition(String content, CompositionFormat format) {
+<span class="nc" id="L639">        Composition composition = buildComposition(content, format, null);</span>
+<span class="nc bnc" id="L640" title="All 2 branches missed.">        if (composition.getArchetypeDetails() == null</span>
+<span class="nc bnc" id="L641" title="All 2 branches missed.">                || composition.getArchetypeDetails().getTemplateId() == null) {</span>
+<span class="nc" id="L642">            return null;</span>
+        } else {
+<span class="nc" id="L644">            return composition.getArchetypeDetails().getTemplateId().getValue();</span>
+        }
+    }
+
+    @Override
+    public String retrieveTemplateId(UUID compositionId) {
+<span class="nc" id="L650">        return I_EntryAccess.getTemplateIdFromEntry(getDataAccess(), compositionId);</span>
+    }
+
+    @Override
+    public boolean exists(UUID versionedObjectId) {
+<span class="nc" id="L655">        return I_CompositionAccess.exists(this.getDataAccess(), versionedObjectId);</span>
+    }
+
+    @Override
+    public boolean isDeleted(UUID versionedObjectId) {
+<span class="nc" id="L660">        return I_CompositionAccess.isDeleted(this.getDataAccess(), versionedObjectId);</span>
+    }
+
+    @PreAuthorize(&quot;hasRole('ADMIN')&quot;)
+    @Override
+    public void adminDelete(UUID compositionId) {
+<span class="nc" id="L666">        I_CompositionAccess compositionAccess = I_CompositionAccess.retrieveInstance(getDataAccess(), compositionId);</span>
+<span class="nc bnc" id="L667" title="All 2 branches missed.">        if (compositionAccess != null) {</span>
+<span class="nc" id="L668">            compositionAccess.adminDelete();</span>
+        }
+<span class="nc" id="L670">    }</span>
+
+    @Override
+    public VersionedComposition getVersionedComposition(UUID ehrId, UUID composition) {
+<span class="nc" id="L674">        Optional&lt;CompositionDto&gt; dto = retrieve(ehrId, composition, 1).map(c -&gt; CompositionService.from(ehrId, c));</span>
+
+<span class="nc" id="L676">        VersionedComposition compo = new VersionedComposition();</span>
+<span class="nc bnc" id="L677" title="All 2 branches missed.">        if (dto.isPresent()) {</span>
+<span class="nc" id="L678">            compo.setUid(new HierObjectId(dto.get().getUuid().toString()));</span>
+<span class="nc" id="L679">            compo.setOwnerId(</span>
+<span class="nc" id="L680">                    new ObjectRef&lt;&gt;(new HierObjectId(dto.get().getEhrId().toString()), &quot;local&quot;, &quot;ehr&quot;));</span>
+
+<span class="nc" id="L682">            Map&lt;Integer, I_CompositionAccess&gt; compos =</span>
+<span class="nc" id="L683">                    I_CompositionAccess.getVersionMapOfComposition(getDataAccess(), composition);</span>
+<span class="nc bnc" id="L684" title="All 2 branches missed.">            if (compos.containsKey(1)) {</span>
+<span class="nc" id="L685">                compo.setTimeCreated(new DvDateTime(OffsetDateTime.of(</span>
+<span class="nc" id="L686">                        compos.get(1).getSysTransaction().toLocalDateTime(),</span>
+<span class="nc" id="L687">                        OffsetDateTime.now().getOffset())));</span>
+<span class="nc" id="L688">            } else {</span>
+<span class="nc" id="L689">                throw new InternalServerException(&quot;Inconsistent composition data, no version 1 available&quot;);</span>
+            }
+        }
+
+<span class="nc" id="L693">        return compo;</span>
+    }
+
+    @Override
+    public RevisionHistory getRevisionHistoryOfVersionedComposition(UUID ehrUid, UUID composition) {
+        // get number of versions
+<span class="nc" id="L699">        int versions = getLastVersionNumber(composition);</span>
+        // fetch each version and add to revision history
+<span class="nc" id="L701">        RevisionHistory revisionHistory = new RevisionHistory();</span>
+<span class="nc bnc" id="L702" title="All 2 branches missed.">        for (int i = 1; i &lt;= versions; i++) {</span>
+<span class="nc" id="L703">            Optional&lt;OriginalVersion&lt;Composition&gt;&gt; compoVersion = getOriginalVersionComposition(ehrUid, composition, i);</span>
+<span class="nc" id="L704">            compoVersion.ifPresent(compositionOriginalVersion -&gt;</span>
+<span class="nc" id="L705">                    revisionHistory.addItem(revisionHistoryItemFromComposition(compositionOriginalVersion)));</span>
+        }
+
+<span class="nc bnc" id="L708" title="All 2 branches missed.">        if (revisionHistory.getItems().isEmpty()) {</span>
+<span class="nc" id="L709">            throw new InternalServerException(&quot;Problem creating RevisionHistory&quot;); // never should be empty; not valid</span>
+        }
+<span class="nc" id="L711">        return revisionHistory;</span>
+    }
+
+    private RevisionHistoryItem revisionHistoryItemFromComposition(OriginalVersion&lt;Composition&gt; composition) {
+
+<span class="nc" id="L716">        ObjectVersionId objectVersionId = composition.getUid();</span>
+
+        // Note: is List but only has more than one item when there are contributions regarding this
+        // object of change type attestation
+<span class="nc" id="L720">        List&lt;AuditDetails&gt; auditDetailsList = new ArrayList&lt;&gt;();</span>
+        // retrieving the audits
+<span class="nc" id="L722">        auditDetailsList.add(composition.getCommitAudit());</span>
+
+        // add retrieval of attestations, if there are any
+<span class="nc bnc" id="L725" title="All 2 branches missed.">        if (composition.getAttestations() != null) {</span>
+<span class="nc bnc" id="L726" title="All 2 branches missed.">            for (Attestation a : composition.getAttestations()) {</span>
+<span class="nc" id="L727">                AuditDetails newAudit = new AuditDetails(</span>
+<span class="nc" id="L728">                        a.getSystemId(), a.getCommitter(), a.getTimeCommitted(), a.getChangeType(), a.getDescription());</span>
+<span class="nc" id="L729">                auditDetailsList.add(newAudit);</span>
+            }
+        }
+
+<span class="nc" id="L733">        return new RevisionHistoryItem(objectVersionId, auditDetailsList);</span>
+    }
+
+    @Override
+    public Optional&lt;OriginalVersion&lt;Composition&gt;&gt; getOriginalVersionComposition(
+            UUID ehrUid, UUID versionedObjectUid, int version) {
+        // check for valid version parameter
+<span class="nc bnc" id="L740" title="All 4 branches missed.">        if ((version == 0) || I_CompositionAccess.getLastVersionNumber(getDataAccess(), versionedObjectUid) &lt; version) {</span>
+<span class="nc" id="L741">            throw new ObjectNotFoundException(</span>
+<span class="nc" id="L742">                    &quot;versioned_composition&quot;, &quot;No VERSIONED_COMPOSITION with given version: &quot; + version);</span>
+        }
+
+        // retrieve requested object
+<span class="nc" id="L746">        I_CompositionAccess compositionAccess =</span>
+<span class="nc" id="L747">                I_CompositionAccess.retrieveCompositionVersion(getDataAccess(), versionedObjectUid, version);</span>
+<span class="nc bnc" id="L748" title="All 2 branches missed.">        if (compositionAccess == null) {</span>
+<span class="nc" id="L749">            return Optional.empty();</span>
+        }
+
+        // create data for output, i.e. fields of the OriginalVersion&lt;Composition&gt;
+<span class="nc" id="L753">        ObjectVersionId versionId = new ObjectVersionId(</span>
+<span class="nc" id="L754">                versionedObjectUid + &quot;::&quot; + getServerConfig().getNodename() + &quot;::&quot; + version);</span>
+<span class="nc" id="L755">        DvCodedText lifecycleState = new DvCodedText(</span>
+<span class="nc" id="L756">                &quot;complete&quot;, new CodePhrase(&quot;532&quot;)); // TODO: once lifecycle state is supported, get it here dynamically</span>
+<span class="nc" id="L757">        AuditDetails commitAudit = compositionAccess.getAuditDetailsAccess().getAsAuditDetails();</span>
+<span class="nc" id="L758">        ObjectRef&lt;HierObjectId&gt; contribution = new ObjectRef&lt;&gt;(</span>
+<span class="nc" id="L759">                new HierObjectId(compositionAccess.getContributionId().toString()), &quot;openehr&quot;, &quot;contribution&quot;);</span>
+<span class="nc" id="L760">        List&lt;UUID&gt; attestationIdList = I_AttestationAccess.retrieveListOfAttestationsByRef(</span>
+<span class="nc" id="L761">                getDataAccess(), compositionAccess.getAttestationRef());</span>
+<span class="nc" id="L762">        List&lt;Attestation&gt; attestations = null; // as default, gets content if available in the following lines</span>
+<span class="nc bnc" id="L763" title="All 2 branches missed.">        if (!attestationIdList.isEmpty()) {</span>
+<span class="nc" id="L764">            attestations = new ArrayList&lt;&gt;();</span>
+<span class="nc bnc" id="L765" title="All 2 branches missed.">            for (UUID id : attestationIdList) {</span>
+<span class="nc" id="L766">                I_AttestationAccess a = new AttestationAccess(getDataAccess()).retrieveInstance(id);</span>
+<span class="nc" id="L767">                attestations.add(a.getAsAttestation());</span>
+            }
+        }
+
+<span class="nc" id="L771">        ObjectVersionId precedingVersionId = null;</span>
+        // check if there is a preceding version and set it, if available
+<span class="nc bnc" id="L773" title="All 2 branches missed.">        if (version &gt; 1) {</span>
+            // in the current scope version is an int and therefore: preceding = current - 1
+<span class="nc" id="L775">            precedingVersionId = new ObjectVersionId(</span>
+<span class="nc" id="L776">                    versionedObjectUid + &quot;::&quot; + getServerConfig().getNodename() + &quot;::&quot; + (version - 1));</span>
+        }
+
+<span class="nc" id="L779">        Optional&lt;Composition&gt; compositionDto = retrieve(ehrUid, versionedObjectUid, version);</span>
+<span class="nc" id="L780">        Composition composition = null;</span>
+<span class="nc bnc" id="L781" title="All 2 branches missed.">        if (compositionDto.isPresent()) {</span>
+<span class="nc" id="L782">            composition = compositionDto.get();</span>
+        }
+
+<span class="nc" id="L785">        OriginalVersion&lt;Composition&gt; versionComposition = new OriginalVersion&lt;&gt;(</span>
+<span class="nc" id="L786">                versionId,</span>
+<span class="nc" id="L787">                precedingVersionId,</span>
+<span class="nc" id="L788">                composition,</span>
+<span class="nc" id="L789">                lifecycleState,</span>
+<span class="nc" id="L790">                commitAudit,</span>
+<span class="nc" id="L791">                contribution,</span>
+<span class="nc" id="L792">                null,</span>
+<span class="nc" id="L793">                null,</span>
+<span class="nc" id="L794">                attestations);</span>
+
+<span class="nc" id="L796">        return Optional.of(versionComposition);</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.7.202105040129</span></div></body></html>

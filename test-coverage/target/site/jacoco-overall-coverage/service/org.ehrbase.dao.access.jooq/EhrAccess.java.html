@@ -1,0 +1,883 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../../jacoco-resources/report.gif" type="image/gif"/><title>EhrAccess.java</title><link rel="stylesheet" href="../../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../../index.html" class="el_report">Overall Coverage</a> &gt; <a href="../index.html" class="el_bundle">service</a> &gt; <a href="index.source.html" class="el_package">org.ehrbase.dao.access.jooq</a> &gt; <span class="el_source">EhrAccess.java</span></div><h1>EhrAccess.java</h1><pre class="source lang-java linenums">/*
+ * Copyright (c) 2019 vitasystems GmbH and Hannover Medical School.
+ *
+ * This file is part of project EHRbase
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     https://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.ehrbase.dao.access.jooq;
+
+import static org.ehrbase.jooq.pg.Tables.COMPOSITION;
+import static org.ehrbase.jooq.pg.Tables.EHR_;
+import static org.ehrbase.jooq.pg.Tables.ENTRY;
+import static org.ehrbase.jooq.pg.Tables.IDENTIFIER;
+import static org.ehrbase.jooq.pg.Tables.PARTY_IDENTIFIED;
+import static org.ehrbase.jooq.pg.Tables.STATUS;
+import static org.ehrbase.jooq.pg.Tables.STATUS_HISTORY;
+
+import com.nedap.archie.rm.datastructures.ItemStructure;
+import com.nedap.archie.rm.datavalues.DvCodedText;
+import com.nedap.archie.rm.datavalues.DvText;
+import com.nedap.archie.rm.ehr.EhrStatus;
+import com.nedap.archie.rm.generic.PartySelf;
+import com.nedap.archie.rm.support.identification.HierObjectId;
+import java.sql.Timestamp;
+import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
+import java.time.ZoneId;
+import java.time.ZoneOffset;
+import java.time.ZonedDateTime;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.Objects;
+import java.util.UUID;
+import org.apache.commons.collections.map.MultiValueMap;
+import org.ehrbase.api.exception.InternalServerException;
+import org.ehrbase.api.exception.InvalidApiParameterException;
+import org.ehrbase.dao.access.interfaces.I_AuditDetailsAccess;
+import org.ehrbase.dao.access.interfaces.I_ConceptAccess;
+import org.ehrbase.dao.access.interfaces.I_ConceptAccess.ContributionChangeType;
+import org.ehrbase.dao.access.interfaces.I_ContributionAccess;
+import org.ehrbase.dao.access.interfaces.I_DomainAccess;
+import org.ehrbase.dao.access.interfaces.I_EhrAccess;
+import org.ehrbase.dao.access.interfaces.I_StatusAccess;
+import org.ehrbase.dao.access.interfaces.I_SystemAccess;
+import org.ehrbase.dao.access.jooq.party.PersistedPartyProxy;
+import org.ehrbase.dao.access.support.DataAccess;
+import org.ehrbase.dao.access.support.TenantSupport;
+import org.ehrbase.dao.access.util.ContributionDef;
+import org.ehrbase.dao.access.util.ContributionDef.ContributionState;
+import org.ehrbase.dao.access.util.TransactionTime;
+import org.ehrbase.jooq.pg.Routines;
+import org.ehrbase.jooq.pg.enums.ContributionDataType;
+import org.ehrbase.jooq.pg.tables.records.AdminDeleteEhrFullRecord;
+import org.ehrbase.jooq.pg.tables.records.EhrRecord;
+import org.ehrbase.jooq.pg.tables.records.IdentifierRecord;
+import org.ehrbase.jooq.pg.tables.records.StatusHistoryRecord;
+import org.ehrbase.jooq.pg.tables.records.StatusRecord;
+import org.ehrbase.service.RecordedDvCodedText;
+import org.ehrbase.service.RecordedDvText;
+import org.ehrbase.util.UuidGenerator;
+import org.jooq.DSLContext;
+import org.jooq.Record;
+import org.jooq.Record1;
+import org.jooq.Result;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+/**
+ * Persistence operations on EHR.
+ *
+ * @author Christian Chevalley
+ * @author Jake Smolka
+ * @author Luis Marco-Ruiz
+ * @since 1.0.0
+ */
+@SuppressWarnings(&quot;java:S2589&quot;)
+public class EhrAccess extends DataAccess implements I_EhrAccess {
+
+    // Logger used in static methods
+<span class="nc" id="L90">    private static final Logger logger = LoggerFactory.getLogger(EhrAccess.class);</span>
+
+    public static final String JSONB = &quot;::jsonb&quot;;
+    public static final String EXCEPTION = &quot; exception:&quot;;
+    public static final String COULD_NOT_RETRIEVE_EHR_FOR_ID = &quot;Could not retrieve EHR for id:&quot;;
+<span class="nc" id="L95">    public static final String COULD_NOT_RETRIEVE_EHR_FOR_PARTY = &quot;Could not retrieve EHR for party:&quot;;</span>
+    private EhrRecord ehrRecord;
+<span class="nc" id="L97">    private boolean isNew = false;</span>
+<span class="nc" id="L98">    private boolean hasStatusChanged = false;</span>
+
+    // holds the non serialized ItemStructure other_details structure
+<span class="nc" id="L101">    private ItemStructure otherDetails = null;</span>
+
+    private I_ContributionAccess contributionAccess; // locally referenced contribution associated to ehr transactions
+
+    private I_StatusAccess statusAccess; // associated EHR_STATUS. Each EHR has 1 EHR_STATUS
+
+    // set this variable to change the identification  mode in status
+<span class="nc" id="L108">    public enum PARTY_MODE {</span>
+<span class="nc" id="L109">        IDENTIFIER,</span>
+<span class="nc" id="L110">        EXTERNAL_REF</span>
+    }
+
+    /**
+     * @throws InternalServerException if creating or retrieving system failed
+     */
+    public EhrAccess(I_DomainAccess domain, UUID partyId, UUID systemId, UUID accessId, UUID ehrId, Short sysTenant) {
+<span class="nc" id="L117">        super(domain);</span>
+
+<span class="nc" id="L119">        this.ehrRecord = domain.getContext().newRecord(EHR_);</span>
+        // checking for and executing case of custom ehr ID
+<span class="nc" id="L121">        ehrRecord.setId(Objects.requireNonNullElseGet(ehrId, UuidGenerator::randomUUID));</span>
+
+        // init a new EHR_STATUS with default values to associate with this EHR
+<span class="nc" id="L124">        this.statusAccess = new StatusAccess(this, ehrRecord.getId(), sysTenant);</span>
+<span class="nc" id="L125">        this.statusAccess.getStatusRecord().setId(UuidGenerator.randomUUID());</span>
+<span class="nc" id="L126">        this.statusAccess.getStatusRecord().setIsModifiable(true);</span>
+<span class="nc" id="L127">        this.statusAccess.getStatusRecord().setIsQueryable(true);</span>
+<span class="nc" id="L128">        this.statusAccess.getStatusRecord().setParty(partyId);</span>
+<span class="nc" id="L129">        this.statusAccess.getStatusRecord().setEhrId(ehrRecord.getId());</span>
+
+<span class="nc" id="L131">        ehrRecord.setSystemId(systemId);</span>
+<span class="nc" id="L132">        ehrRecord.setAccess(accessId);</span>
+<span class="nc" id="L133">        ehrRecord.setSysTenant(sysTenant);</span>
+
+<span class="nc bnc" id="L135" title="All 2 branches missed.">        if (ehrRecord.getSystemId() == null) { // storeComposition a default entry for the current system</span>
+<span class="nc" id="L136">            ehrRecord.setSystemId(I_SystemAccess.createOrRetrieveLocalSystem(this));</span>
+        }
+
+<span class="nc" id="L139">        this.isNew = true;</span>
+
+        // associate a contribution with this EHR
+<span class="nc" id="L142">        contributionAccess = I_ContributionAccess.getInstance(this, ehrRecord.getId(), sysTenant);</span>
+<span class="nc" id="L143">        contributionAccess.setState(ContributionDef.ContributionState.COMPLETE);</span>
+<span class="nc" id="L144">    }</span>
+
+    /**
+     * Internal constructor to create minimal instance to customize further before returning.
+     *
+     * @param domainAccess DB domain access object
+     * @param ehrId        EHR ID, necessary to create an EHR status and contributions
+     */
+    private EhrAccess(I_DomainAccess domainAccess, UUID ehrId, Short sysTenant) {
+<span class="nc" id="L153">        super(domainAccess);</span>
+<span class="nc" id="L154">        statusAccess = new StatusAccess(this, ehrId, sysTenant); // minimal association with STATUS</span>
+        // associate a contribution with this EHR
+<span class="nc" id="L156">        contributionAccess = I_ContributionAccess.getInstance(this, ehrId, sysTenant);</span>
+<span class="nc" id="L157">        contributionAccess.setState(ContributionDef.ContributionState.COMPLETE);</span>
+<span class="nc" id="L158">    }</span>
+
+    /**
+     * @throws IllegalArgumentException if retrieving failed for given input
+     */
+    public static UUID retrieveInstanceBySubject(I_DomainAccess domainAccess, UUID subjectUuid) {
+        Record record;
+<span class="nc" id="L165">        DSLContext context = domainAccess.getContext();</span>
+
+        try {
+<span class="nc" id="L168">            record = context.select(STATUS.EHR_ID)</span>
+<span class="nc" id="L169">                    .from(STATUS)</span>
+<span class="nc" id="L170">                    .where(STATUS.PARTY.eq(context.select(PARTY_IDENTIFIED.ID)</span>
+<span class="nc" id="L171">                            .from(PARTY_IDENTIFIED)</span>
+<span class="nc" id="L172">                            .where(PARTY_IDENTIFIED.ID.eq(subjectUuid))))</span>
+<span class="nc" id="L173">                    .fetchOne();</span>
+
+<span class="nc" id="L175">        } catch (Exception e) { // possibly not unique for a party: this is not permitted!</span>
+<span class="nc" id="L176">            throw new IllegalArgumentException(&quot;Could not retrieve  EHR for party:&quot; + subjectUuid + EXCEPTION + e);</span>
+        }
+
+<span class="nc bnc" id="L179" title="All 4 branches missed.">        if (record == null || record.size() == 0) {</span>
+<span class="nc" id="L180">            logger.warn(COULD_NOT_RETRIEVE_EHR_FOR_PARTY + subjectUuid);</span>
+<span class="nc" id="L181">            return null;</span>
+        }
+
+<span class="nc" id="L184">        return (UUID) record.getValue(0);</span>
+    }
+
+    /**
+     * @throws IllegalArgumentException if retrieving failed for given input
+     */
+    public static UUID retrieveInstanceBySubject(I_DomainAccess domainAccess, String subjectId, String issuerSpace) {
+        Record record;
+<span class="nc" id="L192">        DSLContext context = domainAccess.getContext();</span>
+
+        // get the corresponding party Id from the codification space provided by an issuer
+<span class="nc" id="L195">        IdentifierRecord identifierRecord =</span>
+<span class="nc" id="L196">                context.fetchOne(IDENTIFIER, IDENTIFIER.ID_VALUE.eq(subjectId).and(IDENTIFIER.ISSUER.eq(issuerSpace)));</span>
+
+<span class="nc bnc" id="L198" title="All 2 branches missed.">        if (identifierRecord == null) {</span>
+<span class="nc" id="L199">            throw new IllegalArgumentException(&quot;Could not invalidateContent an identified party for code:&quot; + subjectId</span>
+<span class="nc" id="L200">                    + &quot; issued by:&quot; + issuerSpace);</span>
+        }
+
+        try {
+<span class="nc" id="L204">            record = context.select(STATUS.EHR_ID)</span>
+<span class="nc" id="L205">                    .from(STATUS)</span>
+<span class="nc" id="L206">                    .where(STATUS.PARTY.eq(context.select(PARTY_IDENTIFIED.ID)</span>
+<span class="nc" id="L207">                            .from(PARTY_IDENTIFIED)</span>
+<span class="nc" id="L208">                            .where(PARTY_IDENTIFIED.ID.eq(identifierRecord.getParty()))))</span>
+<span class="nc" id="L209">                    .fetchOne();</span>
+
+<span class="nc" id="L211">        } catch (Exception e) { // possibly not unique for a party: this is not permitted!</span>
+<span class="nc" id="L212">            throw new IllegalArgumentException(COULD_NOT_RETRIEVE_EHR_FOR_PARTY + subjectId + EXCEPTION + e);</span>
+        }
+
+<span class="nc bnc" id="L215" title="All 4 branches missed.">        if (record == null || record.size() == 0) {</span>
+<span class="nc" id="L216">            logger.warn(COULD_NOT_RETRIEVE_EHR_FOR_PARTY + subjectId);</span>
+<span class="nc" id="L217">            return null;</span>
+        }
+
+<span class="nc" id="L220">        return (UUID) record.getValue(0);</span>
+    }
+
+    /**
+     * @throws IllegalArgumentException if retrieving failed for given input
+     */
+    public static UUID retrieveInstanceBySubjectExternalRef(
+            I_DomainAccess domainAccess, String subjectId, String issuerSpace) {
+        Record record;
+<span class="nc" id="L229">        DSLContext context = domainAccess.getContext();</span>
+
+        try {
+<span class="nc" id="L232">            record = context.select(STATUS.EHR_ID)</span>
+<span class="nc" id="L233">                    .from(STATUS)</span>
+<span class="nc" id="L234">                    .where(STATUS.PARTY.eq(context.select(PARTY_IDENTIFIED.ID)</span>
+<span class="nc" id="L235">                            .from(PARTY_IDENTIFIED)</span>
+<span class="nc" id="L236">                            .where(PARTY_IDENTIFIED</span>
+<span class="nc" id="L237">                                    .PARTY_REF_VALUE</span>
+<span class="nc" id="L238">                                    .eq(subjectId)</span>
+<span class="nc" id="L239">                                    .and(PARTY_IDENTIFIED.PARTY_REF_NAMESPACE.eq(issuerSpace)))))</span>
+<span class="nc" id="L240">                    .fetchOne();</span>
+
+<span class="nc" id="L242">        } catch (Exception e) { // possibly not unique for a party: this is not permitted!</span>
+<span class="nc" id="L243">            throw new IllegalArgumentException(COULD_NOT_RETRIEVE_EHR_FOR_PARTY + subjectId + EXCEPTION + e);</span>
+        }
+
+<span class="nc bnc" id="L246" title="All 4 branches missed.">        if (record == null || record.size() == 0) {</span>
+<span class="nc" id="L247">            logger.warn(&quot;Could not retrieve ehr for party: {}&quot;, subjectId);</span>
+<span class="nc" id="L248">            return null;</span>
+        }
+
+<span class="nc" id="L251">        return (UUID) record.getValue(0);</span>
+    }
+
+    public static I_EhrAccess retrieveInstanceByStatus(
+            I_DomainAccess domainAccess, UUID ehrId, UUID status, Integer version) {
+<span class="nc bnc" id="L256" title="All 2 branches missed.">        if (version &lt; 1) {</span>
+<span class="nc" id="L257">            throw new IllegalArgumentException(&quot;Version number must be &gt; 0&quot;);</span>
+        }
+
+        // minimal access, needs attributes to be set before returning
+<span class="nc" id="L261">        EhrAccess ehrAccess = new EhrAccess(domainAccess, ehrId, TenantSupport.currentSysTenant());</span>
+        EhrRecord record;
+
+        // necessary anyway, but if no version is provided assume latest version (otherwise this one will be overwritten
+        // with wanted one)
+<span class="nc" id="L266">        I_StatusAccess statusAccess = I_StatusAccess.retrieveInstance(domainAccess, status);</span>
+<span class="nc" id="L267">        ehrAccess.setStatusAccess(statusAccess);</span>
+
+        // first step of retrieving a particular version is to query for the amount of versions, which depends on the
+        // latest one above
+<span class="nc" id="L271">        Integer versions = domainAccess</span>
+<span class="nc" id="L272">                        .getContext()</span>
+<span class="nc" id="L273">                        .fetchCount(</span>
+<span class="nc" id="L274">                                STATUS_HISTORY,</span>
+<span class="nc" id="L275">                                STATUS_HISTORY.EHR_ID.eq(ehrAccess</span>
+<span class="nc" id="L276">                                        .getStatusAccess()</span>
+<span class="nc" id="L277">                                        .getStatusRecord()</span>
+<span class="nc" id="L278">                                        .getEhrId()))</span>
+<span class="nc" id="L279">                + 1;</span>
+        // check if input version number fits into existing amount of versions, but is not the same (same equals latest
+        // version)
+        // when either there is only one version or the requested one is the latest, continue with record already set
+<span class="nc bnc" id="L283" title="All 4 branches missed.">        if (versions &gt; version &amp;&amp; !version.equals(versions)) { // or get the particular requested version</span>
+            // sonarlint says that the expression above is always true? tested it, it can be true and false!?
+            // note: here version is &gt; 1 and there has to be at least one history entry
+<span class="nc" id="L286">            Result&lt;StatusHistoryRecord&gt; result = domainAccess</span>
+<span class="nc" id="L287">                    .getContext()</span>
+<span class="nc" id="L288">                    .selectFrom(STATUS_HISTORY)</span>
+<span class="nc" id="L289">                    .where(STATUS_HISTORY.EHR_ID.eq(ehrId))</span>
+<span class="nc" id="L290">                    .orderBy(STATUS_HISTORY.SYS_TRANSACTION.asc()) // oldest at top, i.e. [0]</span>
+<span class="nc" id="L291">                    .fetch();</span>
+
+<span class="nc bnc" id="L293" title="All 2 branches missed.">            if (result.isEmpty()) {</span>
+<span class="nc" id="L294">                throw new InternalServerException(&quot;Error retrieving EHR_STATUS&quot;); // should never be reached</span>
+            }
+
+            // result set of history table is always version+1, because the latest is in non-history table
+<span class="nc" id="L298">            StatusHistoryRecord statusHistoryRecord = result.get(version - 1);</span>
+            // FIXME EHR_STATUS: manually converting types. dirty, formally break jooq-style, right? the record would
+            // considered to be updated when calling methods like .store()
+<span class="nc" id="L301">            ehrAccess.getStatusAccess().getStatusRecord().setEhrId(statusHistoryRecord.getEhrId());</span>
+<span class="nc" id="L302">            ehrAccess.getStatusAccess().getStatusRecord().setIsQueryable(statusHistoryRecord.getIsQueryable());</span>
+<span class="nc" id="L303">            ehrAccess.getStatusAccess().getStatusRecord().setIsModifiable(statusHistoryRecord.getIsModifiable());</span>
+<span class="nc" id="L304">            ehrAccess.getStatusAccess().getStatusRecord().setParty(statusHistoryRecord.getParty());</span>
+<span class="nc" id="L305">            ehrAccess.getStatusAccess().getStatusRecord().setOtherDetails(statusHistoryRecord.getOtherDetails());</span>
+
+<span class="nc" id="L307">            ehrAccess.getStatusAccess().getStatusRecord().setSysTransaction(statusHistoryRecord.getSysTransaction());</span>
+<span class="nc" id="L308">            ehrAccess.getStatusAccess().getStatusRecord().setSysPeriod(statusHistoryRecord.getSysPeriod());</span>
+
+<span class="nc" id="L310">            ehrAccess.getStatusAccess().getStatusRecord().setHasAudit(statusHistoryRecord.getHasAudit());</span>
+<span class="nc" id="L311">            ehrAccess.getStatusAccess().getStatusRecord().setAttestationRef(statusHistoryRecord.getAttestationRef());</span>
+<span class="nc" id="L312">            ehrAccess.getStatusAccess().getStatusRecord().setInContribution(statusHistoryRecord.getInContribution());</span>
+<span class="nc" id="L313">            ehrAccess.getStatusAccess().getStatusRecord().setArchetypeNodeId(statusHistoryRecord.getArchetypeNodeId());</span>
+<span class="nc" id="L314">            ehrAccess.getStatusAccess().getStatusRecord().setName(statusHistoryRecord.getName());</span>
+        }
+
+        try {
+<span class="nc" id="L318">            record = domainAccess</span>
+<span class="nc" id="L319">                    .getContext()</span>
+<span class="nc" id="L320">                    .selectFrom(EHR_)</span>
+<span class="nc" id="L321">                    .where(EHR_.ID.eq(</span>
+<span class="nc" id="L322">                            ehrAccess.getStatusAccess().getStatusRecord().getEhrId()))</span>
+<span class="nc" id="L323">                    .fetchOne();</span>
+<span class="nc" id="L324">        } catch (Exception e) { // possibly not unique for a party: this is not permitted!</span>
+<span class="nc" id="L325">            throw new IllegalArgumentException(</span>
+<span class="nc" id="L326">                    &quot;Could not retrieveInstanceByNamedSubject EHR for status:&quot; + status + EXCEPTION + e);</span>
+        }
+
+<span class="nc bnc" id="L329" title="All 2 branches missed.">        if (record.size() == 0) {</span>
+<span class="nc" id="L330">            logger.warn(&quot;Could not retrieveInstanceByNamedSubject ehr for status:&quot; + status);</span>
+<span class="nc" id="L331">            return null;</span>
+        }
+
+<span class="nc" id="L334">        ehrAccess.ehrRecord = record;</span>
+
+<span class="nc" id="L336">        ehrAccess.isNew = false;</span>
+
+<span class="nc" id="L338">        return ehrAccess;</span>
+    }
+
+    /**
+     * @throws IllegalArgumentException when either no EHR for ID, or problem with data structure of
+     *                                  EHR, or DB inconsistency
+     */
+    public static I_EhrAccess retrieveInstance(I_DomainAccess domainAccess, UUID ehrId) {
+<span class="nc" id="L346">        DSLContext context = domainAccess.getContext();</span>
+<span class="nc" id="L347">        EhrAccess ehrAccess = new EhrAccess(domainAccess, ehrId, TenantSupport.currentSysTenant());</span>
+
+        EhrRecord record;
+
+        try {
+<span class="nc" id="L352">            record = context.selectFrom(EHR_).where(EHR_.ID.eq(ehrId)).fetchOne();</span>
+<span class="nc" id="L353">        } catch (Exception e) { // possibly not unique for a party: this is not permitted!</span>
+<span class="nc" id="L354">            throw new IllegalArgumentException(COULD_NOT_RETRIEVE_EHR_FOR_ID + ehrId + EXCEPTION + e);</span>
+        }
+
+<span class="nc bnc" id="L357" title="All 4 branches missed.">        if (record == null || record.size() == 0) {</span>
+<span class="nc" id="L358">            logger.warn(COULD_NOT_RETRIEVE_EHR_FOR_ID + ehrId);</span>
+<span class="nc" id="L359">            return null;</span>
+        }
+
+<span class="nc" id="L362">        ehrAccess.ehrRecord = record;</span>
+        // retrieve the corresponding status
+<span class="nc" id="L364">        I_StatusAccess statusAccess = I_StatusAccess.retrieveInstanceByEhrId(domainAccess, ehrAccess.ehrRecord.getId());</span>
+<span class="nc" id="L365">        ehrAccess.setStatusAccess(statusAccess);</span>
+
+        // set otherDetails if available
+<span class="nc bnc" id="L368" title="All 2 branches missed.">        if (ehrAccess.getStatusAccess().getStatusRecord().getOtherDetails() != null) {</span>
+<span class="nc" id="L369">            ehrAccess.otherDetails =</span>
+<span class="nc" id="L370">                    ehrAccess.getStatusAccess().getStatusRecord().getOtherDetails();</span>
+        }
+
+<span class="nc" id="L373">        ehrAccess.isNew = false;</span>
+
+<span class="nc" id="L375">        ehrAccess.setContributionAccess(I_ContributionAccess.retrieveInstance(</span>
+<span class="nc" id="L376">                domainAccess, ehrAccess.getStatusAccess().getContributionId()));</span>
+
+<span class="nc" id="L378">        return ehrAccess;</span>
+    }
+
+    /**
+     * @throws IllegalArgumentException when no EHR found for ID
+     */
+    public static Map&lt;String, Object&gt; fetchSubjectIdentifiers(I_DomainAccess domainAccess, UUID ehrId) {
+<span class="nc" id="L385">        EhrAccess ehrAccess = (EhrAccess) retrieveInstance(domainAccess, ehrId);</span>
+<span class="nc" id="L386">        DSLContext context = domainAccess.getContext();</span>
+
+<span class="nc bnc" id="L388" title="All 2 branches missed.">        if (ehrAccess == null) {</span>
+<span class="nc" id="L389">            throw new IllegalArgumentException(&quot;No ehr found for id:&quot; + ehrId);</span>
+        }
+
+<span class="nc" id="L392">        Map&lt;String, Object&gt; idlist = new MultiValueMap();</span>
+
+        // getNewFolderAccessInstance the corresponding subject Identifiers
+
+<span class="nc" id="L396">        context.selectFrom(IDENTIFIER)</span>
+<span class="nc" id="L397">                .where(IDENTIFIER.PARTY.eq(getParty(ehrAccess)))</span>
+<span class="nc" id="L398">                .fetch()</span>
+<span class="nc" id="L399">                .forEach(record -&gt; {</span>
+<span class="nc" id="L400">                    idlist.put(&quot;identifier_issuer&quot;, record.getIssuer());</span>
+<span class="nc" id="L401">                    idlist.put(&quot;identifier_id_value&quot;, record.getIdValue());</span>
+<span class="nc" id="L402">                });</span>
+
+        // get the list of ref attributes
+<span class="nc" id="L405">        context.selectFrom(PARTY_IDENTIFIED)</span>
+<span class="nc" id="L406">                .where(PARTY_IDENTIFIED.ID.eq(getParty(ehrAccess)))</span>
+<span class="nc" id="L407">                .fetch()</span>
+<span class="nc" id="L408">                .forEach(record -&gt; {</span>
+<span class="nc" id="L409">                    idlist.put(&quot;ref_name_space&quot;, record.getPartyRefNamespace());</span>
+<span class="nc" id="L410">                    idlist.put(&quot;id_value&quot;, record.getPartyRefValue());</span>
+<span class="nc" id="L411">                    idlist.put(&quot;ref_name_scheme&quot;, record.getPartyRefScheme());</span>
+<span class="nc" id="L412">                    idlist.put(&quot;ref_party_type&quot;, record.getPartyRefType());</span>
+<span class="nc" id="L413">                });</span>
+
+<span class="nc" id="L415">        return idlist;</span>
+    }
+
+    /**
+     * FIXME: check this method. appears to be needed later on. problematic: it actually gets a list of entries, not compositions. why only with three attributes? what about the unique key problem below?
+     *
+     * @throws IllegalArgumentException when no EHR found for ID
+     */
+    public static Map&lt;String, Map&lt;String, String&gt;&gt; getCompositionList(I_DomainAccess domainAccess, UUID ehrId) {
+<span class="nc" id="L424">        EhrAccess ehrAccess = (EhrAccess) retrieveInstance(domainAccess, ehrId);</span>
+<span class="nc" id="L425">        DSLContext context = domainAccess.getContext();</span>
+
+<span class="nc bnc" id="L427" title="All 2 branches missed.">        if (ehrAccess == null) {</span>
+<span class="nc" id="L428">            throw new IllegalArgumentException(&quot;No ehr found for id:&quot; + ehrId);</span>
+        }
+
+<span class="nc" id="L431">        Map&lt;String, Map&lt;String, String&gt;&gt; compositionlist = new HashMap&lt;&gt;(); // unique keys</span>
+
+<span class="nc" id="L433">        context.selectFrom(ENTRY)</span>
+<span class="nc" id="L434">                .where(ENTRY.COMPOSITION_ID.eq(</span>
+<span class="nc" id="L435">                        context.select(COMPOSITION.ID).from(COMPOSITION).where(COMPOSITION.EHR_ID.eq(ehrId))))</span>
+<span class="nc" id="L436">                .fetch()</span>
+<span class="nc" id="L437">                .forEach(record -&gt; {</span>
+<span class="nc" id="L438">                    Map&lt;String, String&gt; details = new HashMap&lt;&gt;();</span>
+<span class="nc" id="L439">                    details.put(&quot;composition_id&quot;, record.getCompositionId().toString());</span>
+<span class="nc" id="L440">                    details.put(&quot;templateId&quot;, record.getTemplateId());</span>
+<span class="nc" id="L441">                    details.put(&quot;date&quot;, record.getSysTransaction().toString());</span>
+<span class="nc" id="L442">                    compositionlist.put(</span>
+<span class="nc" id="L443">                            &quot;details&quot;,</span>
+<span class="nc" id="L444">                            details); // FIXME: bug? gets overwritten if more than 1 put() with this static key</span>
+<span class="nc" id="L445">                });</span>
+
+<span class="nc" id="L447">        return compositionlist;</span>
+    }
+
+    private static UUID getParty(EhrAccess ehrAccess) {
+<span class="nc" id="L451">        return ehrAccess.getStatusRecord().getParty();</span>
+    }
+
+    @Override
+    public DataAccess getDataAccess() {
+<span class="nc" id="L456">        return this;</span>
+    }
+
+    @Override
+    public void setAccess(UUID access) {
+<span class="nc" id="L461">        ehrRecord.setAccess(access);</span>
+<span class="nc" id="L462">    }</span>
+
+    @Override
+    public void setSystem(UUID system) {
+<span class="nc" id="L466">        ehrRecord.setSystemId(system);</span>
+<span class="nc" id="L467">    }</span>
+
+    @Override
+    public void setModifiable(Boolean modifiable) {
+<span class="nc" id="L471">        getStatusAccess().getStatusRecord().setIsModifiable(modifiable);</span>
+<span class="nc" id="L472">    }</span>
+
+    @Override
+    public void setArchetypeNodeId(String archetypeNodeId) {
+<span class="nc" id="L476">        getStatusAccess().getStatusRecord().setArchetypeNodeId(archetypeNodeId);</span>
+<span class="nc" id="L477">    }</span>
+
+    @Override
+    public String getArchetypeNodeId() {
+<span class="nc" id="L481">        return getStatusAccess().getStatusRecord().getArchetypeNodeId();</span>
+    }
+
+    @Override
+    public void setName(DvText name) {
+<span class="nc" id="L486">        new RecordedDvText().toDB(getStatusAccess().getStatusRecord(), STATUS.NAME, name);</span>
+<span class="nc" id="L487">    }</span>
+
+    @Override
+    public void setName(DvCodedText name) {
+<span class="nc" id="L491">        new RecordedDvCodedText().toDB(getStatusAccess().getStatusRecord(), STATUS.NAME, name);</span>
+<span class="nc" id="L492">    }</span>
+
+    @Override
+    public void setQueryable(Boolean queryable) {
+<span class="nc" id="L496">        getStatusAccess().getStatusRecord().setIsQueryable(queryable);</span>
+<span class="nc" id="L497">    }</span>
+
+    /**
+     * @throws InvalidApiParameterException when input couldn't be processed, i.e. EHR not stored
+     */
+    @Override
+    public UUID commit(Timestamp transactionTime) {
+
+<span class="nc" id="L505">        ehrRecord.setDateCreated(transactionTime);</span>
+<span class="nc" id="L506">        ehrRecord.setDateCreatedTzid(</span>
+<span class="nc" id="L507">                OffsetDateTime.from(transactionTime.toLocalDateTime().atOffset(ZoneOffset.from(OffsetDateTime.now())))</span>
+<span class="nc" id="L508">                        .getOffset()</span>
+<span class="nc" id="L509">                        .getId()); // get zoneId independent of &quot;transactionTime&quot;</span>
+<span class="nc" id="L510">        ehrRecord.store();</span>
+
+<span class="nc" id="L512">        UUID contributionId = contributionAccess.commit(transactionTime);</span>
+
+<span class="nc bnc" id="L514" title="All 6 branches missed.">        if (isNew &amp;&amp; getStatusAccess().getStatusRecord() != null &amp;&amp; hasStatusChanged) {</span>
+
+            // status is attached to EHR, so always same contribution when creating both together
+<span class="nc" id="L517">            statusAccess.setContributionId(contributionId);</span>
+<span class="nc" id="L518">            statusAccess.setEhrId(ehrRecord.getId());</span>
+<span class="nc" id="L519">            statusAccess.setOtherDetails(otherDetails);</span>
+<span class="nc" id="L520">            statusAccess.commit(transactionTime.toLocalDateTime(), contributionId, null);</span>
+
+            // reset
+<span class="nc" id="L523">            hasStatusChanged = false;</span>
+        }
+
+<span class="nc" id="L526">        return ehrRecord.getId();</span>
+    }
+
+    /**
+     * @throws InternalServerException because inherited interface function isn't implemented in this
+     *                                 class
+     * @deprecated
+     */
+    @Deprecated
+    @Override
+    public UUID commit() {
+<span class="nc" id="L537">        throw new InternalServerException(&quot;INTERNAL: this commit is not legal&quot;);</span>
+    }
+
+    /**
+     * @throws IllegalArgumentException when EHR couldn't be stored
+     */
+    @Override
+    public UUID commit(UUID committerId, UUID systemId, String description) {
+<span class="nc" id="L545">        Timestamp timestamp = TransactionTime.millis();</span>
+        // prepare EHR_STATUS audit with given values
+
+        // prepare associated contribution (with contribution's audit embedded)
+<span class="nc" id="L549">        contributionAccess.setAuditDetailsValues(committerId, systemId, description, ContributionChangeType.CREATION);</span>
+<span class="nc" id="L550">        contributionAccess.setDataType(ContributionDataType.ehr);</span>
+<span class="nc" id="L551">        contributionAccess.setState(ContributionDef.ContributionState.COMPLETE);</span>
+
+<span class="nc" id="L553">        statusAccess.setAuditAndContributionAuditValues(</span>
+<span class="nc" id="L554">                systemId, committerId, description, ContributionChangeType.CREATION);</span>
+
+<span class="nc" id="L556">        return commit(timestamp);</span>
+    }
+
+    /**
+     * {@inheritDoc}
+     *
+     * @throws InvalidApiParameterException when marshalling of EHR_STATUS / OTHER_DETAILS failed
+     */
+    @Override
+    public Boolean update(Timestamp transactionTime) {
+<span class="nc" id="L566">        return update(transactionTime, false);</span>
+    }
+
+    /**
+     * {@inheritDoc}
+     *
+     * @throws InvalidApiParameterException when marshalling of EHR_STATUS / OTHER_DETAILS failed
+     */
+    @Override
+    public Boolean update(Timestamp transactionTime, boolean force) {
+<span class="nc" id="L576">        boolean result = false;</span>
+
+<span class="nc bnc" id="L578" title="All 2 branches missed.">        if (hasStatusChanged) {</span>
+<span class="nc" id="L579">            statusAccess.setContributionAccess(this.contributionAccess);</span>
+
+<span class="nc" id="L581">            statusAccess.setOtherDetails(otherDetails);</span>
+<span class="nc" id="L582">            I_AuditDetailsAccess auditDetailsAccess = statusAccess.getAuditDetailsAccess();</span>
+<span class="nc" id="L583">            result = statusAccess.update(</span>
+<span class="nc" id="L584">                    LocalDateTime.ofInstant(transactionTime.toInstant(), ZoneId.systemDefault()),</span>
+<span class="nc" id="L585">                    this.contributionAccess.getId(),</span>
+<span class="nc" id="L586">                    auditDetailsAccess.getId());</span>
+
+            // reset
+<span class="nc" id="L589">            hasStatusChanged = false;</span>
+        }
+
+<span class="nc bnc" id="L592" title="All 4 branches missed.">        if (force || ehrRecord.changed()) {</span>
+<span class="nc" id="L593">            ehrRecord.setDateCreated(transactionTime);</span>
+<span class="nc" id="L594">            ehrRecord.setDateCreatedTzid(</span>
+<span class="nc" id="L595">                    ZonedDateTime.now().getZone().getId()); // get zoneId independent of &quot;transactionTime&quot;</span>
+<span class="nc bnc" id="L596" title="All 2 branches missed.">            result |= ehrRecord.update() &gt; 0;</span>
+        }
+
+<span class="nc" id="L599">        return result;</span>
+    }
+
+    /**
+     * @throws InternalServerException because inherited interface function isn't implemented in this
+     *                                 class
+     * @deprecated
+     */
+    @Deprecated
+    @Override
+    public Boolean update() {
+<span class="nc" id="L610">        throw new InternalServerException(&quot;INTERNAL: this update is not legal&quot;);</span>
+    }
+
+    /**
+     * @throws InternalServerException because inherited interface function isn't implemented in this
+     *                                 class
+     * @deprecated
+     */
+    @Deprecated
+    @Override
+    public Boolean update(Boolean force) {
+<span class="nc" id="L621">        throw new InternalServerException(&quot;INTERNAL: this update is not legal&quot;);</span>
+    }
+
+    @Override
+    public Boolean update(
+            UUID committerId,
+            UUID systemId,
+            UUID contributionId,
+            ContributionState state,
+            ContributionChangeType contributionChangeType,
+            String description,
+            UUID audit) {
+<span class="nc" id="L633">        Timestamp timestamp = TransactionTime.millis();</span>
+        // If custom contribution ID is provided use it, otherwise reuse already linked one
+<span class="nc bnc" id="L635" title="All 2 branches missed.">        if (contributionId != null) {</span>
+<span class="nc" id="L636">            I_ContributionAccess access = I_ContributionAccess.retrieveInstance(this.getDataAccess(), contributionId);</span>
+<span class="nc" id="L637">            I_AuditDetailsAccess auditDetailsAccess = new AuditDetailsAccess(</span>
+<span class="nc" id="L638">                            this.getDataAccess(), ehrRecord.getSysTenant())</span>
+<span class="nc" id="L639">                    .retrieveInstance(this.getDataAccess(), audit);</span>
+<span class="nc bnc" id="L640" title="All 4 branches missed.">            if (access != null &amp;&amp; auditDetailsAccess != null) {</span>
+<span class="nc" id="L641">                this.contributionAccess = access;</span>
+<span class="nc" id="L642">                this.statusAccess.setAuditDetailsAccess(auditDetailsAccess);</span>
+<span class="nc" id="L643">            } else {</span>
+<span class="nc" id="L644">                throw new InternalServerException(&quot;Can't update status with invalid contribution ID.&quot;);</span>
+            }
+            // Status check, because a contribution is needed only IF a versioned object is changed.
+            // So the plain EHR object change, e.g. only with new directory reference, shall not have a separate
+            // contribution.
+<span class="nc bnc" id="L649" title="All 2 branches missed.">        } else if (hasStatusChanged) {</span>
+<span class="nc" id="L650">            this.contributionAccess = new ContributionAccess(</span>
+<span class="nc" id="L651">                    this, getEhrRecord().getId(), getEhrRecord().getSysTenant());</span>
+<span class="nc" id="L652">            provisionContributionAccess(</span>
+<span class="nc" id="L653">                    contributionAccess, committerId, systemId, description, state, contributionChangeType);</span>
+<span class="nc" id="L654">            this.contributionAccess.commit();</span>
+
+            // create new audit for this update
+<span class="nc" id="L657">            statusAccess.setAuditDetailsAccess(new AuditDetailsAccess(</span>
+<span class="nc" id="L658">                    this,</span>
+<span class="nc" id="L659">                    this.contributionAccess.getAuditsSystemId(),</span>
+<span class="nc" id="L660">                    this.contributionAccess.getAuditsCommitter(),</span>
+<span class="nc" id="L661">                    ContributionChangeType.MODIFICATION,</span>
+<span class="nc" id="L662">                    this.contributionAccess.getAuditsDescription(),</span>
+<span class="nc" id="L663">                    ehrRecord.getSysTenant()));</span>
+<span class="nc" id="L664">            statusAccess.getAuditDetailsAccess().commit();</span>
+        }
+
+<span class="nc" id="L667">        return update(timestamp);</span>
+    }
+
+    /**
+     * Helper to provision a contribution access object with several data items.
+     */
+    private void provisionContributionAccess(
+            I_ContributionAccess access,
+            UUID committerId,
+            UUID systemId,
+            String description,
+            ContributionDef.ContributionState state,
+            I_ConceptAccess.ContributionChangeType contributionChangeType) {
+<span class="nc" id="L680">        access.setAuditDetailsValues(committerId, systemId, description, contributionChangeType);</span>
+<span class="nc" id="L681">        access.setState(state);</span>
+<span class="nc" id="L682">        access.setDataType(ContributionDataType.ehr);</span>
+<span class="nc" id="L683">        access.setState(ContributionState.COMPLETE);</span>
+<span class="nc" id="L684">    }</span>
+
+    /**
+     * @throws InternalServerException because inherited interface function isn't implemented in this
+     *                                 class
+     * @deprecated
+     */
+    @Deprecated
+    @Override
+    public Integer delete() {
+<span class="nc" id="L694">        throw new InternalServerException(&quot;INTERNAL: this delete is not legal&quot;);</span>
+    }
+
+    /**
+     * @throws IllegalArgumentException when instance's EHR ID can't be matched to existing one
+     */
+    @Override
+    public UUID reload() {
+        EhrRecord record;
+
+        try {
+<span class="nc" id="L705">            record = getContext().selectFrom(EHR_).where(EHR_.ID.eq(getId())).fetchOne();</span>
+<span class="nc" id="L706">        } catch (Exception e) { // possibly not unique for a party: this is not permitted!</span>
+<span class="nc" id="L707">            throw new IllegalArgumentException(COULD_NOT_RETRIEVE_EHR_FOR_ID + getId() + EXCEPTION + e);</span>
+        }
+
+<span class="nc bnc" id="L710" title="All 4 branches missed.">        if (record == null || record.size() == 0) {</span>
+<span class="nc" id="L711">            logger.warn(COULD_NOT_RETRIEVE_EHR_FOR_ID + getId());</span>
+<span class="nc" id="L712">            return null;</span>
+        }
+
+<span class="nc" id="L715">        ehrRecord = record;</span>
+        // retrieve the corresponding status
+<span class="nc" id="L717">        I_StatusAccess retStatusAccess =</span>
+<span class="nc" id="L718">                I_StatusAccess.retrieveInstanceByEhrId(this.getDataAccess(), ehrRecord.getId());</span>
+<span class="nc" id="L719">        setStatusAccess(retStatusAccess);</span>
+<span class="nc" id="L720">        isNew = false;</span>
+
+<span class="nc" id="L722">        return getId();</span>
+    }
+
+    public I_EhrAccess retrieve(UUID id) {
+<span class="nc" id="L726">        return retrieveInstance(this, id);</span>
+    }
+
+    public EhrRecord getEhrRecord() {
+<span class="nc" id="L730">        return ehrRecord;</span>
+    }
+
+    private StatusRecord getStatusRecord() {
+<span class="nc" id="L734">        return getStatusAccess().getStatusRecord();</span>
+    }
+
+    public boolean isNew() {
+<span class="nc" id="L738">        return isNew;</span>
+    }
+
+    @Override
+    public UUID getParty() {
+<span class="nc" id="L743">        return getStatusAccess().getStatusRecord().getParty();</span>
+    }
+
+    @Override
+    public void setParty(UUID partyId) {
+<span class="nc" id="L748">        getStatusAccess().getStatusRecord().setParty(partyId);</span>
+<span class="nc" id="L749">    }</span>
+
+    @Override
+    public UUID getId() {
+<span class="nc" id="L753">        return ehrRecord.getId();</span>
+    }
+
+    @Override
+    public Boolean isModifiable() {
+<span class="nc" id="L758">        return getStatusAccess().getStatusRecord().getIsModifiable();</span>
+    }
+
+    @Override
+    public Boolean isQueryable() {
+<span class="nc" id="L763">        return getStatusAccess().getStatusRecord().getIsQueryable();</span>
+    }
+
+    @Override
+    public UUID getSystemId() {
+<span class="nc" id="L768">        return ehrRecord.getSystemId();</span>
+    }
+
+    @Override
+    public UUID getStatusId() {
+<span class="nc" id="L773">        return statusAccess.getId();</span>
+    }
+
+    @Override
+    public UUID getAccessId() {
+<span class="nc" id="L778">        return ehrRecord.getAccess();</span>
+    }
+
+    @Override
+    public void setOtherDetails(ItemStructure otherDetails, String templateId) {
+<span class="nc" id="L783">        this.otherDetails = otherDetails;</span>
+        //        this.otherDetailsTemplateId =
+        // Optional.ofNullable(otherDetails).map(Locatable::getArchetypeDetails).map(Archetyped::getTemplateId).map(ObjectId::getValue).orElse(null);
+<span class="nc" id="L786">    }</span>
+
+    @Override
+    public ItemStructure getOtherDetails() {
+<span class="nc" id="L790">        return otherDetails;</span>
+    }
+
+    public I_ContributionAccess getContributionAccess() {
+<span class="nc" id="L794">        return contributionAccess;</span>
+    }
+
+    @Override
+    public void setContributionAccess(I_ContributionAccess contributionAccess) {
+<span class="nc" id="L799">        this.contributionAccess = contributionAccess;</span>
+<span class="nc" id="L800">    }</span>
+
+    @Override
+    public I_StatusAccess getStatusAccess() {
+<span class="nc" id="L804">        return this.statusAccess;</span>
+    }
+
+    @Override
+    public void setStatusAccess(I_StatusAccess statusAccess) {
+<span class="nc" id="L809">        this.statusAccess = statusAccess;</span>
+<span class="nc" id="L810">    }</span>
+
+    @Override
+    public void setStatus(EhrStatus status) {
+<span class="nc" id="L814">        setModifiable(status.isModifiable());</span>
+<span class="nc" id="L815">        setQueryable(status.isQueryable());</span>
+<span class="nc" id="L816">        setOtherDetails(status.getOtherDetails(), null);</span>
+
+        // Locatable stuff if present
+<span class="nc bnc" id="L819" title="All 2 branches missed.">        if (status.getArchetypeNodeId() != null) {</span>
+<span class="nc" id="L820">            setArchetypeNodeId(status.getArchetypeNodeId());</span>
+        }
+
+<span class="nc bnc" id="L823" title="All 2 branches missed.">        if (status.getName() != null) {</span>
+<span class="nc" id="L824">            setName(status.getName());</span>
+        }
+
+<span class="nc" id="L827">        UUID subjectUuid = new PersistedPartyProxy(getDataAccess())</span>
+<span class="nc" id="L828">                .getOrCreate(</span>
+<span class="nc" id="L829">                        status.getSubject(), getStatusAccess().getStatusRecord().getSysTenant());</span>
+<span class="nc" id="L830">        setParty(subjectUuid);</span>
+
+<span class="nc" id="L832">        hasStatusChanged = true;</span>
+<span class="nc" id="L833">    }</span>
+
+    @Override // get latest status
+    public EhrStatus getStatus() {
+<span class="nc" id="L837">        EhrStatus status = new EhrStatus();</span>
+
+<span class="nc" id="L839">        status.setModifiable(isModifiable());</span>
+<span class="nc" id="L840">        status.setQueryable(isQueryable());</span>
+        // set otherDetails if available
+<span class="nc bnc" id="L842" title="All 2 branches missed.">        if (getStatusAccess().getStatusRecord().getOtherDetails() != null) {</span>
+<span class="nc" id="L843">            status.setOtherDetails(getStatusAccess().getStatusRecord().getOtherDetails());</span>
+        }
+
+        // Locatable attribute
+<span class="nc" id="L847">        status.setArchetypeNodeId(getArchetypeNodeId());</span>
+<span class="nc" id="L848">        Object name = new RecordedDvCodedText().fromDB(getStatusAccess().getStatusRecord(), STATUS.NAME);</span>
+<span class="nc bnc" id="L849" title="All 2 branches missed.">        status.setName(name instanceof DvText ? (DvText) name : (DvCodedText) name);</span>
+
+<span class="nc" id="L851">        UUID statusId = getStatusAccess().getStatusRecord().getId();</span>
+<span class="nc" id="L852">        status.setUid(new HierObjectId(statusId.toString() + &quot;::&quot;</span>
+<span class="nc" id="L853">                + getServerConfig().getNodename() + &quot;::&quot; + I_StatusAccess.getLatestVersionNumber(this, statusId)));</span>
+
+<span class="nc" id="L855">        PartySelf partySelf = (PartySelf) new PersistedPartyProxy(this).retrieve(getParty());</span>
+<span class="nc" id="L856">        status.setSubject(partySelf);</span>
+
+<span class="nc" id="L858">        return status;</span>
+    }
+
+    @Override
+    public void adminDeleteEhr() {
+<span class="nc" id="L863">        Result&lt;AdminDeleteEhrFullRecord&gt; result =</span>
+<span class="nc" id="L864">                Routines.adminDeleteEhrFull(getContext().configuration(), this.getId());</span>
+<span class="nc bnc" id="L865" title="All 4 branches missed.">        if (result.isEmpty() || !Boolean.TRUE.equals(result.get(0).getDeleted())) {</span>
+<span class="nc" id="L866">            throw new InternalServerException(&quot;Admin deletion of EHR failed!&quot;);</span>
+        }
+<span class="nc" id="L868">    }</span>
+
+    public static boolean hasEhr(I_DomainAccess domainAccess, UUID ehrId) {
+<span class="nc" id="L871">        return domainAccess.getContext().fetchExists(EHR_, EHR_.ID.eq(ehrId));</span>
+    }
+
+    public static Boolean isModifiable(I_DomainAccess domainAccess, UUID ehrId) {
+<span class="nc" id="L875">        return domainAccess</span>
+<span class="nc" id="L876">                .getContext()</span>
+<span class="nc" id="L877">                .select(STATUS.IS_MODIFIABLE)</span>
+<span class="nc" id="L878">                .from(STATUS)</span>
+<span class="nc" id="L879">                .where(STATUS.EHR_ID.eq(ehrId))</span>
+<span class="nc" id="L880">                .fetchOne(Record1::value1);</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.7.202105040129</span></div></body></html>

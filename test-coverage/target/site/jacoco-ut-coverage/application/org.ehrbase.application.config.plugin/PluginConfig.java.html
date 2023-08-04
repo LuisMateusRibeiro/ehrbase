@@ -1,0 +1,140 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../../jacoco-resources/report.gif" type="image/gif"/><title>PluginConfig.java</title><link rel="stylesheet" href="../../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../../index.html" class="el_report">Coverage with Unit Tests</a> &gt; <a href="../index.html" class="el_bundle">application</a> &gt; <a href="index.source.html" class="el_package">org.ehrbase.application.config.plugin</a> &gt; <span class="el_source">PluginConfig.java</span></div><h1>PluginConfig.java</h1><pre class="source lang-java linenums">/*
+ * Copyright (c) 2022 vitasystems GmbH and Hannover Medical School.
+ *
+ * This file is part of project EHRbase
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     https://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.ehrbase.application.config.plugin;
+
+import static org.ehrbase.plugin.PluginHelper.PLUGIN_MANAGER_PREFIX;
+
+import java.util.HashMap;
+import java.util.Map;
+import org.ehrbase.api.exception.InternalServerException;
+import org.ehrbase.plugin.WebMvcEhrBasePlugin;
+import org.pf4j.PluginWrapper;
+import org.springframework.beans.factory.config.BeanFactoryPostProcessor;
+import org.springframework.beans.factory.config.ConfigurableListableBeanFactory;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.boot.context.properties.EnableConfigurationProperties;
+import org.springframework.boot.context.properties.bind.Binder;
+import org.springframework.boot.web.servlet.ServletRegistrationBean;
+import org.springframework.boot.web.servlet.context.ServletWebServerInitializedEvent;
+import org.springframework.context.ApplicationListener;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.core.env.Environment;
+import org.springframework.web.servlet.DispatcherServlet;
+import org.springframework.web.util.UriComponentsBuilder;
+
+/**
+ * @author Stefan Spiska
+ */
+@Configuration
+@EnableConfigurationProperties(PluginManagerProperties.class)
+@ConditionalOnProperty(prefix = PLUGIN_MANAGER_PREFIX, name = &quot;enable&quot;, havingValue = &quot;true&quot;)
+<span class="nc" id="L47">public class PluginConfig {</span>
+
+    @Bean
+    public EhrBasePluginManager pluginManager(Environment environment) {
+
+<span class="nc" id="L52">        return new EhrBasePluginManager(getPluginManagerProperties(environment));</span>
+    }
+    // since this is used in a BeanFactoryPostProcessor the PluginManagerProperties must be bound
+    // manually.
+    private PluginManagerProperties getPluginManagerProperties(Environment environment) {
+<span class="nc" id="L57">        return Binder.get(environment)</span>
+<span class="nc" id="L58">                .bind(PLUGIN_MANAGER_PREFIX, PluginManagerProperties.class)</span>
+<span class="nc" id="L59">                .get();</span>
+    }
+
+    /** Register the {@link DispatcherServlet} for all {@link WebMvcEhrBasePlugin} */
+    @Bean
+    public BeanFactoryPostProcessor beanFactoryPostProcessor(
+            EhrBasePluginManager pluginManager, Environment environment) {
+
+<span class="nc" id="L67">        PluginManagerProperties pluginManagerProperties = getPluginManagerProperties(environment);</span>
+
+<span class="nc" id="L69">        Map&lt;String, String&gt; registeredUrl = new HashMap&lt;&gt;();</span>
+
+<span class="nc" id="L71">        return beanFactory -&gt; {</span>
+<span class="nc" id="L72">            pluginManager.loadPlugins();</span>
+
+<span class="nc" id="L74">            pluginManager.getPlugins().stream()</span>
+<span class="nc" id="L75">                    .map(PluginWrapper::getPlugin)</span>
+<span class="nc" id="L76">                    .filter(p -&gt; WebMvcEhrBasePlugin.class.isAssignableFrom(p.getClass()))</span>
+<span class="nc" id="L77">                    .map(WebMvcEhrBasePlugin.class::cast)</span>
+<span class="nc" id="L78">                    .forEach(p -&gt; register(beanFactory, pluginManagerProperties, registeredUrl, p));</span>
+<span class="nc" id="L79">        };</span>
+    }
+
+    /**
+     * Register the {@link DispatcherServlet} for a {@link WebMvcEhrBasePlugin}
+     *
+     * @param beanFactory
+     * @param pluginManagerProperties
+     * @param registeredUrl
+     * @param p
+     */
+    private void register(
+            ConfigurableListableBeanFactory beanFactory,
+            PluginManagerProperties pluginManagerProperties,
+            Map&lt;String, String&gt; registeredUrl,
+            WebMvcEhrBasePlugin p) {
+
+<span class="nc" id="L96">        String pluginId = p.getWrapper().getPluginId();</span>
+
+<span class="nc" id="L98">        final String uri = UriComponentsBuilder.newInstance()</span>
+<span class="nc" id="L99">                .path(pluginManagerProperties.getPluginContextPath())</span>
+<span class="nc" id="L100">                .path(p.getContextPath())</span>
+<span class="nc" id="L101">                .path(&quot;/*&quot;)</span>
+<span class="nc" id="L102">                .build()</span>
+<span class="nc" id="L103">                .getPath();</span>
+
+        // check for duplicate plugin uri
+<span class="nc" id="L106">        registeredUrl.entrySet().stream()</span>
+<span class="nc" id="L107">                .filter(e -&gt; e.getValue().equals(uri))</span>
+<span class="nc" id="L108">                .findAny()</span>
+<span class="nc" id="L109">                .ifPresent(e -&gt; {</span>
+<span class="nc" id="L110">                    throw new InternalServerException(String.format(</span>
+<span class="nc" id="L111">                            &quot;uri %s for plugin %s already registered by plugin %s&quot;, uri, pluginId, e.getKey()));</span>
+                });
+
+<span class="nc" id="L114">        registeredUrl.put(pluginId, uri);</span>
+
+<span class="nc" id="L116">        ServletRegistrationBean&lt;DispatcherServlet&gt; bean = new ServletRegistrationBean&lt;&gt;(p.getDispatcherServlet(), uri);</span>
+
+<span class="nc" id="L118">        bean.setLoadOnStartup(1);</span>
+<span class="nc" id="L119">        bean.setOrder(1);</span>
+<span class="nc" id="L120">        bean.setName(pluginId);</span>
+<span class="nc" id="L121">        beanFactory.initializeBean(bean, pluginId);</span>
+<span class="nc" id="L122">        beanFactory.autowireBean(bean);</span>
+<span class="nc" id="L123">        beanFactory.registerSingleton(pluginId, bean);</span>
+<span class="nc" id="L124">    }</span>
+
+    /**
+     * Create a Listener for the {@link ServletWebServerInitializedEvent } to initialise the {@link
+     * org.pf4j.ExtensionPoint} after all {@link DispatcherServlet} have been initialised.
+     *
+     * @param pluginManager
+     * @return
+     */
+    @Bean
+    ApplicationListener&lt;ServletWebServerInitializedEvent&gt; servletWebServerInitializedEventApplicationListener(
+            EhrBasePluginManager pluginManager) {
+
+<span class="nc" id="L137">        return event -&gt; pluginManager.initPlugins();</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.7.202105040129</span></div></body></html>

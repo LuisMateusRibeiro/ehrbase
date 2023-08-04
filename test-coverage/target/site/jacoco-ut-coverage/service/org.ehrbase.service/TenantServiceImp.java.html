@@ -1,0 +1,161 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../../jacoco-resources/report.gif" type="image/gif"/><title>TenantServiceImp.java</title><link rel="stylesheet" href="../../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../../index.html" class="el_report">Coverage with Unit Tests</a> &gt; <a href="../index.html" class="el_bundle">service</a> &gt; <a href="index.source.html" class="el_package">org.ehrbase.service</a> &gt; <span class="el_source">TenantServiceImp.java</span></div><h1>TenantServiceImp.java</h1><pre class="source lang-java linenums">/*
+ * Copyright (c) 2019-2022 vitasystems GmbH and Hannover Medical School.
+ *
+ * This file is part of project EHRbase
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     https://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.ehrbase.service;
+
+import static org.ehrbase.api.tenant.TenantAuthentication.DEFAULT_TENANT_ID;
+import static org.ehrbase.dao.access.jooq.TenantAccess.getSysTenants;
+
+import java.util.List;
+import java.util.Optional;
+import java.util.stream.Collectors;
+import javax.annotation.PostConstruct;
+import org.apache.commons.lang3.StringUtils;
+import org.ehrbase.api.definitions.ServerConfig;
+import org.ehrbase.api.exception.ObjectNotFoundException;
+import org.ehrbase.api.service.TenantService;
+import org.ehrbase.api.tenant.Tenant;
+import org.ehrbase.api.tenant.TenantAuthentication;
+import org.ehrbase.cache.CacheOptions;
+import org.ehrbase.dao.access.interfaces.I_TenantAccess;
+import org.ehrbase.tenant.DefaultTenantAuthentication;
+import org.jooq.DSLContext;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.cache.Cache;
+import org.springframework.cache.CacheManager;
+import org.springframework.context.annotation.Lazy;
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.context.SecurityContext;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+/**
+ * {@link TenantService} implementation.
+ */
+@Service
+@Transactional
+public class TenantServiceImp extends BaseServiceImp implements TenantService {
+
+<span class="nc" id="L55">    private final Logger log = LoggerFactory.getLogger(getClass());</span>
+
+    private static final String ERR_GETTING_TENANT = &quot;Could not find tenant %s in cache&quot;;
+    private static final String WARN_NOT_TENANT_ID =
+            &quot;No tenant identifier provided, falling back to default tenant identifier {}&quot;;
+    private static final String ERR_DELETE_TENANT_ID = &quot;Deleting tenant id[%s] is not allowed&quot;;
+
+    private final Cache sysTenantCache;
+
+    public TenantServiceImp(
+            @Lazy KnowledgeCacheService knowledgeCacheService,
+            CacheManager cacheManager,
+            DSLContext context,
+            ServerConfig serverConfig) {
+<span class="nc" id="L69">        super(knowledgeCacheService, context, serverConfig);</span>
+<span class="nc" id="L70">        this.sysTenantCache = cacheManager.getCache(CacheOptions.SYS_TENANT);</span>
+<span class="nc" id="L71">    }</span>
+
+    @PostConstruct
+    void init() {
+<span class="nc" id="L75">        getSysTenants(getDataAccess().getContext()).forEach(sysTenantCache::put);</span>
+<span class="nc" id="L76">    }</span>
+
+    @Override
+    public Short getCurrentSysTenant() {
+<span class="nc" id="L80">        return retrieveFromCache(getCurrentTenantIdentifier());</span>
+    }
+
+    @Override
+    public Short getSysTenantByTenantId(String tenantId) {
+<span class="nc" id="L85">        return retrieveFromCache(tenantId);</span>
+    }
+
+    private Short retrieveFromCache(String tenantId) {
+<span class="nc" id="L89">        return Optional.ofNullable(tenantId)</span>
+<span class="nc" id="L90">                .map(sysTenantCache::get)</span>
+<span class="nc" id="L91">                .map(Cache.ValueWrapper::get)</span>
+<span class="nc" id="L92">                .map(Short.class::cast)</span>
+<span class="nc" id="L93">                .orElseThrow(() -&gt; new IllegalArgumentException(String.format(ERR_GETTING_TENANT, tenantId)));</span>
+    }
+
+    @Override
+    public String getCurrentTenantIdentifier() {
+<span class="nc" id="L98">        return Optional.ofNullable(SecurityContextHolder.getContext())</span>
+<span class="nc" id="L99">                .map(SecurityContext::getAuthentication)</span>
+<span class="nc" id="L100">                .filter(DefaultTenantAuthentication.class::isInstance)</span>
+<span class="nc" id="L101">                .map(DefaultTenantAuthentication.class::cast)</span>
+<span class="nc" id="L102">                .map(DefaultTenantAuthentication::getTenantId)</span>
+<span class="nc" id="L103">                .filter(StringUtils::isNotEmpty)</span>
+<span class="nc" id="L104">                .orElseGet(() -&gt; {</span>
+<span class="nc" id="L105">                    log.trace(WARN_NOT_TENANT_ID, TenantAuthentication.getDefaultTenantId());</span>
+<span class="nc" id="L106">                    return TenantAuthentication.getDefaultTenantId();</span>
+                });
+    }
+
+    @Override
+    public String create(Tenant tenant) {
+<span class="nc" id="L112">        I_TenantAccess tenantAccess =</span>
+<span class="nc" id="L113">                I_TenantAccess.getNewInstance(getDataAccess().getContext(), tenant);</span>
+<span class="nc" id="L114">        Short sysTenant = tenantAccess.commit();</span>
+<span class="nc" id="L115">        sysTenantCache.put(tenant.getTenantId(), sysTenant);</span>
+
+<span class="nc" id="L117">        return tenant.getTenantId();</span>
+    }
+
+    @PreAuthorize(&quot;hasRole('ADMIN')&quot;)
+    @Override
+    public void deleteTenant(String tenantId) {
+<span class="nc bnc" id="L123" title="All 2 branches missed.">        if (DEFAULT_TENANT_ID.equals(tenantId)) {</span>
+<span class="nc" id="L124">            throw new IllegalArgumentException(</span>
+<span class="nc" id="L125">                    String.format(&quot;Not allowed to delete default tenant with id %s.&quot;, tenantId));</span>
+        }
+
+<span class="nc bnc" id="L128" title="All 2 branches missed.">        if (!hasTenant(tenantId)) {</span>
+<span class="nc" id="L129">            throw new ObjectNotFoundException(&quot;Tenant&quot;, String.format(&quot;Tenant with id %s does not exist.&quot;, tenantId));</span>
+        }
+
+<span class="nc" id="L132">        I_TenantAccess.deleteTenant(getDataAccess().getContext(), tenantId);</span>
+<span class="nc" id="L133">        sysTenantCache.evict(tenantId);</span>
+<span class="nc" id="L134">    }</span>
+
+    @Override
+    public List&lt;Tenant&gt; getAll() {
+<span class="nc" id="L138">        return I_TenantAccess.getAll(getDataAccess().getContext()).stream()</span>
+<span class="nc" id="L139">                .map(I_TenantAccess::convert)</span>
+<span class="nc" id="L140">                .collect(Collectors.toList());</span>
+    }
+
+    @Override
+    public Optional&lt;Tenant&gt; findBy(String tenantId) {
+<span class="nc" id="L145">        return Optional.ofNullable(</span>
+<span class="nc" id="L146">                        I_TenantAccess.retrieveInstanceBy(getDataAccess().getContext(), tenantId))</span>
+<span class="nc" id="L147">                .map(I_TenantAccess::convert);</span>
+    }
+
+    @Override
+    public Tenant update(Tenant tenant) {
+<span class="nc" id="L152">        return I_TenantAccess.retrieveInstanceBy(getDataAccess().getContext(), tenant.getTenantId())</span>
+<span class="nc" id="L153">                .update(tenant);</span>
+    }
+
+    @Override
+    public boolean hasTenant(String tenantId) {
+<span class="nc" id="L158">        return I_TenantAccess.hasTenant(getDataAccess(), tenantId);</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.7.202105040129</span></div></body></html>

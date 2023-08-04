@@ -1,0 +1,100 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../../jacoco-resources/report.gif" type="image/gif"/><title>Predicates.java</title><link rel="stylesheet" href="../../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../../index.html" class="el_report">Overall Coverage</a> &gt; <a href="../index.html" class="el_bundle">service</a> &gt; <a href="index.source.html" class="el_package">org.ehrbase.aql.containment</a> &gt; <span class="el_source">Predicates.java</span></div><h1>Predicates.java</h1><pre class="source lang-java linenums">/*
+ * Copyright (c) 2019 vitasystems GmbH and Hannover Medical School.
+ *
+ * This file is part of project EHRbase
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     https://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.ehrbase.aql.containment;
+
+import java.util.ArrayList;
+import java.util.List;
+
+/**
+ * Container defining list of predicates with their associated operator (if any).
+ * Created by christian on 4/23/2016.
+ */
+public class Predicates {
+
+    private ContainmentSet containmentSet;
+
+    public static class Details {
+        private String expression;
+        private Containment containedIn;
+        private ContainmentSet inSet;
+
+<span class="nc" id="L36">        public Details(String expression, ContainmentSet inSet, Containment enclosing) {</span>
+<span class="nc" id="L37">            this.expression = expression;</span>
+<span class="nc" id="L38">            this.containedIn = enclosing;</span>
+<span class="nc" id="L39">            this.inSet = inSet;</span>
+<span class="nc" id="L40">        }</span>
+
+        public boolean isVoid() {
+<span class="nc bnc" id="L43" title="All 4 branches missed.">            return (getExpression() == null || getExpression().length() == 0);</span>
+        }
+
+        public String getExpression() {
+<span class="nc" id="L47">            return expression;</span>
+        }
+
+        public void setExpression(String expression) {
+<span class="nc" id="L51">            this.expression = expression;</span>
+<span class="nc" id="L52">        }</span>
+
+        public Containment getContainedIn() {
+<span class="nc" id="L55">            return containedIn;</span>
+        }
+
+        public void setContainedIn(Containment containedIn) {
+<span class="nc" id="L59">            this.containedIn = containedIn;</span>
+<span class="nc" id="L60">        }</span>
+
+        public ContainmentSet getInSet() {
+<span class="nc" id="L63">            return inSet;</span>
+        }
+
+        public void setInSet(ContainmentSet inSet) {
+<span class="nc" id="L67">            this.inSet = inSet;</span>
+<span class="nc" id="L68">        }</span>
+    }
+
+<span class="nc" id="L71">    public Predicates(ContainmentSet containmentSet) {</span>
+<span class="nc" id="L72">        this.containmentSet = containmentSet;</span>
+<span class="nc" id="L73">    }</span>
+
+<span class="nc" id="L75">    private final List&lt;Details&gt; intersectPredicates = new ArrayList&lt;&gt;();</span>
+<span class="nc" id="L76">    private final List&lt;Details&gt; exceptPredicates = new ArrayList&lt;&gt;();</span>
+<span class="nc" id="L77">    private final List&lt;Details&gt; unionPredicates = new ArrayList&lt;&gt;();</span>
+<span class="nc" id="L78">    private final List&lt;Details&gt; atomicPredicates = new ArrayList&lt;&gt;();</span>
+
+    public ContainmentSet getContainmentSet() {
+<span class="nc" id="L81">        return containmentSet;</span>
+    }
+
+    public List&lt;Details&gt; getIntersectPredicates() {
+<span class="nc" id="L85">        return intersectPredicates;</span>
+    }
+
+    public List&lt;Details&gt; getExceptPredicates() {
+<span class="nc" id="L89">        return exceptPredicates;</span>
+    }
+
+    public List&lt;Details&gt; getUnionPredicates() {
+<span class="nc" id="L93">        return unionPredicates;</span>
+    }
+
+    public List&lt;Details&gt; getAtomicPredicates() {
+<span class="nc" id="L97">        return atomicPredicates;</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.7.202105040129</span></div></body></html>

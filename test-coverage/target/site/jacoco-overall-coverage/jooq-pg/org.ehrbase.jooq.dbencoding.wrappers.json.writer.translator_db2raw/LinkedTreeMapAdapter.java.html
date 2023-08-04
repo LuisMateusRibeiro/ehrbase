@@ -1,0 +1,470 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../../jacoco-resources/report.gif" type="image/gif"/><title>LinkedTreeMapAdapter.java</title><link rel="stylesheet" href="../../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../../index.html" class="el_report">Overall Coverage</a> &gt; <a href="../index.html" class="el_bundle">jooq-pg</a> &gt; <a href="index.source.html" class="el_package">org.ehrbase.jooq.dbencoding.wrappers.json.writer.translator_db2raw</a> &gt; <span class="el_source">LinkedTreeMapAdapter.java</span></div><h1>LinkedTreeMapAdapter.java</h1><pre class="source lang-java linenums">/*
+ * Copyright (c) 2019 vitasystems GmbH and Hannover Medical School.
+ *
+ * This file is part of project EHRbase
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     https://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.ehrbase.jooq.dbencoding.wrappers.json.writer.translator_db2raw;
+
+import com.google.gson.TypeAdapter;
+import com.google.gson.internal.LinkedTreeMap;
+import com.google.gson.stream.JsonReader;
+import com.google.gson.stream.JsonWriter;
+import com.nedap.archie.rm.archetyped.Locatable;
+import com.nedap.archie.rm.datavalues.encapsulated.DvMultimedia;
+import com.nedap.archie.rminfo.ArchieRMInfoLookup;
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import org.ehrbase.jooq.dbencoding.CompositionSerializer;
+import org.ehrbase.jooq.dbencoding.wrappers.json.I_DvTypeAdapter;
+import org.ehrbase.openehr.sdk.aql.webtemplatepath.AqlPath;
+import org.ehrbase.openehr.sdk.util.SnakeCase;
+
+/**
+ * GSON adapter for LinkedTreeMap
+ *
+ * &lt;p&gt;NB. @SuppressWarnings(&quot;unchecked&quot;) is used to deal with generics
+ */
+public class LinkedTreeMapAdapter extends TypeAdapter&lt;LinkedTreeMap&lt;String, Object&gt;&gt; implements I_DvTypeAdapter {
+
+<span class="fc" id="L44">    private static final Set&lt;String&gt; STRUCTURAL_CLASSES = Set.of(</span>
+            &quot;ItemTree&quot;,
+            &quot;ItemTable&quot;,
+            &quot;ItemSingle&quot;,
+            &quot;PointEvent&quot;,
+            &quot;Instruction&quot;,
+            &quot;Evaluation&quot;,
+            &quot;Observation&quot;,
+            &quot;Action&quot;,
+            &quot;AdminEntry&quot;,
+            &quot;IntervalEvent&quot;);
+
+    protected AdapterType adapterType;
+
+    public LinkedTreeMapAdapter(AdapterType adapterType) {
+<span class="nc" id="L59">        super();</span>
+<span class="nc" id="L60">        this.adapterType = adapterType;</span>
+<span class="nc" id="L61">    }</span>
+
+    public LinkedTreeMapAdapter() {
+<span class="fc" id="L64">        super();</span>
+<span class="fc" id="L65">        this.adapterType = AdapterType.DBJSON2RAWJSON;</span>
+<span class="fc" id="L66">    }</span>
+
+    //	@Override
+    public LinkedTreeMap read(JsonReader arg0) {
+<span class="nc" id="L70">        return null;</span>
+    }
+
+    @SuppressWarnings(&quot;unchecked&quot;)
+    private void writeInternal(JsonWriter writer, LinkedTreeMap&lt;String, Object&gt; map) throws IOException {
+
+<span class="fc" id="L76">        map = new Children(map).removeDuplicateArchetypeNodeId();</span>
+
+<span class="fc" id="L78">        boolean isItemsOnly = new Children(map).isItemsOnly();</span>
+<span class="fc" id="L79">        boolean isMultiEvents = new Children(map).isEvents();</span>
+<span class="fc" id="L80">        boolean isMultiContent = new Children(map).isMultiContent();</span>
+
+<span class="fc" id="L82">        fixWrongDbEncoding(map);</span>
+
+<span class="fc" id="L84">        String parentItemsArchetypeNodeId = null;</span>
+<span class="fc" id="L85">        String parentItemsType = null;</span>
+
+<span class="fc bfc" id="L87" title="All 4 branches covered.">        if (isItemsOnly || isMultiEvents) {</span>
+            // promote archetype node id and type at parent level
+            // get the archetype node id
+<span class="fc bfc" id="L90" title="All 2 branches covered.">            if (map.containsKey(I_DvTypeAdapter.ARCHETYPE_NODE_ID)) {</span>
+<span class="fc" id="L91">                parentItemsArchetypeNodeId = (String) map.get(I_DvTypeAdapter.ARCHETYPE_NODE_ID);</span>
+<span class="fc" id="L92">                map.remove(I_DvTypeAdapter.ARCHETYPE_NODE_ID);</span>
+            }
+<span class="fc bfc" id="L94" title="All 2 branches covered.">            if (map.containsKey(AT_TYPE)) {</span>
+<span class="fc" id="L95">                parentItemsType = (String) map.get(AT_TYPE);</span>
+<span class="fc" id="L96">                map.remove(AT_TYPE);</span>
+            }
+<span class="fc bfc" id="L98" title="All 2 branches covered.">            if (map.containsKey(CompositionSerializer.TAG_CLASS)) {</span>
+<span class="fc bfc" id="L99" title="All 2 branches covered.">                if (map.get(CompositionSerializer.TAG_CLASS) instanceof ArrayList)</span>
+<span class="fc" id="L100">                    parentItemsType = new SnakeCase(</span>
+<span class="fc" id="L101">                                    (String) ((ArrayList) map.get(CompositionSerializer.TAG_CLASS)).get(0))</span>
+<span class="fc" id="L102">                            .camelToUpperSnake();</span>
+<span class="pc bpc" id="L103" title="1 of 2 branches missed.">                else if (map.get(CompositionSerializer.TAG_CLASS) instanceof String)</span>
+<span class="fc" id="L104">                    parentItemsType =</span>
+<span class="fc" id="L105">                            new SnakeCase((String) map.get(CompositionSerializer.TAG_CLASS)).camelToUpperSnake();</span>
+
+<span class="fc" id="L107">                map.remove(CompositionSerializer.TAG_CLASS);</span>
+            }
+        }
+
+<span class="fc bfc" id="L111" title="All 2 branches covered.">        if (isItemsOnly) {</span>
+            // CHC 20191003: Removed archetype_node_id writer since it is serviced by closing the array.
+<span class="fc" id="L113">            ArrayList&lt;?&gt; items = new Children(map).items();</span>
+
+<span class="fc bfc" id="L115" title="All 2 branches covered.">            if (map.containsKey(CompositionSerializer.TAG_NAME)) {</span>
+<span class="fc bfc" id="L116" title="All 2 branches covered.">                if (map.get(CompositionSerializer.TAG_NAME) instanceof ArrayList)</span>
+<span class="fc" id="L117">                    new ValueArrayList(writer, map.get(CompositionSerializer.TAG_NAME), CompositionSerializer.TAG_NAME)</span>
+<span class="fc" id="L118">                            .write();</span>
+<span class="pc bpc" id="L119" title="1 of 2 branches missed.">                else if (map.get(CompositionSerializer.TAG_NAME) instanceof String)</span>
+<span class="nc" id="L120">                    new NameValue(writer, (String) map.get(CompositionSerializer.TAG_NAME)).write();</span>
+<span class="pc bpc" id="L121" title="1 of 2 branches missed.">                else if (map.get(CompositionSerializer.TAG_NAME) instanceof LinkedTreeMap) {</span>
+<span class="fc" id="L122">                    new NameValue(writer, (LinkedTreeMap) map.get(CompositionSerializer.TAG_NAME)).write();</span>
+                }
+            }
+
+<span class="fc bfc" id="L126" title="All 2 branches covered.">            if (map.containsKey(CompositionSerializer.TAG_ARCHETYPE_NODE_ID)) {</span>
+<span class="fc bfc" id="L127" title="All 2 branches covered.">                if (map.get(CompositionSerializer.TAG_ARCHETYPE_NODE_ID) instanceof ArrayList)</span>
+<span class="fc" id="L128">                    new ValueArrayList(</span>
+                                    writer,
+<span class="fc" id="L130">                                    map.get(CompositionSerializer.TAG_ARCHETYPE_NODE_ID),</span>
+                                    CompositionSerializer.TAG_ARCHETYPE_NODE_ID)
+<span class="fc" id="L132">                            .write();</span>
+                else
+<span class="fc" id="L134">                    writer.name(ARCHETYPE_NODE_ID)</span>
+<span class="fc" id="L135">                            .value(map.get(CompositionSerializer.TAG_ARCHETYPE_NODE_ID)</span>
+<span class="fc" id="L136">                                    .toString());</span>
+            }
+
+<span class="fc" id="L139">            writeItemInArray(ITEMS, items, writer, parentItemsArchetypeNodeId, parentItemsType);</span>
+<span class="fc bfc" id="L140" title="All 2 branches covered.">        } else if (isMultiEvents) {</span>
+            // assumed sorted (LinkedTreeMap preserve input order)
+<span class="fc" id="L142">            ArrayList&lt;?&gt; events = new Children(map).events();</span>
+<span class="fc" id="L143">            writeItemInArray(EVENTS, events, writer, parentItemsArchetypeNodeId, parentItemsType);</span>
+<span class="fc bfc" id="L144" title="All 2 branches covered.">        } else if (isMultiContent) {</span>
+<span class="fc bfc" id="L145" title="All 2 branches covered.">            while (map.keySet().iterator().hasNext()) {</span>
+<span class="fc" id="L146">                String key = map.keySet().iterator().next();</span>
+<span class="fc bfc" id="L147" title="All 2 branches covered.">                if (!key.startsWith(CompositionSerializer.TAG_CONTENT)) {</span>
+<span class="fc bfc" id="L148" title="All 2 branches covered.">                    if (map.get(key) instanceof LinkedTreeMap) {</span>
+<span class="fc" id="L149">                        writer.name(key);</span>
+<span class="fc" id="L150">                        writer.beginObject();</span>
+<span class="fc" id="L151">                        writeNode((LinkedTreeMap) map.get(key), writer);</span>
+<span class="fc" id="L152">                        writer.endObject();</span>
+<span class="pc bpc" id="L153" title="1 of 2 branches missed.">                    } else if (map.get(key) instanceof ArrayList) { // due to using multimap</span>
+<span class="nc bnc" id="L154" title="All 2 branches missed.">                        if (!key.equals(CompositionSerializer.TAG_CLASS)) { // ignore it</span>
+<span class="nc" id="L155">                            ArrayList&lt;?&gt; arrayList = (ArrayList&lt;?&gt;) map.get(key);</span>
+<span class="nc bnc" id="L156" title="All 2 branches missed.">                            if (!arrayList.isEmpty())</span>
+<span class="nc" id="L157">                                writer.name(key).value(arrayList.get(0).toString());</span>
+<span class="nc" id="L158">                        }</span>
+<span class="fc" id="L159">                    } else writer.name(key).value((String) map.get(key));</span>
+<span class="fc" id="L160">                    map.remove(key);</span>
+                } else {
+<span class="pc bpc" id="L162" title="1 of 2 branches missed.">                    if (isNodePredicate(key)) {</span>
+                        // set the archetype node id in each children
+<span class="fc bfc" id="L164" title="All 2 branches covered.">                        for (Map.Entry&lt;String, Object&gt; kv : map.entrySet()) {</span>
+<span class="fc bfc" id="L165" title="All 2 branches covered.">                            for (Object valueMap : (ArrayList&lt;?&gt;) kv.getValue()) {</span>
+<span class="fc bfc" id="L166" title="All 2 branches covered.">                                if (valueMap instanceof LinkedTreeMap) {</span>
+<span class="fc" id="L167">                                    LinkedTreeMap&lt;String, Object&gt; vm = (LinkedTreeMap&lt;String, Object&gt;) valueMap;</span>
+<span class="fc" id="L168">                                    vm.put(</span>
+                                            CompositionSerializer.TAG_ARCHETYPE_NODE_ID,
+<span class="fc" id="L170">                                            AqlPath.parse(kv.getKey())</span>
+<span class="fc" id="L171">                                                    .getLastNode()</span>
+<span class="fc" id="L172">                                                    .getAtCode());</span>
+                                }
+<span class="fc" id="L174">                            }</span>
+<span class="fc" id="L175">                        }</span>
+                    }
+<span class="fc" id="L177">                    Children children = new Children(map);</span>
+<span class="fc" id="L178">                    ArrayList&lt;?&gt; contents = children.contents();</span>
+<span class="fc" id="L179">                    writeContent(contents, writer);</span>
+<span class="fc" id="L180">                    map = children.removeContents();</span>
+                }
+<span class="fc bfc" id="L182" title="All 2 branches covered.">                if (map.size() == 1) {</span>
+<span class="pc bpc" id="L183" title="1 of 2 branches missed.">                    if (map.get(CompositionSerializer.TAG_CLASS) != null) // the only remaining key is CLASS</span>
+                    {
+<span class="fc" id="L185">                        return;</span>
+                    } else
+<span class="nc" id="L187">                        throw new IllegalStateException(&quot;Inconsistent encoding of composition, found:&quot; + map.keySet());</span>
+                }
+<span class="fc" id="L189">            }</span>
+        } else {
+<span class="fc" id="L191">            writeNode(map, writer);</span>
+        }
+<span class="fc" id="L193">    }</span>
+
+    /**
+     * fix worryingly encoded {@link com.nedap.archie.rm.archetyped.Locatable} attributes {@link
+     * Locatable#getLinks()}, {@link Locatable#getUid()} and {@link Locatable#getFeederAudit()} with
+     * extra []
+     *
+     * @param map
+     */
+    private void fixWrongDbEncoding(LinkedTreeMap&lt;String, Object&gt; map) {
+<span class="fc bfc" id="L203" title="All 2 branches covered.">        if (map.containsKey(CompositionSerializer.TAG_UID)</span>
+<span class="fc bfc" id="L204" title="All 2 branches covered.">                &amp;&amp; map.get(CompositionSerializer.TAG_UID) instanceof List</span>
+<span class="pc bpc" id="L205" title="1 of 2 branches missed.">                &amp;&amp; !((List&lt;?&gt;) map.get(CompositionSerializer.TAG_UID)).isEmpty()) {</span>
+<span class="fc" id="L206">            map.put(CompositionSerializer.TAG_UID, ((List&lt;?&gt;) map.get(CompositionSerializer.TAG_UID)).get(0));</span>
+        }
+
+<span class="fc bfc" id="L209" title="All 2 branches covered.">        if (map.containsKey(CompositionSerializer.TAG_FEEDER_AUDIT)</span>
+<span class="fc bfc" id="L210" title="All 2 branches covered.">                &amp;&amp; map.get(CompositionSerializer.TAG_FEEDER_AUDIT) instanceof List</span>
+<span class="pc bpc" id="L211" title="1 of 2 branches missed.">                &amp;&amp; !((List&lt;?&gt;) map.get(CompositionSerializer.TAG_FEEDER_AUDIT)).isEmpty()) {</span>
+<span class="fc" id="L212">            map.put(</span>
+                    CompositionSerializer.TAG_FEEDER_AUDIT,
+<span class="fc" id="L214">                    ((List&lt;?&gt;) map.get(CompositionSerializer.TAG_FEEDER_AUDIT)).get(0));</span>
+        }
+
+<span class="fc bfc" id="L217" title="All 2 branches covered.">        if (map.containsKey(CompositionSerializer.TAG_LINKS)</span>
+<span class="pc bpc" id="L218" title="1 of 2 branches missed.">                &amp;&amp; map.get(CompositionSerializer.TAG_LINKS) instanceof List</span>
+<span class="fc bfc" id="L219" title="All 2 branches covered.">                &amp;&amp; !((List&lt;?&gt;) map.get(CompositionSerializer.TAG_LINKS)).isEmpty()</span>
+<span class="fc bfc" id="L220" title="All 2 branches covered.">                &amp;&amp; ((List&lt;?&gt;) map.get(CompositionSerializer.TAG_LINKS)).get(0) instanceof List) {</span>
+<span class="fc" id="L221">            map.put(CompositionSerializer.TAG_LINKS, ((List&lt;?&gt;) map.get(CompositionSerializer.TAG_LINKS)).get(0));</span>
+        }
+<span class="fc" id="L223">    }</span>
+
+    @SuppressWarnings(&quot;unchecked&quot;)
+    private LinkedTreeMap&lt;String, Object&gt; reformatMapForCanonical(LinkedTreeMap&lt;String, Object&gt; map) {
+<span class="fc" id="L227">        map = new IterativeItemStructure(map).promoteIterations();</span>
+<span class="fc" id="L228">        map = new EmbeddedValue(map).formatForEmbeddedTag();</span>
+<span class="fc" id="L229">        return map;</span>
+    }
+
+    //	@Override
+    @SuppressWarnings(&quot;unchecked&quot;)
+    public void write(JsonWriter writer, LinkedTreeMap map) throws IOException {
+<span class="pc bpc" id="L235" title="1 of 2 branches missed.">        if (map.isEmpty()) {</span>
+<span class="nc" id="L236">            writer.nullValue();</span>
+<span class="nc" id="L237">            return;</span>
+        }
+<span class="fc" id="L239">        writer.beginObject();</span>
+<span class="fc" id="L240">        writeInternal(writer, map);</span>
+<span class="fc" id="L241">        writer.endObject();</span>
+<span class="fc" id="L242">    }</span>
+
+    private boolean isNodePredicate(String key) {
+        // a key in the form '/xyz[atNNNN]'
+<span class="pc bpc" id="L246" title="1 of 6 branches missed.">        return key.startsWith(&quot;/&quot;) &amp;&amp; key.contains(&quot;[&quot;) &amp;&amp; key.contains(&quot;]&quot;);</span>
+    }
+
+    @SuppressWarnings(&quot;unchecked&quot;)
+    private LinkedTreeMap&lt;String, Object&gt; compactTimeMap(LinkedTreeMap&lt;String, Object&gt; valueMap) {
+<span class="fc" id="L251">        LinkedTreeMap&lt;String, Object&gt; compactMap = new LinkedTreeMap&lt;&gt;();</span>
+<span class="fc bfc" id="L252" title="All 2 branches covered.">        for (Map.Entry&lt;String, Object&gt; item : valueMap.entrySet()) {</span>
+<span class="fc" id="L253">            String key = item.getKey();</span>
+<span class="fc bfc" id="L254" title="All 2 branches covered.">            if (key.equals(CompositionSerializer.TAG_VALUE)) {</span>
+<span class="fc" id="L255">                String value = (String) ((LinkedTreeMap) (item).getValue()).get(&quot;value&quot;);</span>
+<span class="fc" id="L256">                compactMap.put(CompositionSerializer.TAG_VALUE, value);</span>
+<span class="fc" id="L257">            } else {</span>
+<span class="fc" id="L258">                compactMap.put(item.getKey(), item.getValue());</span>
+            }
+<span class="fc" id="L260">        }</span>
+<span class="fc" id="L261">        return compactMap;</span>
+    }
+
+    /**
+     * this method perform a factorization of items as an array. When serialized, items are presented
+     * as an array list in the form: &lt;br&gt;
+     * &lt;code&gt;
+     * /items[openEHR-EHR-...] { item 1 }
+     * /items[openEHR-EHR-...] { item 2 }
+     * ...
+     * &lt;/code&gt; &lt;br&gt;
+     * The expected result is &lt;code&gt;
+     * /items : { item 1 }{item 2}
+     * &lt;/code&gt; with the node predicate passed as archetype node id inside its respective item content
+     *
+     * @param heading String the heading of this node (f.e. 'items')
+     * @param value ArrayList the content of this node as a list of json structures
+     * @param writer {@link JsonWriter} the writer used to create the json translation
+     * @param parentItemsArchetypeNodeId String the id of the parent node
+     * @param parentItemsType String the type of the parent node (f.e. SECTION)
+     * @throws IOException whenever a json writing issue occurs
+     */
+    private void writeItemInArray(
+            String heading,
+            ArrayList&lt;?&gt; value,
+            JsonWriter writer,
+            String parentItemsArchetypeNodeId,
+            String parentItemsType)
+            throws IOException {
+<span class="fc" id="L290">        new ArrayClosure(writer, parentItemsArchetypeNodeId, parentItemsType).start();</span>
+<span class="pc bpc" id="L291" title="1 of 2 branches missed.">        if (value.isEmpty()) {</span>
+<span class="nc" id="L292">            return;</span>
+        }
+<span class="fc bfc" id="L294" title="All 2 branches covered.">        for (int cursor = 0; cursor &lt; value.size(); cursor++) {</span>
+<span class="fc bfc" id="L295" title="All 2 branches covered.">            if (cursor == 0) { // initial</span>
+<span class="fc" id="L296">                writer.name(heading); // header of items list</span>
+<span class="fc" id="L297">                writer.beginArray();</span>
+            }
+<span class="fc bfc" id="L299" title="All 2 branches covered.">            if (value.get(cursor) instanceof ArrayList) {</span>
+<span class="fc" id="L300">                new ArrayListAdapter().write(writer, (ArrayList) value.get(cursor));</span>
+            } else { // next siblings
+<span class="fc" id="L302">                new LinkedTreeMapAdapter().write(writer, (LinkedTreeMap) value.get(cursor));</span>
+            }
+        }
+<span class="fc" id="L305">        writer.endArray();</span>
+<span class="fc" id="L306">    }</span>
+
+    private void writeContent(ArrayList&lt;?&gt; value, JsonWriter writer) throws IOException {
+
+<span class="fc bfc" id="L310" title="All 2 branches covered.">        for (int cursor = 0; cursor &lt; value.size(); cursor++) {</span>
+<span class="fc bfc" id="L311" title="All 2 branches covered.">            if (cursor == 0) { // initial</span>
+                // insert archetype node id
+<span class="fc" id="L313">                writer.name(&quot;content&quot;);</span>
+<span class="fc" id="L314">                writer.beginArray();</span>
+            }
+<span class="pc bpc" id="L316" title="1 of 2 branches missed.">            if (value.get(cursor) instanceof ArrayList)</span>
+<span class="fc" id="L317">                new ArrayListAdapter().write(writer, (ArrayList) value.get(cursor));</span>
+<span class="nc" id="L318">            else new LinkedTreeMapAdapter().write(writer, (LinkedTreeMap) value.get(cursor));</span>
+        }
+<span class="fc" id="L320">        writer.endArray();</span>
+<span class="fc" id="L321">    }</span>
+
+    @SuppressWarnings(&quot;unchecked&quot;)
+    private void writeNode(LinkedTreeMap&lt;String, Object&gt; map, JsonWriter writer) throws IOException {
+
+        // some hacking for some specific entries...
+<span class="fc" id="L327">        reformatMapForCanonical(map);</span>
+
+<span class="fc bfc" id="L329" title="All 2 branches covered.">        for (Map.Entry&lt;String, Object&gt; entry : map.entrySet()) {</span>
+<span class="fc" id="L330">            Object value = entry.getValue();</span>
+
+<span class="pc bpc" id="L332" title="1 of 2 branches missed.">            if (value == null) continue;</span>
+
+<span class="fc" id="L334">            String key = entry.getKey();</span>
+
+<span class="fc bfc" id="L336" title="All 2 branches covered.">            if (new OptOut(key).skipIt()) continue;</span>
+
+<span class="fc" id="L338">            String jsonKey = new RawJsonKey(key).toRawJson();</span>
+<span class="fc" id="L339">            final String archetypeNodeId = new NodeId(key).predicate();</span>
+
+            // required to deal with DV_MULTIMEDIA embedded document in data
+<span class="fc bfc" id="L342" title="All 2 branches covered.">            if (value instanceof ArrayList</span>
+<span class="pc bpc" id="L343" title="1 of 2 branches missed.">                    &amp;&amp; key.equals(&quot;data&quot;)</span>
+<span class="nc" id="L344">                    &amp;&amp; map.get(&quot;_type&quot;)</span>
+<span class="nc bnc" id="L345" title="All 2 branches missed.">                            .equals(ArchieRMInfoLookup.getInstance()</span>
+<span class="nc" id="L346">                                    .getTypeInfo(DvMultimedia.class)</span>
+<span class="nc" id="L347">                                    .getRmName())) {</span>
+                // prepare a store for the value
+<span class="nc" id="L349">                Double[] dataStore = new Double[((ArrayList) value).size()];</span>
+<span class="nc" id="L350">                value = ((ArrayList&lt;Double&gt;) value).toArray(dataStore);</span>
+            }
+
+<span class="fc bfc" id="L353" title="All 2 branches covered.">            if (value instanceof ArrayList) {</span>
+<span class="fc bfc" id="L354" title="All 2 branches covered.">                if (key.equals(CompositionSerializer.TAG_NAME)) {</span>
+<span class="fc" id="L355">                    new ValueArrayList(writer, value, key).write();</span>
+<span class="fc bfc" id="L356" title="All 2 branches covered.">                } else if (key.equals(CompositionSerializer.TAG_CLASS)) {</span>
+<span class="fc" id="L357">                    writer.name(AT_TYPE)</span>
+<span class="fc" id="L358">                            .value(new SnakeCase((String) ((ArrayList&lt;?&gt;) value).get(0)).camelToUpperSnake());</span>
+<span class="pc bpc" id="L359" title="1 of 2 branches missed.">                } else if (key.equals(CompositionSerializer.TAG_ARCHETYPE_NODE_ID)) {</span>
+                    // same as name above, this is due to usage of MultiValueMap which is backed by ArrayList
+<span class="nc" id="L361">                    new ValueArrayList(writer, value, key).write();</span>
+                } else {
+                    // make sure we service a non empty array list value
+<span class="fc bfc" id="L364" title="All 2 branches covered.">                    if (!new ArrayChildren((ArrayList&lt;?&gt;) value).isNull()) {</span>
+<span class="fc" id="L365">                        writer.name(jsonKey);</span>
+<span class="fc" id="L366">                        writer.beginArray();</span>
+<span class="fc bfc" id="L367" title="All 2 branches covered.">                        if (isNodePredicate(key)) {</span>
+<span class="fc" id="L368">                            ((ArrayList&lt;?&gt;) value)</span>
+<span class="fc" id="L369">                                    .stream()</span>
+<span class="fc" id="L370">                                            .filter(o -&gt; Map.class.isAssignableFrom(o.getClass()))</span>
+<span class="fc" id="L371">                                            .forEach(m -&gt; ((Map&lt;String, Object&gt;) m)</span>
+<span class="fc" id="L372">                                                    .put(I_DvTypeAdapter.ARCHETYPE_NODE_ID, archetypeNodeId));</span>
+                        }
+<span class="fc" id="L374">                        new ArrayListAdapter().write(writer, (ArrayList&lt;?&gt;) value);</span>
+<span class="fc" id="L375">                        writer.endArray();</span>
+                    }
+                }
+<span class="fc bfc" id="L378" title="All 2 branches covered.">            } else if (value instanceof LinkedTreeMap) {</span>
+<span class="fc" id="L379">                LinkedTreeMap&lt;String, Object&gt; valueMap = (LinkedTreeMap&lt;String, Object&gt;) value;</span>
+<span class="fc" id="L380">                String elementType = new ElementType(valueMap).type();</span>
+
+<span class="fc bfc" id="L382" title="All 2 branches covered.">                if (elementType.equals(&quot;History&quot;)) {</span>
+                    // promote events[...]
+<span class="fc" id="L384">                    LinkedTreeMap&lt;String, Object&gt; eventMap =</span>
+<span class="fc" id="L385">                            (LinkedTreeMap&lt;String, Object&gt;) valueMap.get(CompositionSerializer.TAG_EVENTS);</span>
+<span class="fc" id="L386">                    valueMap.remove(CompositionSerializer.TAG_EVENTS);</span>
+<span class="fc" id="L387">                    valueMap.putAll(eventMap);</span>
+<span class="fc" id="L388">                    valueMap.put(AT_TYPE, new SnakeCase(elementType).camelToUpperSnake());</span>
+<span class="fc bfc" id="L389" title="All 2 branches covered.">                } else if (archetypeNodeId.equals(CompositionSerializer.TAG_TIMING)</span>
+<span class="pc bpc" id="L390" title="1 of 2 branches missed.">                        &amp;&amp; elementType.equals(&quot;DvParsable&quot;)) {</span>
+                    // promote value and formalism
+<span class="fc" id="L392">                    LinkedTreeMap&lt;String, Object&gt; timingValueMap =</span>
+<span class="fc" id="L393">                            (LinkedTreeMap&lt;String, Object&gt;) valueMap.get(CompositionSerializer.TAG_VALUE);</span>
+<span class="pc bpc" id="L394" title="1 of 2 branches missed.">                    if (timingValueMap != null) {</span>
+<span class="fc" id="L395">                        valueMap.put(CompositionSerializer.TAG_VALUE, timingValueMap.get(&quot;value&quot;));</span>
+<span class="fc" id="L396">                        valueMap.put(&quot;/formalism&quot;, timingValueMap.get(&quot;formalism&quot;));</span>
+                    }
+                }
+
+<span class="fc bfc" id="L400" title="All 2 branches covered.">                if (key.equals(CompositionSerializer.TAG_VALUE)) {</span>
+                    // get the class and add it to the value map
+<span class="fc" id="L402">                    String type = (String) map.get(CompositionSerializer.TAG_CLASS);</span>
+<span class="pc bpc" id="L403" title="1 of 4 branches missed.">                    if (type != null &amp;&amp; !type.isEmpty()) {</span>
+                        // pushed into the value map for the next recursion
+<span class="fc" id="L405">                        valueMap.put(AT_TYPE, new SnakeCase(type).camelToUpperSnake());</span>
+                        // check if this type is composite (DV_INTERVAL&lt;DV_DATE&gt;) to push the actual type down
+                        // the value structure
+<span class="fc bfc" id="L408" title="All 2 branches covered.">                        if (new GenericRmType(type).isSpecialized()) { // composite</span>
+<span class="fc" id="L409">                            valueMap = new GenericRmType(new SnakeCase(type).camelToUpperSnake())</span>
+<span class="fc" id="L410">                                    .inferSpecialization(valueMap);</span>
+                        }
+                    }
+                }
+                // get the value point type and add it to the value map
+<span class="fc bfc" id="L415" title="All 2 branches covered.">                if (valueMap.containsKey(CompositionSerializer.TAG_CLASS)) {</span>
+<span class="fc" id="L416">                    valueMap.put(AT_TYPE, new SnakeCase(elementType).camelToUpperSnake());</span>
+<span class="fc" id="L417">                    valueMap.remove(CompositionSerializer.TAG_CLASS);</span>
+<span class="fc bfc" id="L418" title="All 2 branches covered.">                    if (key.contains(&quot;/time&quot;)) {</span>
+<span class="fc" id="L419">                        valueMap.remove(CompositionSerializer.TAG_NAME);</span>
+                    }
+                }
+<span class="fc bfc" id="L422" title="All 2 branches covered.">                if (isNodePredicate(key)) // contains an archetype node predicate</span>
+                {
+<span class="fc" id="L424">                    valueMap.put(ARCHETYPE_NODE_ID, archetypeNodeId);</span>
+<span class="fc bfc" id="L425" title="All 4 branches covered.">                } else if (key.equals(CompositionSerializer.TAG_ORIGIN) || key.equals(CompositionSerializer.TAG_TIME)) {</span>
+                    // compact time expression
+<span class="fc" id="L427">                    valueMap = compactTimeMap(valueMap);</span>
+                }
+<span class="fc" id="L429">                writer.name(jsonKey);</span>
+<span class="fc" id="L430">                new LinkedTreeMapAdapter().write(writer, valueMap);</span>
+<span class="fc bfc" id="L431" title="All 2 branches covered.">            } else if (value instanceof String) {</span>
+<span class="pc bpc" id="L432" title="1 of 4 branches missed.">                switch (key) {</span>
+                    case CompositionSerializer.TAG_CLASS:
+<span class="fc bfc" id="L434" title="All 2 branches covered.">                        if (STRUCTURAL_CLASSES.contains(value))</span>
+<span class="fc" id="L435">                            writer.name(AT_TYPE).value(new SnakeCase(((String) value)).camelToUpperSnake());</span>
+                        break;
+                    case CompositionSerializer.TAG_PATH: // this is an element
+<span class="fc" id="L438">                        String archetypeNodeId2 =</span>
+<span class="fc" id="L439">                                AqlPath.parse((String) value).getLastNode().getAtCode();</span>
+<span class="fc bfc" id="L440" title="All 2 branches covered.">                        if (archetypeNodeId2 != null) writer.name(AT_TYPE).value(ELEMENT);</span>
+                        // CHC 20191003: removed writer for archetype_node_id as it was not applicable here
+                        break;
+                    case CompositionSerializer.TAG_NAME:
+<span class="nc" id="L444">                        new NameValue(writer, value.toString()).write();</span>
+<span class="nc" id="L445">                        break;</span>
+                    default:
+<span class="fc" id="L447">                        writer.name(jsonKey).value((String) value);</span>
+                        break;
+<span class="fc" id="L449">                }</span>
+<span class="fc bfc" id="L450" title="All 2 branches covered.">            } else if (value instanceof Double) {</span>
+<span class="fc" id="L451">                writer.name(new SnakeCase(key).camelToSnake()).value((Double) value);</span>
+<span class="pc bpc" id="L452" title="1 of 2 branches missed.">            } else if (value instanceof Long) {</span>
+<span class="nc" id="L453">                writer.name(new SnakeCase(key).camelToSnake()).value((Long) value);</span>
+<span class="pc bpc" id="L454" title="1 of 2 branches missed.">            } else if (value instanceof Number) {</span>
+<span class="nc" id="L455">                writer.name(new SnakeCase(key).camelToSnake()).value((Number) value);</span>
+<span class="pc bpc" id="L456" title="1 of 2 branches missed.">            } else if (value instanceof Boolean) {</span>
+<span class="fc" id="L457">                writer.name(new SnakeCase(key).camelToSnake()).value((Boolean) value);</span>
+<span class="nc bnc" id="L458" title="All 2 branches missed.">            } else if (value instanceof Double[]) {</span>
+<span class="nc" id="L459">                writer.name(new SnakeCase(key).camelToSnake());</span>
+<span class="nc" id="L460">                writer.beginArray();</span>
+<span class="nc bnc" id="L461" title="All 2 branches missed.">                for (Double pix : (Double[]) value) {</span>
+<span class="nc" id="L462">                    writer.value(pix.byteValue());</span>
+                }
+<span class="nc" id="L464">                writer.endArray();</span>
+            } else
+<span class="nc" id="L466">                throw new IllegalArgumentException(&quot;Could not handle value type for key:&quot; + key + &quot;, value:&quot; + value);</span>
+<span class="fc" id="L467">        }</span>
+<span class="fc" id="L468">    }</span>
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.7.202105040129</span></div></body></html>

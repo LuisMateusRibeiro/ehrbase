@@ -1,0 +1,79 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../../jacoco-resources/report.gif" type="image/gif"/><title>HttpClientConfig.java</title><link rel="stylesheet" href="../../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../../index.html" class="el_report">Coverage with Unit Tests</a> &gt; <a href="../index.html" class="el_bundle">application</a> &gt; <a href="index.source.html" class="el_package">org.ehrbase.application.config</a> &gt; <span class="el_source">HttpClientConfig.java</span></div><h1>HttpClientConfig.java</h1><pre class="source lang-java linenums">/*
+ * Copyright (c) 2021 vitasystems GmbH and Hannover Medical School.
+ *
+ * This file is part of project EHRbase
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     https://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.ehrbase.application.config;
+
+import java.net.InetSocketAddress;
+import java.net.ProxySelector;
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpClient.Redirect;
+import java.net.http.HttpClient.Version;
+import java.time.Duration;
+import org.springframework.boot.context.properties.ConfigurationProperties;
+import org.springframework.boot.context.properties.EnableConfigurationProperties;
+import org.springframework.context.annotation.Configuration;
+
+@Configuration
+@EnableConfigurationProperties
+@ConfigurationProperties(prefix = &quot;httpclient&quot;)
+<span class="nc" id="L34">public class HttpClientConfig {</span>
+
+    private HttpClient client;
+
+    private URI proxy;
+    private int proxyPort;
+
+    /**
+     * General HTTP client with central configuration.
+     */
+    public HttpClient getClient() {
+<span class="nc bnc" id="L45" title="All 2 branches missed.">        if (this.client == null) {</span>
+<span class="nc" id="L46">            var builder = HttpClient.newBuilder()</span>
+<span class="nc" id="L47">                    .version(Version.HTTP_2)</span>
+<span class="nc" id="L48">                    .followRedirects(Redirect.NEVER)</span>
+<span class="nc" id="L49">                    .connectTimeout(Duration.ofSeconds(20));</span>
+
+<span class="nc bnc" id="L51" title="All 4 branches missed.">            if (proxy != null &amp;&amp; proxyPort != 0) {</span>
+<span class="nc" id="L52">                builder.proxy(ProxySelector.of(new InetSocketAddress(proxy.toString(), proxyPort)));</span>
+            }
+
+            // TODO: allow configuration of authentication
+            // builder.authenticator(Authenticator.getDefault());
+
+<span class="nc" id="L58">            this.client = builder.build();</span>
+        }
+<span class="nc" id="L60">        return client;</span>
+    }
+
+    public URI getProxy() {
+<span class="nc" id="L64">        return proxy;</span>
+    }
+
+    public void setProxy(URI proxy) {
+<span class="nc" id="L68">        this.proxy = proxy;</span>
+<span class="nc" id="L69">    }</span>
+
+    public int getProxyPort() {
+<span class="nc" id="L72">        return proxyPort;</span>
+    }
+
+    public void setProxyPort(int proxyPort) {
+<span class="nc" id="L76">        this.proxyPort = proxyPort;</span>
+<span class="nc" id="L77">    }</span>
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.7.202105040129</span></div></body></html>

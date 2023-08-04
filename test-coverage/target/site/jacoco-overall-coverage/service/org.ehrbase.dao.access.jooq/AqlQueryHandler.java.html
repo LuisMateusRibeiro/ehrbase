@@ -1,0 +1,135 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../../jacoco-resources/report.gif" type="image/gif"/><title>AqlQueryHandler.java</title><link rel="stylesheet" href="../../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../../index.html" class="el_report">Overall Coverage</a> &gt; <a href="../index.html" class="el_bundle">service</a> &gt; <a href="index.source.html" class="el_package">org.ehrbase.dao.access.jooq</a> &gt; <span class="el_source">AqlQueryHandler.java</span></div><h1>AqlQueryHandler.java</h1><pre class="source lang-java linenums">/*
+ * Copyright (c) 2019 vitasystems GmbH and Hannover Medical School.
+ *
+ * This file is part of project EHRbase
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     https://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.ehrbase.dao.access.jooq;
+
+import java.util.*;
+import java.util.stream.Collectors;
+import org.apache.commons.lang3.StringUtils;
+import org.ehrbase.aql.compiler.*;
+import org.ehrbase.aql.definition.I_VariableDefinition;
+import org.ehrbase.aql.sql.AqlResult;
+import org.ehrbase.aql.sql.QueryProcessor;
+import org.ehrbase.dao.access.interfaces.I_DomainAccess;
+import org.ehrbase.dao.access.support.DataAccess;
+import org.ehrbase.openehr.sdk.validation.terminology.ExternalTerminologyValidation;
+import org.ehrbase.service.KnowledgeCacheService;
+import org.jooq.Record;
+import org.jooq.Result;
+
+/**
+ * Created by christian on 6/9/2016.
+ */
+public class AqlQueryHandler extends DataAccess {
+
+    private ExternalTerminologyValidation tsAdapter;
+<span class="nc" id="L40">    private Map&lt;String, Set&lt;Object&gt;&gt; auditResultMap =</span>
+            new LinkedHashMap&lt;&gt;(); // we add a map of audit related data (f.e. ehr_id/value)
+
+    public AqlQueryHandler(I_DomainAccess domainAccess, ExternalTerminologyValidation tsAdapter) {
+<span class="nc" id="L44">        super(domainAccess);</span>
+<span class="nc" id="L45">        this.tsAdapter = tsAdapter;</span>
+<span class="nc" id="L46">    }</span>
+
+    public AqlResult process(String query) {
+<span class="nc" id="L49">        AqlExpression aqlExpression = new AqlExpression().parse(query);</span>
+<span class="nc" id="L50">        return execute(aqlExpression);</span>
+    }
+
+    public AqlResult process(String query, Map&lt;String, Object&gt; parameters) {
+<span class="nc" id="L54">        AqlExpression aqlExpression = new AqlExpressionWithParameters().parse(query, parameters);</span>
+<span class="nc" id="L55">        return execute(aqlExpression);</span>
+    }
+
+    @SuppressWarnings(&quot;unchecked&quot;)
+    private AqlResult execute(AqlExpression aqlExpression) {
+
+<span class="nc" id="L61">        AuditVariables auditVariables = new AuditVariables();</span>
+
+<span class="nc" id="L63">        Contains contains = new Contains(aqlExpression.getParseTree(), (KnowledgeCacheService)</span>
+<span class="nc" id="L64">                        this.getDataAccess().getIntrospectService())</span>
+<span class="nc" id="L65">                .process();</span>
+
+<span class="nc" id="L67">        Statements statements =</span>
+<span class="nc" id="L68">                new Statements(aqlExpression.getParseTree(), contains.getIdentifierMapper(), tsAdapter).process();</span>
+
+<span class="nc" id="L70">        QueryProcessor queryProcessor = new QueryProcessor(</span>
+                this,
+<span class="nc" id="L72">                this.getIntrospectService(),</span>
+                contains,
+                statements,
+<span class="nc" id="L75">                getDataAccess().getServerConfig().getNodename());</span>
+
+<span class="nc" id="L77">        AqlResult aqlResult = queryProcessor.execute();</span>
+
+        // add the variable from statements
+<span class="nc" id="L80">        Map&lt;String, String&gt; variables = new LinkedHashMap&lt;&gt;();</span>
+
+<span class="nc" id="L82">        Iterator&lt;I_VariableDefinition&gt; iterator = statements.getVariables().iterator();</span>
+<span class="nc" id="L83">        int serial = 0;</span>
+<span class="nc bnc" id="L84" title="All 2 branches missed.">        while (iterator.hasNext()) {</span>
+<span class="nc" id="L85">            I_VariableDefinition variableDefinition = iterator.next();</span>
+
+<span class="nc bnc" id="L87" title="All 2 branches missed.">            if (auditVariables.isAuditVariable(variableDefinition)) {</span>
+                // add the result to the list of audit variables
+<span class="nc" id="L89">                auditVariables.addResults(</span>
+                        auditResultMap,
+<span class="nc" id="L91">                        variableDefinition.getPath(),</span>
+<span class="nc" id="L92">                        resultSetForVariable(variableDefinition, aqlResult.getRecords()));</span>
+            }
+
+<span class="nc bnc" id="L95" title="All 2 branches missed.">            if (!variableDefinition.isHidden()) {</span>
+<span class="nc bnc" id="L96" title="All 4 branches missed.">                String key = variableDefinition.getAlias() == null || variableDefinition.isVoidAlias()</span>
+<span class="nc" id="L97">                        ? &quot;#&quot; + serial++</span>
+<span class="nc" id="L98">                        : variableDefinition.getAlias();</span>
+<span class="nc bnc" id="L99" title="All 2 branches missed.">                String value = StringUtils.isNotBlank(variableDefinition.getPath())</span>
+<span class="nc" id="L100">                        ? &quot;/&quot; + variableDefinition.getPath()</span>
+<span class="nc" id="L101">                        : variableDefinition.getIdentifier();</span>
+<span class="nc" id="L102">                variables.put(key, value);</span>
+            }
+<span class="nc" id="L104">        }</span>
+<span class="nc" id="L105">        aqlResult.setVariables(variables);</span>
+<span class="nc" id="L106">        aqlResult.setAuditResultMap(auditResultMap);</span>
+<span class="nc" id="L107">        return aqlResult;</span>
+    }
+
+    @Override
+    public DataAccess getDataAccess() {
+<span class="nc" id="L112">        return this;</span>
+    }
+
+    public Set&lt;Object&gt; resultSetForVariable(I_VariableDefinition variableDefinition, Result&lt;Record&gt; recordResult) {
+<span class="nc" id="L116">        var alias = Optional.of(variableDefinition).map(I_VariableDefinition::getAlias);</span>
+
+        // if the variable is a function parameter, ignore it (f.e. count())
+<span class="nc" id="L119">        boolean fctAlias = alias.filter(a -&gt; a.startsWith(&quot;_FCT&quot;)).isPresent();</span>
+<span class="nc bnc" id="L120" title="All 2 branches missed.">        if (fctAlias) {</span>
+<span class="nc" id="L121">            return new LinkedHashSet&lt;&gt;();</span>
+        }
+
+<span class="nc" id="L124">        String columnIdentifier = alias.orElseGet(() -&gt; &quot;/&quot; + variableDefinition.getPath());</span>
+
+<span class="nc" id="L126">        return recordResult.stream()</span>
+<span class="nc" id="L127">                .map(r -&gt; r.get(columnIdentifier))</span>
+<span class="nc" id="L128">                .collect(Collectors.toCollection(LinkedHashSet::new));</span>
+    }
+
+    public Map&lt;String, Set&lt;Object&gt;&gt; getAuditResultMap() {
+<span class="nc" id="L132">        return auditResultMap;</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.7.202105040129</span></div></body></html>

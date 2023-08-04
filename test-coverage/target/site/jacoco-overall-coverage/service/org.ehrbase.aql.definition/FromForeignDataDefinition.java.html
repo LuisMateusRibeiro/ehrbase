@@ -1,0 +1,127 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../../jacoco-resources/report.gif" type="image/gif"/><title>FromForeignDataDefinition.java</title><link rel="stylesheet" href="../../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../../index.html" class="el_report">Overall Coverage</a> &gt; <a href="../index.html" class="el_bundle">service</a> &gt; <a href="index.source.html" class="el_package">org.ehrbase.aql.definition</a> &gt; <span class="el_source">FromForeignDataDefinition.java</span></div><h1>FromForeignDataDefinition.java</h1><pre class="source lang-java linenums">/*
+ * Copyright (c) 2016-2022 vitasystems GmbH and Hannover Medical School.
+ *
+ * This file is part of project EHRbase
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     https://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.ehrbase.aql.definition;
+
+import java.util.ArrayList;
+import java.util.List;
+
+/**
+ * Contains the parameters of an element in a FROM clause
+ * &lt;p&gt;
+ * The FROM clause is generally associated to an EHR definition
+ * &lt;/p&gt;
+ *
+ * @author Christian Chevalley
+ * @since 1.0
+ */
+public class FromForeignDataDefinition implements I_FromEntityDefinition {
+
+<span class="nc" id="L34">    public enum FDType {</span>
+<span class="nc" id="L35">        PERSON,</span>
+<span class="nc" id="L36">        AGENT,</span>
+<span class="nc" id="L37">        ORGANISATION,</span>
+<span class="nc" id="L38">        GROUP</span>
+    }
+
+    public static class NodePredicate {
+
+        String field;
+        String value;
+        String identifier;
+        String operator;
+
+<span class="nc" id="L48">        public NodePredicate(String field, String value, String operator) {</span>
+<span class="nc" id="L49">            this.field = field;</span>
+<span class="nc" id="L50">            this.value = value;</span>
+<span class="nc" id="L51">            this.operator = operator;</span>
+<span class="nc" id="L52">        }</span>
+
+<span class="nc" id="L54">        public NodePredicate(String identifier) {</span>
+<span class="nc" id="L55">            this.identifier = identifier;</span>
+<span class="nc" id="L56">        }</span>
+
+        public void setIdentifier(String identifier) {
+<span class="nc" id="L59">            this.identifier = identifier;</span>
+<span class="nc" id="L60">        }</span>
+
+        public String getIdentifier() {
+<span class="nc" id="L63">            return identifier;</span>
+        }
+
+        public String getField() {
+<span class="nc" id="L67">            return field;</span>
+        }
+
+        public String getValue() {
+<span class="nc" id="L71">            return value;</span>
+        }
+
+        public String getOperator() {
+<span class="nc" id="L75">            return operator;</span>
+        }
+
+        public String toString() {
+<span class="nc" id="L79">            return &quot;ForeignData::&quot; + getIdentifier() + &quot;::&quot; + getIdentifier() + &quot;::&quot; + getValue();</span>
+        }
+    }
+
+<span class="nc" id="L83">    private final List&lt;NodePredicate&gt; fromNodePredicates = new ArrayList&lt;&gt;();</span>
+
+    private String identifier;
+
+    private final FDType fdType;
+
+<span class="nc" id="L89">    public FromForeignDataDefinition(String type) {</span>
+<span class="nc" id="L90">        fdType = FDType.valueOf(type);</span>
+<span class="nc" id="L91">    }</span>
+
+    @Override
+    public void add(String identifier, String value, String operator) {
+<span class="nc" id="L95">        fromNodePredicates.add(new NodePredicate(identifier, value, operator));</span>
+<span class="nc" id="L96">    }</span>
+
+    public void setIdentifier(String identifier) {
+<span class="nc" id="L99">        this.identifier = identifier;</span>
+<span class="nc" id="L100">    }</span>
+
+    public String getIdentifier() {
+<span class="nc" id="L103">        return identifier;</span>
+    }
+
+    public FDType getFdType() {
+<span class="nc" id="L107">        return fdType;</span>
+    }
+
+    /**
+     * Assumes ehr_id/value has been given
+     *
+     * @return the string representation of FROM clause
+     */
+    public String toString() {
+<span class="nc" id="L116">        StringBuilder builder = new StringBuilder();</span>
+<span class="nc bnc" id="L117" title="All 2 branches missed.">        for (NodePredicate predicate : fromNodePredicates) {</span>
+<span class="nc" id="L118">            builder.append(predicate).append(&quot; &quot;);</span>
+<span class="nc" id="L119">        }</span>
+<span class="nc" id="L120">        return builder.toString();</span>
+    }
+
+    public List&lt;NodePredicate&gt; getFDPredicates() {
+<span class="nc" id="L124">        return fromNodePredicates;</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.7.202105040129</span></div></body></html>

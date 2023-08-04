@@ -1,0 +1,233 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../../jacoco-resources/report.gif" type="image/gif"/><title>EhrController.java</title><link rel="stylesheet" href="../../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../../index.html" class="el_report">Coverage with Unit Tests</a> &gt; <a href="../index.html" class="el_bundle">rest-ehr-scape</a> &gt; <a href="index.source.html" class="el_package">org.ehrbase.rest.ehrscape.controller</a> &gt; <span class="el_source">EhrController.java</span></div><h1>EhrController.java</h1><pre class="source lang-java linenums">/*
+ * Copyright (c) 2019-2022 vitasystems GmbH and Hannover Medical School.
+ *
+ * This file is part of project EHRbase
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     https://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.ehrbase.rest.ehrscape.controller;
+
+import static org.ehrbase.rest.ehrscape.controller.BaseController.API_ECIS_CONTEXT_PATH_WITH_VERSION;
+
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.nedap.archie.rm.datavalues.DvText;
+import com.nedap.archie.rm.ehr.EhrStatus;
+import com.nedap.archie.rm.generic.PartySelf;
+import com.nedap.archie.rm.support.identification.HierObjectId;
+import com.nedap.archie.rm.support.identification.PartyRef;
+import java.net.URI;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Optional;
+import java.util.UUID;
+import org.apache.commons.lang3.StringUtils;
+import org.ehrbase.api.annotations.TenantAware;
+import org.ehrbase.api.authorization.EhrbaseAuthorization;
+import org.ehrbase.api.authorization.EhrbasePermission;
+import org.ehrbase.api.exception.GeneralRequestProcessingException;
+import org.ehrbase.api.exception.InvalidApiParameterException;
+import org.ehrbase.api.service.EhrService;
+import org.ehrbase.openehr.sdk.response.dto.ehrscape.CompositionFormat;
+import org.ehrbase.openehr.sdk.response.dto.ehrscape.EhrStatusDto;
+import org.ehrbase.rest.ehrscape.responsedata.Action;
+import org.ehrbase.rest.ehrscape.responsedata.EhrResponseData;
+import org.ehrbase.rest.ehrscape.responsedata.Meta;
+import org.ehrbase.rest.ehrscape.responsedata.RestHref;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.ResponseStatus;
+import org.springframework.web.bind.annotation.RestController;
+
+/**
+ * Controller for /ehr resource of EhrScape REST API
+ *
+ * @author Stefan Spiska
+ * @author Jake Smolka
+ */
+@TenantAware
+@RestController
+@RequestMapping(path = API_ECIS_CONTEXT_PATH_WITH_VERSION + &quot;/ehr&quot;)
+public class EhrController extends BaseController {
+
+    private static final String MODIFIABLE = &quot;modifiable&quot;;
+
+    private static final String QUERYABLE = &quot;queryable&quot;;
+
+    private final EhrService ehrService;
+
+<span class="nc" id="L78">    public EhrController(EhrService ehrService) {</span>
+<span class="nc" id="L79">        this.ehrService = Objects.requireNonNull(ehrService);</span>
+<span class="nc" id="L80">    }</span>
+
+    @EhrbaseAuthorization(permission = EhrbasePermission.EHRBASE_EHR_CREATE)
+    @PostMapping
+    @ResponseStatus(value = HttpStatus.CREATED)
+    // overwrites default 200, fixes the wrong listing of 200 in swagger-ui (EHR-56)
+    public ResponseEntity&lt;EhrResponseData&gt; createEhr(
+            @RequestParam(value = &quot;subjectId&quot;, required = false) String subjectId,
+            @RequestParam(value = &quot;subjectNamespace&quot;, required = false) String subjectNamespace,
+            @RequestParam(value = &quot;committerId&quot;, required = false) String committerId,
+            @RequestParam(value = &quot;committerName&quot;, required = false) String committerName,
+            @RequestHeader(value = &quot;Content-Type&quot;, required = false) String contentType) {
+
+        // subjectId and subjectNamespace are not required by EhrScape spec but without those parameters a 400 error
+        // shall be
+        // returned
+<span class="nc bnc" id="L96" title="All 4 branches missed.">        if ((subjectId == null) || (subjectNamespace == null)) {</span>
+<span class="nc" id="L97">            throw new InvalidApiParameterException(&quot;subjectId or subjectNamespace missing&quot;);</span>
+<span class="nc bnc" id="L98" title="All 4 branches missed.">        } else if ((subjectId.isEmpty()) || (subjectNamespace.isEmpty())) {</span>
+<span class="nc" id="L99">            throw new InvalidApiParameterException(&quot;subjectId or subjectNamespace emtpy&quot;);</span>
+        }
+
+<span class="nc" id="L102">        var subject = new PartySelf(new PartyRef(new HierObjectId(subjectId), subjectNamespace, &quot;PERSON&quot;));</span>
+<span class="nc" id="L103">        var status = new EhrStatus();</span>
+<span class="nc" id="L104">        status.setArchetypeNodeId(&quot;openEHR-EHR-EHR_STATUS.generic.v1&quot;);</span>
+<span class="nc" id="L105">        status.setName(new DvText(&quot;EHR Status&quot;));</span>
+<span class="nc" id="L106">        status.setSubject(subject);</span>
+
+<span class="nc" id="L108">        UUID ehrId = ehrService.create(null, status);</span>
+
+        // TODO: use config file or alike to set the basic api path
+<span class="nc" id="L111">        URI url = URI.create(createLocationUri(EHR, ehrId.toString()));</span>
+<span class="nc" id="L112">        return Optional.ofNullable(ehrId)</span>
+<span class="nc" id="L113">                .flatMap(i -&gt; buildEhrResponseData(i, Action.CREATE, contentType))</span>
+<span class="nc" id="L114">                .map(ResponseEntity.created(url)::body)</span>
+<span class="nc" id="L115">                .orElse(ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build());</span>
+    }
+
+    @EhrbaseAuthorization(permission = EhrbasePermission.EHRBASE_EHR_READ)
+    @GetMapping
+    public ResponseEntity&lt;EhrResponseData&gt; getEhr(
+            @RequestParam(value = &quot;subjectId&quot;) String subjectId,
+            @RequestParam(value = &quot;subjectNamespace&quot;) String subjectNamespace,
+            @RequestHeader(value = &quot;Content-Type&quot;, required = false) String contentType) {
+
+<span class="nc" id="L125">        Optional&lt;UUID&gt; ehrId = ehrService.findBySubject(subjectId, subjectNamespace);</span>
+<span class="nc" id="L126">        return ehrId.flatMap(i -&gt; buildEhrResponseData(i, Action.RETRIEVE, contentType))</span>
+<span class="nc" id="L127">                .map(ResponseEntity::ok)</span>
+<span class="nc" id="L128">                .orElse(ResponseEntity.noContent().build());</span>
+    }
+
+    @EhrbaseAuthorization(permission = EhrbasePermission.EHRBASE_EHR_READ)
+    @GetMapping(path = &quot;/{uuid}&quot;)
+    public ResponseEntity&lt;EhrResponseData&gt; getEhr(
+            @PathVariable(&quot;uuid&quot;) UUID ehrId,
+            @RequestHeader(value = &quot;Content-Type&quot;, required = false) String contentType) {
+
+<span class="nc" id="L137">        return Optional.ofNullable(ehrId)</span>
+<span class="nc" id="L138">                .flatMap(i -&gt; buildEhrResponseData(i, Action.RETRIEVE, contentType))</span>
+<span class="nc" id="L139">                .map(ResponseEntity::ok)</span>
+<span class="nc" id="L140">                .orElse(ResponseEntity.notFound().build());</span>
+    }
+
+    @EhrbaseAuthorization(permission = EhrbasePermission.EHRBASE_EHR_UPDATE_STATUS)
+    @PutMapping(path = &quot;/{uuid}/status&quot;)
+    public ResponseEntity&lt;EhrResponseData&gt; updateStatus(
+            @PathVariable(&quot;uuid&quot;) UUID ehrId,
+            @RequestBody String ehrStatus,
+            @RequestHeader(value = &quot;Content-Type&quot;, required = false) String contentType) {
+
+<span class="nc" id="L150">        ehrService.updateStatus(ehrId, extractEhrStatus(ehrStatus), null, null);</span>
+<span class="nc" id="L151">        return Optional.ofNullable(ehrId)</span>
+<span class="nc" id="L152">                .flatMap(i -&gt; buildEhrResponseData(i, Action.UPDATE, contentType))</span>
+<span class="nc" id="L153">                .map(ResponseEntity::ok)</span>
+<span class="nc" id="L154">                .orElse(ResponseEntity.notFound().build());</span>
+    }
+
+    private EhrStatus extractEhrStatus(@RequestBody String content) {
+<span class="nc" id="L158">        EhrStatus ehrStatus = new EhrStatus();</span>
+<span class="nc" id="L159">        ehrStatus.setArchetypeNodeId(&quot;openEHR-EHR-EHR_STATUS.generic.v1&quot;);</span>
+<span class="nc" id="L160">        ehrStatus.setName(new DvText(&quot;EHR Status&quot;));</span>
+
+<span class="nc bnc" id="L162" title="All 2 branches missed.">        if (StringUtils.isBlank(content)) {</span>
+<span class="nc" id="L163">            return ehrStatus;</span>
+        }
+
+        Map&lt;String, Object&gt; attributes;
+        try {
+<span class="nc" id="L168">            attributes = new ObjectMapper().readerForMapOf(Object.class).readValue(content);</span>
+<span class="nc" id="L169">        } catch (JsonProcessingException e) {</span>
+<span class="nc" id="L170">            throw new GeneralRequestProcessingException(&quot;Invalid content format&quot;, e);</span>
+<span class="nc" id="L171">        }</span>
+
+<span class="nc" id="L173">        String subjectId = getAttribute(attributes, &quot;subjectId&quot;, String.class)</span>
+<span class="nc" id="L174">                .orElseThrow(() -&gt; new InvalidApiParameterException(&quot;subjectId missing&quot;));</span>
+
+<span class="nc" id="L176">        String subjectNamespace = getAttribute(attributes, &quot;subjectNamespace&quot;, String.class)</span>
+<span class="nc" id="L177">                .orElseThrow(() -&gt; new InvalidApiParameterException(&quot;subjectNamespace missing&quot;));</span>
+
+<span class="nc" id="L179">        PartySelf subject = new PartySelf(new PartyRef(new HierObjectId(subjectId), subjectNamespace, &quot;PERSON&quot;));</span>
+<span class="nc" id="L180">        ehrStatus.setSubject(subject);</span>
+
+<span class="nc" id="L182">        getAttribute(attributes, MODIFIABLE, Boolean.class).ifPresent(ehrStatus::setModifiable);</span>
+<span class="nc" id="L183">        getAttribute(attributes, QUERYABLE, Boolean.class).ifPresent(ehrStatus::setQueryable);</span>
+
+<span class="nc" id="L185">        return ehrStatus;</span>
+    }
+
+    private static &lt;T&gt; Optional&lt;T&gt; getAttribute(Map&lt;String, Object&gt; attributes, String key, Class&lt;T&gt; valueType) {
+<span class="nc" id="L189">        return Optional.of(key)</span>
+<span class="nc" id="L190">                .map(attributes::get)</span>
+<span class="nc" id="L191">                .map(valueType::cast)</span>
+<span class="nc bnc" id="L192" title="All 4 branches missed.">                .filter(v -&gt; valueType != String.class || StringUtils.isNotBlank((String) v));</span>
+    }
+
+    private Optional&lt;EhrResponseData&gt; buildEhrResponseData(UUID ehrId, Action create, String contentType) {
+        // check for valid format header to produce content accordingly
+        CompositionFormat format;
+<span class="nc bnc" id="L198" title="All 2 branches missed.">        if (contentType == null) {</span>
+            // assign default if no header was set
+<span class="nc" id="L200">            format = CompositionFormat.RAW;</span>
+        } else {
+            // if header was set process it
+<span class="nc" id="L203">            MediaType mediaType = MediaType.parseMediaType(contentType);</span>
+
+<span class="nc bnc" id="L205" title="All 2 branches missed.">            if (mediaType.isCompatibleWith(MediaType.APPLICATION_JSON)) {</span>
+<span class="nc" id="L206">                format = CompositionFormat.RAW;</span>
+<span class="nc bnc" id="L207" title="All 2 branches missed.">            } else if (mediaType.isCompatibleWith(MediaType.APPLICATION_XML)) {</span>
+<span class="nc" id="L208">                format = CompositionFormat.XML;</span>
+            } else {
+<span class="nc" id="L210">                throw new InvalidApiParameterException(&quot;Wrong Content-Type header in request&quot;);</span>
+            }
+        }
+
+        // Optional&lt;EhrStatusDto&gt; ehrStatus = ehrService.getEhrStatus(ehrId, CompositionFormat.FLAT);
+        // // older, keep until rework of formatting
+<span class="nc" id="L216">        Optional&lt;EhrStatusDto&gt; ehrStatus = ehrService.getEhrStatusEhrScape(ehrId, format);</span>
+<span class="nc bnc" id="L217" title="All 2 branches missed.">        if (!ehrStatus.isPresent()) {</span>
+<span class="nc" id="L218">            return Optional.empty();</span>
+        }
+<span class="nc" id="L220">        EhrResponseData responseData = new EhrResponseData();</span>
+<span class="nc" id="L221">        responseData.setAction(create);</span>
+<span class="nc" id="L222">        responseData.setEhrId(ehrId);</span>
+<span class="nc" id="L223">        responseData.setEhrStatus(ehrStatus.get());</span>
+<span class="nc" id="L224">        RestHref url = new RestHref();</span>
+        // TODO: use config file or alike to set the basic api path
+<span class="nc" id="L226">        url.setUrl(createLocationUri(EHR, responseData.getEhrId().toString()));</span>
+<span class="nc" id="L227">        Meta meta = new Meta();</span>
+<span class="nc" id="L228">        meta.setHref(url);</span>
+<span class="nc" id="L229">        responseData.setMeta(meta);</span>
+<span class="nc" id="L230">        return Optional.of(responseData);</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.7.202105040129</span></div></body></html>

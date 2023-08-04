@@ -1,0 +1,553 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../../jacoco-resources/report.gif" type="image/gif"/><title>CustomMethodSecurityExpressionRoot.java</title><link rel="stylesheet" href="../../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../../index.html" class="el_report">Coverage with Unit Tests</a> &gt; <a href="../index.html" class="el_bundle">application</a> &gt; <a href="index.source.html" class="el_package">org.ehrbase.application.abac</a> &gt; <span class="el_source">CustomMethodSecurityExpressionRoot.java</span></div><h1>CustomMethodSecurityExpressionRoot.java</h1><pre class="source lang-java linenums">/*
+ * Copyright (c) 2021-2022 vitasystems GmbH and Hannover Medical School.
+ *
+ * This file is part of project EHRbase
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     https://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.ehrbase.application.abac;
+
+import static org.apache.commons.lang3.StringUtils.isBlank;
+import static org.ehrbase.rest.util.AuthHelper.getRequestedJwtClaim;
+import static org.springframework.http.HttpStatus.NO_CONTENT;
+
+import com.nedap.archie.rm.composition.Composition;
+import com.nedap.archie.rm.support.identification.ObjectVersionId;
+import java.io.IOException;
+import java.util.Arrays;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Optional;
+import java.util.Set;
+import java.util.UUID;
+import java.util.stream.Collectors;
+import org.ehrbase.api.exception.InternalServerException;
+import org.ehrbase.api.service.CompositionService;
+import org.ehrbase.api.service.ContributionService;
+import org.ehrbase.api.service.EhrService;
+import org.ehrbase.application.abac.AbacConfig.AbacCheck;
+import org.ehrbase.application.abac.AbacConfig.AbacType;
+import org.ehrbase.application.abac.AbacConfig.Policy;
+import org.ehrbase.application.abac.AbacConfig.PolicyParameter;
+import org.ehrbase.aql.compiler.AuditVariables;
+import org.ehrbase.openehr.sdk.response.dto.OriginalVersionResponseData;
+import org.ehrbase.openehr.sdk.response.dto.ehrscape.CompositionFormat;
+import org.ehrbase.rest.BaseController;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.expression.SecurityExpressionRoot;
+import org.springframework.security.access.expression.method.MethodSecurityExpressionOperations;
+import org.springframework.security.authentication.AbstractAuthenticationToken;
+import org.springframework.security.core.Authentication;
+
+/**
+ * Implementation of custom security expression, to be used in e.g. @PreAuthorize(..) to allow ABAC
+ * requests.
+ *
+ * @author Jake Smolka
+ * @since 1.0
+ */
+@SuppressWarnings(&quot;unused&quot;)
+public class CustomMethodSecurityExpressionRoot extends SecurityExpressionRoot
+        implements MethodSecurityExpressionOperations {
+
+    static final String ORGANIZATION = &quot;organization&quot;;
+    static final String PATIENT = &quot;patient&quot;;
+    static final String TEMPLATE = &quot;template&quot;;
+    static final String PRE = &quot;pre&quot;;
+    static final String POST = &quot;post&quot;;
+
+    private final AbacConfig abacConfig;
+    private final AbacCheck abacCheck;
+    private CompositionService compositionService;
+    private ContributionService contributionService;
+    private EhrService ehrService;
+    private Object filterObject;
+    private Object returnObject;
+
+    public CustomMethodSecurityExpressionRoot(
+            Authentication authentication, AbacConfig abacConfig, AbacCheck abacCheck) {
+<span class="fc" id="L83">        super(authentication);</span>
+<span class="fc" id="L84">        this.abacConfig = abacConfig;</span>
+<span class="fc" id="L85">        this.abacCheck = abacCheck;</span>
+<span class="fc" id="L86">    }</span>
+
+    public void setCompositionService(CompositionService compositionService) {
+<span class="nc" id="L89">        this.compositionService = compositionService;</span>
+<span class="nc" id="L90">    }</span>
+
+    public void setContributionService(ContributionService contributionService) {
+<span class="nc" id="L93">        this.contributionService = contributionService;</span>
+<span class="nc" id="L94">    }</span>
+
+    public void setEhrService(EhrService ehrService) {
+<span class="fc" id="L97">        this.ehrService = ehrService;</span>
+<span class="fc" id="L98">    }</span>
+
+    /**
+     * Custom SpEL expression to be used to check if the remote ABAC allows the operation by given
+     * data. For @PostAuthorize cases.
+     *
+     * @param type    Type of scope's resource
+     * @param subject Subject ID from the current EHR context
+     * @param payload Payload object, either request's input or response's output
+     * @param contentType Content type from the scope
+     * @return True if ABAC authorizes given attributes
+     * @throws IOException On parsing error
+     */
+    public boolean checkAbacPost(String type, String subject, Object payload, String contentType) throws IOException {
+<span class="nc" id="L112">        return checkAbac(type, subject, payload, contentType, POST);</span>
+    }
+
+    public boolean checkAbacPostQuery(Object payload) throws IOException {
+<span class="nc" id="L116">        return checkAbac(BaseController.QUERY, null, payload, null, POST);</span>
+    }
+
+    /**
+     * Custom SpEL expression to be used to check if the remote ABAC allows the operation by given
+     * data. For @PreAuthorize cases.
+     *
+     * @param type    Type of scope's resource
+     * @param subject Subject ID from the current EHR context
+     * @param payload Payload object, either request's input or response's output
+     * @param contentType Content type from the scope
+     * @return True if ABAC authorizes given attributes
+     * @throws IOException On parsing error
+     */
+    public boolean checkAbacPre(String type, String subject, Object payload, String contentType) throws IOException {
+        // @PreAuthorize will give different types, e.g. String (for composition), EhrStatus,...
+        // so just pipe it through to templateHandling and make by-type handling there
+<span class="nc" id="L133">        return checkAbac(type, subject, payload, contentType, PRE);</span>
+    }
+
+    /*
+    Short call with less parameters.
+     */
+    public boolean checkAbacPre(String type, String subject) throws IOException {
+<span class="nc" id="L140">        return checkAbac(type, subject, null, null, PRE);</span>
+    }
+
+    /**
+     * Builds the ABAC request with given data and evaluates the ABAC's response.
+     * @param type Object type of scope
+     * @param subject Subject ID from the current EHR context
+     * @param payload Payload object, either request's input or response's output
+     * @param contentType Content type from the scope
+     * @param authType Pre- or PostAuthorize, determines payload style (string or object)
+     * @return True if ABAC returns a positive feedback, False if not
+     * @throws IOException On parsing error
+     */
+    private boolean checkAbac(String type, String subject, Object payload, String contentType, String authType)
+            throws IOException {
+        // Set type specific settings:
+        // Extract and set parameters according to which parameters are configured
+        List&lt;PolicyParameter&gt; policyParameters;
+        // Build abac server request, depending on type
+<span class="nc" id="L159">        var requestUrl = abacConfig.getServer().toString();</span>
+
+<span class="nc" id="L161">        Map&lt;AbacType, Policy&gt; policy = abacConfig.getPolicy();</span>
+
+<span class="nc bnc" id="L163" title="All 6 branches missed.">        switch (type) {</span>
+            case BaseController.EHR:
+<span class="nc" id="L165">                policyParameters = Arrays.asList(policy.get(AbacType.EHR).getParameters());</span>
+<span class="nc" id="L166">                requestUrl = requestUrl.concat(policy.get(AbacType.EHR).getName());</span>
+<span class="nc" id="L167">                break;</span>
+            case BaseController.EHR_STATUS:
+<span class="nc" id="L169">                policyParameters = Arrays.asList(policy.get(AbacType.EHR_STATUS).getParameters());</span>
+<span class="nc" id="L170">                requestUrl = requestUrl.concat(policy.get(AbacType.EHR_STATUS).getName());</span>
+<span class="nc" id="L171">                break;</span>
+            case BaseController.COMPOSITION:
+<span class="nc" id="L173">                policyParameters =</span>
+<span class="nc" id="L174">                        Arrays.asList(policy.get(AbacType.COMPOSITION).getParameters());</span>
+<span class="nc" id="L175">                requestUrl = requestUrl.concat(policy.get(AbacType.COMPOSITION).getName());</span>
+<span class="nc" id="L176">                break;</span>
+            case BaseController.CONTRIBUTION:
+<span class="nc" id="L178">                policyParameters =</span>
+<span class="nc" id="L179">                        Arrays.asList(policy.get(AbacType.CONTRIBUTION).getParameters());</span>
+<span class="nc" id="L180">                requestUrl = requestUrl.concat(policy.get(AbacType.CONTRIBUTION).getName());</span>
+<span class="nc" id="L181">                break;</span>
+            case BaseController.QUERY:
+<span class="nc" id="L183">                policyParameters = Arrays.asList(policy.get(AbacType.QUERY).getParameters());</span>
+<span class="nc" id="L184">                requestUrl = requestUrl.concat(policy.get(AbacType.QUERY).getName());</span>
+<span class="nc" id="L185">                break;</span>
+            default:
+<span class="nc" id="L187">                throw new InternalServerException(&quot;ABAC: Invalid type given from Pre- or PostAuthorize&quot;);</span>
+        }
+
+        // Check and extract JWT
+<span class="nc" id="L191">        var jwt = getJwtAuthenticationToken(this.authentication);</span>
+
+        // Request body map. will result in simple JSON like {&quot;patient_id&quot;:&quot;...&quot;, ...}
+        // but requires &quot;Object&quot; for template handling, which can have a Set&lt;String&gt; for multiple IDs
+<span class="nc" id="L195">        Map&lt;String, Object&gt; requestMap = new HashMap&lt;&gt;();</span>
+
+        // Organization attribute handling
+<span class="nc bnc" id="L198" title="All 2 branches missed.">        if (policyParameters.contains(PolicyParameter.ORGANIZATION)) {</span>
+<span class="nc" id="L199">            organizationHandling(jwt, requestMap);</span>
+        }
+
+        // Patient attribute handling
+<span class="nc bnc" id="L203" title="All 2 branches missed.">        if (policyParameters.contains(PolicyParameter.PATIENT)) {</span>
+            // populate requestMap, but also already check if subject from token and request matches
+<span class="nc" id="L205">            boolean patientMatch = patientHandling(jwt, subject, requestMap, type, payload);</span>
+<span class="nc bnc" id="L206" title="All 2 branches missed.">            if (!patientMatch) {</span>
+                // doesn't match -&gt; requesting data for patient X with token for patient Y
+<span class="nc" id="L208">                return false;</span>
+            }
+        }
+
+        // Extract template ID from object of type &quot;type&quot;
+<span class="nc bnc" id="L213" title="All 2 branches missed.">        if (policyParameters.contains(PolicyParameter.TEMPLATE)) {</span>
+<span class="nc" id="L214">            templateHandling(type, payload, contentType, requestMap, authType);</span>
+        }
+
+        // Final check, if request would be empty even though params were configured to be used
+<span class="nc bnc" id="L218" title="All 2 branches missed.">        if ((policyParameters.contains(PolicyParameter.ORGANIZATION)</span>
+<span class="nc bnc" id="L219" title="All 2 branches missed.">                        || policyParameters.contains(PolicyParameter.PATIENT)</span>
+<span class="nc bnc" id="L220" title="All 2 branches missed.">                        || policyParameters.contains(PolicyParameter.TEMPLATE))</span>
+<span class="nc bnc" id="L221" title="All 2 branches missed.">                &amp;&amp; requestMap.size() == 0) {</span>
+<span class="nc" id="L222">            throw new InternalServerException(</span>
+                    &quot;ABAC: Parameters were configured, but request parameters &quot; + &quot;are empty.&quot;);
+        }
+
+<span class="nc" id="L226">        return abacCheckRequest(requestUrl, requestMap);</span>
+    }
+
+    /**
+     * Handles organization ID extraction. Uses token's claim.
+     * @param token Token
+     * @param requestMap ABAC request attribute map to add the result
+     */
+    private void organizationHandling(AbstractAuthenticationToken token, Map&lt;String, Object&gt; requestMap) {
+<span class="nc" id="L235">        String orgId = getRequestedJwtClaim(token, abacConfig.getOrganizationClaim());</span>
+
+<span class="nc bnc" id="L237" title="All 2 branches missed.">        if (isBlank(orgId)) {</span>
+            // organization configured but claim not available or empty
+<span class="nc" id="L239">            throw new IllegalArgumentException(</span>
+                    &quot;ABAC use of an organization claim is configured but can't be retrieved from the given JWT.&quot;);
+        }
+
+<span class="nc" id="L243">        requestMap.put(ORGANIZATION, orgId);</span>
+<span class="nc" id="L244">    }</span>
+
+    /**
+     * Extracts the patient claim from the token's claims.
+     * @param token Token
+     * @return The patient claim
+     */
+    private String getPatient(AbstractAuthenticationToken token) {
+<span class="fc" id="L252">        String tokenPatient = getRequestedJwtClaim(token, abacConfig.getPatientClaim());</span>
+
+<span class="pc bpc" id="L254" title="1 of 2 branches missed.">        if (isBlank(tokenPatient)) {</span>
+<span class="nc" id="L255">            throw new IllegalArgumentException(&quot;ABAC: Patient parameter configured, but no claim attribute available.&quot;);</span>
+        }
+
+<span class="fc" id="L258">        return tokenPatient;</span>
+    }
+
+    /**
+     * Handles patient ID extraction. Either uses token's claim or EHR's subject.
+     * @param token Token
+     * @param subject Subject from EHR
+     * @param requestMap ABAC request attribute map to add the result
+     */
+    @SuppressWarnings(&quot;unchecked&quot;)
+    boolean patientHandling(
+            AbstractAuthenticationToken token,
+            String subject,
+            Map&lt;String, Object&gt; requestMap,
+            String type,
+            Object payload) {
+
+<span class="fc" id="L275">        String tokenPatient = getPatient(token);</span>
+
+<span class="fc" id="L277">        boolean isQuery = type.equals(BaseController.QUERY);</span>
+
+<span class="pc bpc" id="L279" title="5 of 6 branches missed.">        if (!isQuery &amp;&amp; (tokenPatient.equals(subject) || subject == null)) {</span>
+<span class="nc" id="L280">            requestMap.put(PATIENT, tokenPatient);</span>
+<span class="nc" id="L281">            return true;</span>
+<span class="pc bpc" id="L282" title="1 of 2 branches missed.">        } else if (!isQuery) return false;</span>
+<span class="pc bpc" id="L283" title="1 of 2 branches missed.">        else if (!(payload instanceof Map))</span>
+<span class="nc" id="L284">            throw new InternalServerException(&quot;ABAC: AQL audit patient data malformed.&quot;);</span>
+        else {
+<span class="pc bpc" id="L286" title="1 of 2 branches missed.">            if (((Map&lt;?, ?&gt;) payload).containsKey(AuditVariables.EHR_PATH)) {</span>
+<span class="fc" id="L287">                Set&lt;UUID&gt; ehrs = (Set&lt;UUID&gt;) ((Map&lt;?, ?&gt;) payload).get(AuditVariables.EHR_PATH);</span>
+<span class="fc" id="L288">                List&lt;String&gt; allSubjectExtRefs = ehrService.getSubjectExtRefs(</span>
+<span class="fc" id="L289">                        ehrs.stream().map(UUID::toString).collect(Collectors.toList()));</span>
+<span class="fc" id="L290">                boolean isValidRefs =</span>
+<span class="fc bfc" id="L291" title="All 4 branches covered.">                        allSubjectExtRefs.stream().map(tokenPatient::equals).reduce(true, (b1, b2) -&gt; b1 &amp;&amp; b2);</span>
+
+<span class="fc bfc" id="L293" title="All 2 branches covered.">                if (!isValidRefs) return false;</span>
+
+<span class="fc" id="L295">                Set&lt;String&gt; patientSet = new HashSet&lt;&gt;();</span>
+<span class="fc" id="L296">                patientSet.add(tokenPatient);</span>
+<span class="fc" id="L297">                requestMap.put(PATIENT, patientSet);</span>
+<span class="fc" id="L298">                return true;</span>
+<span class="nc" id="L299">            } else throw new InternalServerException(&quot;ABAC: AQL audit patient data unavailable.&quot;);</span>
+        }
+    }
+
+    /**
+     * Handles template ID extraction of specific payload.
+     * &lt;p&gt;
+     * Payload will be a response body string, in case of @PostAuthorize.
+     * &lt;p&gt;
+     * Payload will be request body string, or already deserialized object (e.g. EhrStatus), in case of @PreAuthorize.
+     * @param type Object type of scope
+     * @param payload Payload object, either request's input or response's output
+     * @param contentType Content type from the scope
+     * @param requestMap ABAC request attribute map to add the result
+     * @param authType Pre- or PostAuthorize, determines payload style (string or object)
+     */
+    @SuppressWarnings(&quot;unchecked&quot;)
+    private void templateHandling(
+            String type, Object payload, String contentType, Map&lt;String, Object&gt; requestMap, String authType) {
+<span class="nc bnc" id="L318" title="All 6 branches missed.">        switch (type) {</span>
+            case BaseController.EHR:
+<span class="nc" id="L320">                throw new IllegalArgumentException(</span>
+                        &quot;ABAC: Unsupported configuration: Can't set template ID for EHR type.&quot;);
+            case BaseController.EHR_STATUS:
+<span class="nc" id="L323">                throw new IllegalArgumentException(</span>
+                        &quot;ABAC: Unsupported configuration: Can't set template ID for EHR_STATUS type.&quot;);
+            case BaseController.COMPOSITION:
+<span class="nc" id="L326">                String content = &quot;&quot;;</span>
+<span class="nc bnc" id="L327" title="All 2 branches missed.">                if (authType.equals(POST)) {</span>
+                    // @PostAuthorize gives a ResponseEntity type for &quot;returnObject&quot;, so payload is of that type
+<span class="nc bnc" id="L329" title="All 2 branches missed.">                    if (!(payload instanceof ResponseEntity&lt;?&gt; responseEntity)) {</span>
+<span class="nc" id="L330">                        throw new InternalServerException(&quot;ABAC: unexpected payload type&quot;);</span>
+                    }
+<span class="nc bnc" id="L332" title="All 2 branches missed.">                    if (!responseEntity.hasBody()) {</span>
+<span class="nc bnc" id="L333" title="All 2 branches missed.">                        if (NO_CONTENT.equals(responseEntity.getStatusCode())) {</span>
+<span class="nc" id="L334">                            return;</span>
+                        }
+<span class="nc" id="L336">                        throw new InternalServerException(&quot;ABAC: unexpected empty response body&quot;);</span>
+                    }
+<span class="nc" id="L338">                    Object body = responseEntity.getBody();</span>
+<span class="nc bnc" id="L339" title="All 2 branches missed.">                    if (NO_CONTENT.equals(responseEntity.getStatusCode())) {</span>
+<span class="nc bnc" id="L340" title="All 2 branches missed.">                        if (body instanceof Map) {</span>
+<span class="nc" id="L341">                            Object error = ((Map&lt;?, ?&gt;) body).get(&quot;error&quot;);</span>
+<span class="nc bnc" id="L342" title="All 4 branches missed.">                            if (error != null &amp;&amp; ((String) error).contains(&quot;delet&quot;)) {</span>
+                                // composition was deleted, so nothing to check here, skip
+<span class="nc" id="L344">                                break;</span>
+                            }
+                        }
+<span class="nc" id="L347">                        throw new InternalServerException(&quot;ABAC: Unexpected empty response from composition request&quot;);</span>
+                    }
+<span class="nc bnc" id="L349" title="All 2 branches missed.">                    if (body instanceof OriginalVersionResponseData) {</span>
+                        // case of versioned_composition --&gt; fast path, because template is easy to get
+<span class="nc" id="L351">                        Object data = ((OriginalVersionResponseData&lt;?&gt;) body).getData();</span>
+<span class="nc bnc" id="L352" title="All 2 branches missed.">                        if (data instanceof Composition composition) {</span>
+<span class="nc" id="L353">                            String template = Objects.requireNonNull(</span>
+<span class="nc" id="L354">                                            composition.getArchetypeDetails().getTemplateId())</span>
+<span class="nc" id="L355">                                    .getValue();</span>
+<span class="nc" id="L356">                            requestMap.put(TEMPLATE, template);</span>
+<span class="nc" id="L357">                            break; // special case, so done here, exit</span>
+                        }
+<span class="nc bnc" id="L359" title="All 2 branches missed.">                    } else if (body instanceof String) {</span>
+<span class="nc" id="L360">                        content = (String) body;</span>
+                    } else {
+<span class="nc" id="L362">                        throw new InternalServerException(&quot;ABAC: unexpected composition payload object&quot;);</span>
+                    }
+<span class="nc bnc" id="L364" title="All 2 branches missed.">                } else if (authType.equals(PRE)) {</span>
+                    try {
+                        // try if this is the Delete composition case. Payload would contain the UUID of the compo.
+<span class="nc" id="L367">                        ObjectVersionId versionId = new ObjectVersionId((String) payload);</span>
+<span class="nc" id="L368">                        UUID compositionUid =</span>
+<span class="nc" id="L369">                                UUID.fromString(versionId.getRoot().getValue());</span>
+<span class="nc" id="L370">                        Optional&lt;Composition&gt; compoDto = compositionService.retrieve(</span>
+<span class="nc" id="L371">                                compositionService.getEhrId(compositionUid), compositionUid, null);</span>
+<span class="nc bnc" id="L372" title="All 2 branches missed.">                        if (compoDto.isPresent()) {</span>
+<span class="nc" id="L373">                            Composition c = compoDto.get();</span>
+<span class="nc bnc" id="L374" title="All 2 branches missed.">                            if (c.getArchetypeDetails() != null</span>
+<span class="nc bnc" id="L375" title="All 2 branches missed.">                                    &amp;&amp; c.getArchetypeDetails().getTemplateId() != null) {</span>
+<span class="nc" id="L376">                                requestMap.put(</span>
+                                        TEMPLATE,
+<span class="nc" id="L378">                                        c.getArchetypeDetails().getTemplateId().getValue());</span>
+                            }
+<span class="nc" id="L380">                            break; // special case, so done here, exit</span>
+                        } else {
+<span class="nc" id="L382">                            throw new InternalServerException(</span>
+                                    &quot;ABAC: unexpected empty response from composition delete&quot;);
+                        }
+<span class="nc" id="L385">                    } catch (IllegalArgumentException e) {</span>
+                        // if not an UUID, the payload is a composition itself so continue
+<span class="nc" id="L387">                        content = (String) payload;</span>
+<span class="nc" id="L388">                    }</span>
+                } else {
+<span class="nc" id="L390">                    throw new InternalServerException(&quot;ABAC: invalid auth type given.&quot;);</span>
+                }
+                String templateId;
+<span class="nc bnc" id="L393" title="All 2 branches missed.">                if (MediaType.parseMediaType(contentType).isCompatibleWith(MediaType.APPLICATION_JSON)) {</span>
+<span class="nc" id="L394">                    templateId = compositionService.getTemplateIdFromInputComposition(content, CompositionFormat.JSON);</span>
+<span class="nc bnc" id="L395" title="All 2 branches missed.">                } else if (MediaType.parseMediaType(contentType).isCompatibleWith(MediaType.APPLICATION_XML)) {</span>
+<span class="nc" id="L396">                    templateId = compositionService.getTemplateIdFromInputComposition(content, CompositionFormat.XML);</span>
+                } else {
+<span class="nc" id="L398">                    throw new IllegalArgumentException(&quot;ABAC: Only JSON and XML composition are supported.&quot;);</span>
+                }
+<span class="nc" id="L400">                requestMap.put(TEMPLATE, templateId);</span>
+<span class="nc" id="L401">                break;</span>
+            case BaseController.CONTRIBUTION:
+                CompositionFormat format;
+<span class="nc bnc" id="L404" title="All 2 branches missed.">                if (MediaType.parseMediaType(contentType).isCompatibleWith(MediaType.APPLICATION_JSON)) {</span>
+<span class="nc" id="L405">                    format = CompositionFormat.JSON;</span>
+<span class="nc bnc" id="L406" title="All 2 branches missed.">                } else if (MediaType.parseMediaType(contentType).isCompatibleWith(MediaType.APPLICATION_XML)) {</span>
+<span class="nc" id="L407">                    format = CompositionFormat.XML;</span>
+                } else {
+<span class="nc" id="L409">                    throw new IllegalArgumentException(&quot;ABAC: Only JSON and XML composition are supported.&quot;);</span>
+                }
+<span class="nc bnc" id="L411" title="All 2 branches missed.">                if (payload instanceof String) {</span>
+<span class="nc" id="L412">                    Set&lt;String&gt; templates = contributionService.getListOfTemplates((String) payload, format);</span>
+<span class="nc" id="L413">                    requestMap.put(TEMPLATE, templates);</span>
+<span class="nc" id="L414">                    break;</span>
+                } else {
+<span class="nc" id="L416">                    throw new InternalServerException(&quot;ABAC: invalid POST contribution payload.&quot;);</span>
+                }
+            case BaseController.QUERY:
+                // special case of type QUERY, where multiple subjects are possible
+<span class="nc bnc" id="L420" title="All 2 branches missed.">                if (payload instanceof Map) {</span>
+<span class="nc bnc" id="L421" title="All 2 branches missed.">                    if (((Map&lt;?, ?&gt;) payload).containsKey(AuditVariables.TEMPLATE_PATH)) {</span>
+<span class="nc" id="L422">                        Set&lt;String&gt; templates = (Set&lt;String&gt;) ((Map&lt;?, ?&gt;) payload).get(AuditVariables.TEMPLATE_PATH);</span>
+<span class="nc" id="L423">                        Set&lt;String&gt; templateSet = new HashSet&lt;&gt;(templates);</span>
+                        // put result set into the requestMap and exit
+<span class="nc" id="L425">                        requestMap.put(TEMPLATE, templateSet);</span>
+<span class="nc" id="L426">                        break;</span>
+                    } else {
+<span class="nc" id="L428">                        throw new InternalServerException(&quot;ABAC: AQL audit template data unavailable.&quot;);</span>
+                    }
+                } else {
+<span class="nc" id="L431">                    throw new InternalServerException(&quot;ABAC: AQL audit template data malformed.&quot;);</span>
+                }
+            default:
+<span class="nc" id="L434">                throw new InternalServerException(&quot;ABAC: Invalid type given from Pre- or PostAuthorize&quot;);</span>
+        }
+<span class="nc" id="L436">    }</span>
+
+    @SuppressWarnings(&quot;unchecked&quot;)
+    private boolean abacCheckRequest(String url, Map&lt;String, Object&gt; bodyMap) throws IOException {
+        // prepare request attributes and convert from &lt;String, Object&gt; to &lt;String, String&gt;
+<span class="nc" id="L441">        Map&lt;String, String&gt; request = new HashMap&lt;&gt;();</span>
+<span class="nc bnc" id="L442" title="All 2 branches missed.">        if (bodyMap.containsKey(ORGANIZATION)) {</span>
+<span class="nc" id="L443">            request.put(ORGANIZATION, (String) bodyMap.get(ORGANIZATION));</span>
+        }
+        // check if patient attribues are available and see if it contains a Set or simple String
+<span class="nc bnc" id="L446" title="All 2 branches missed.">        if (bodyMap.containsKey(PATIENT)) {</span>
+<span class="nc bnc" id="L447" title="All 2 branches missed.">            if (bodyMap.get(PATIENT) instanceof Set) {</span>
+                // check if templates are also configured
+<span class="nc bnc" id="L449" title="All 2 branches missed.">                if (bodyMap.containsKey(TEMPLATE)) {</span>
+<span class="nc bnc" id="L450" title="All 2 branches missed.">                    if (bodyMap.get(TEMPLATE) instanceof Set) {</span>
+                        // multiple templates possible: need cartesian product of n patients and m templates
+                        // so: for each patient, go through templates and do a request each
+<span class="nc" id="L453">                        Set&lt;String&gt; setP = (Set&lt;String&gt;) bodyMap.get(PATIENT);</span>
+<span class="nc bnc" id="L454" title="All 2 branches missed.">                        for (String p : setP) {</span>
+<span class="nc" id="L455">                            request.put(PATIENT, p);</span>
+<span class="nc" id="L456">                            boolean success = sendRequestForEach(TEMPLATE, url, bodyMap, request);</span>
+<span class="nc bnc" id="L457" title="All 2 branches missed.">                            if (!success) {</span>
+<span class="nc" id="L458">                                return false;</span>
+                            }
+<span class="nc" id="L460">                        }</span>
+                        // in case all combinations were validated successfully
+<span class="nc" id="L462">                        return true;</span>
+                    }
+                } else {
+                    // only patients (or + orga) set. So run request for each patient, without template.
+<span class="nc" id="L466">                    return sendRequestForEach(PATIENT, url, bodyMap, request);</span>
+                }
+<span class="nc bnc" id="L468" title="All 2 branches missed.">            } else if (bodyMap.get(PATIENT) instanceof String) {</span>
+<span class="nc" id="L469">                request.put(PATIENT, (String) bodyMap.get(PATIENT));</span>
+            } else {
+                // if it is just a String, set it and continue normal
+<span class="nc" id="L472">                throw new InternalServerException(&quot;ABAC: Invalid patient attribute content.&quot;);</span>
+            }
+        }
+        // check if template attributes are available and see if it contains a Set or simple String
+<span class="nc bnc" id="L476" title="All 2 branches missed.">        if (bodyMap.containsKey(TEMPLATE)) {</span>
+<span class="nc bnc" id="L477" title="All 2 branches missed.">            if (bodyMap.get(TEMPLATE) instanceof Set) {</span>
+                // set each template and send separate ABAC requests
+<span class="nc" id="L479">                return sendRequestForEach(TEMPLATE, url, bodyMap, request);</span>
+<span class="nc bnc" id="L480" title="All 2 branches missed.">            } else if (bodyMap.get(TEMPLATE) instanceof String) {</span>
+                // if it is just a String, set it and continue normal
+<span class="nc" id="L482">                request.put(TEMPLATE, (String) bodyMap.get(TEMPLATE));</span>
+            } else {
+<span class="nc" id="L484">                throw new InternalServerException(&quot;ABAC: Invalid template attribute content.&quot;);</span>
+            }
+        }
+<span class="nc" id="L487">        return abacCheck.execute(url, request);</span>
+    }
+
+    /**
+     * Goes through all template IDs and sends an ABAC request for each.
+     * @param type Type, either ORGANIZATION, TEMPLATE, PATIENT
+     * @param url ABAC server request URL
+     * @param bodyMap Unprocessed attributes for the request
+     * @param request Processed attributes for the request
+     * @return True on success, False if one combinations is rejected by the ABAC server
+     * @throws IOException On error during attribute or HTTP handling
+     */
+    @SuppressWarnings(&quot;unchecked&quot;)
+    private boolean sendRequestForEach(
+            String type, String url, Map&lt;String, Object&gt; bodyMap, Map&lt;String, String&gt; request) throws IOException {
+<span class="nc" id="L502">        Set&lt;String&gt; set = (Set&lt;String&gt;) bodyMap.get(type);</span>
+<span class="nc bnc" id="L503" title="All 2 branches missed.">        for (String s : set) {</span>
+<span class="nc" id="L504">            request.put(type, s);</span>
+<span class="nc" id="L505">            boolean allowed = abacCheck.execute(url, request);</span>
+<span class="nc bnc" id="L506" title="All 2 branches missed.">            if (!allowed) {</span>
+                // if only one combination of attributes is rejected by ABAC return false for all
+<span class="nc" id="L508">                return false;</span>
+            }
+<span class="nc" id="L510">        }</span>
+        // in case all combinations were validated successfully
+<span class="nc" id="L512">        return true;</span>
+    }
+
+    /**
+     * Extracts the JWT auth token.
+     * @param auth Auth object.
+     * @return JWT Auth Token
+     */
+    private AbstractAuthenticationToken getJwtAuthenticationToken(Authentication auth) {
+<span class="nc bnc" id="L521" title="All 2 branches missed.">        if (auth instanceof AbstractAuthenticationToken jwt) {</span>
+<span class="nc" id="L522">            return jwt;</span>
+        } else {
+<span class="nc" id="L524">            throw new IllegalArgumentException(&quot;ABAC: Invalid authentication, no JWT available.&quot;);</span>
+        }
+    }
+
+    @Override
+    public Object getFilterObject() {
+<span class="nc" id="L530">        return this.filterObject;</span>
+    }
+
+    @Override
+    public void setFilterObject(Object filterObject) {
+<span class="nc" id="L535">        this.filterObject = filterObject;</span>
+<span class="nc" id="L536">    }</span>
+
+    @Override
+    public Object getReturnObject() {
+<span class="nc" id="L540">        return this.returnObject;</span>
+    }
+
+    @Override
+    public void setReturnObject(Object returnObject) {
+<span class="nc" id="L545">        this.returnObject = returnObject;</span>
+<span class="nc" id="L546">    }</span>
+
+    @Override
+    public Object getThis() {
+<span class="nc" id="L550">        return this;</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.7.202105040129</span></div></body></html>

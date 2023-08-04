@@ -1,0 +1,289 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../../jacoco-resources/report.gif" type="image/gif"/><title>OpenehrEhrController.java</title><link rel="stylesheet" href="../../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../../index.html" class="el_report">Overall Coverage</a> &gt; <a href="../index.html" class="el_bundle">rest-openehr</a> &gt; <a href="index.source.html" class="el_package">org.ehrbase.rest.openehr</a> &gt; <span class="el_source">OpenehrEhrController.java</span></div><h1>OpenehrEhrController.java</h1><pre class="source lang-java linenums">/*
+ * Copyright (c) 2019 vitasystems GmbH and Hannover Medical School.
+ *
+ * This file is part of project EHRbase
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     https://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.ehrbase.rest.openehr;
+
+import com.nedap.archie.rm.datavalues.quantity.datetime.DvDateTime;
+import com.nedap.archie.rm.ehr.EhrStatus;
+import com.nedap.archie.rm.support.identification.HierObjectId;
+import java.net.URI;
+import java.util.Arrays;
+import java.util.List;
+import java.util.Objects;
+import java.util.Optional;
+import java.util.UUID;
+import java.util.function.Supplier;
+import org.ehrbase.api.annotations.TenantAware;
+import org.ehrbase.api.audit.msg.AuditMsgBuilder;
+import org.ehrbase.api.authorization.EhrbaseAuthorization;
+import org.ehrbase.api.authorization.EhrbasePermission;
+import org.ehrbase.api.exception.InternalServerException;
+import org.ehrbase.api.exception.InvalidApiParameterException;
+import org.ehrbase.api.exception.ObjectNotFoundException;
+import org.ehrbase.api.exception.StateConflictException;
+import org.ehrbase.api.service.EhrService;
+import org.ehrbase.openehr.sdk.response.dto.EhrResponseData;
+import org.ehrbase.rest.BaseController;
+import org.ehrbase.rest.openehr.specification.EhrApiSpecification;
+import org.ehrbase.rest.util.InternalResponse;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.ResponseStatus;
+import org.springframework.web.bind.annotation.RestController;
+
+/**
+ * Controller for /ehr resource of openEHR REST API
+ */
+@TenantAware
+@RestController
+@RequestMapping(
+        path = BaseController.API_CONTEXT_PATH_WITH_VERSION + &quot;/ehr&quot;,
+        produces = {MediaType.APPLICATION_JSON_VALUE, MediaType.APPLICATION_XML_VALUE})
+public class OpenehrEhrController extends BaseController implements EhrApiSpecification {
+
+    private final EhrService ehrService;
+
+    @Autowired
+<span class="nc" id="L73">    public OpenehrEhrController(EhrService ehrService) {</span>
+<span class="nc" id="L74">        this.ehrService = Objects.requireNonNull(ehrService);</span>
+<span class="nc" id="L75">    }</span>
+
+    @EhrbaseAuthorization(permission = EhrbasePermission.EHRBASE_EHR_CREATE)
+    @PostMapping // (consumes = {&quot;application/xml&quot;, &quot;application/json&quot;})
+    @ResponseStatus(value = HttpStatus.CREATED)
+    // TODO auditing headers (openehr*) ignored until auditing is implemented
+    @Override
+    public ResponseEntity createEhr(
+            @RequestHeader(value = &quot;openEHR-VERSION&quot;, required = false) String openehrVersion,
+            @RequestHeader(value = &quot;openEHR-AUDIT_DETAILS&quot;, required = false) String openehrAuditDetails,
+            @RequestHeader(value = CONTENT_TYPE, required = false)
+                    String contentType, // TODO when working on EHR_STATUS
+            @RequestHeader(value = HttpHeaders.ACCEPT, required = false) String accept,
+            @RequestHeader(value = PREFER, required = false, defaultValue = RETURN_MINIMAL) String prefer,
+            @RequestBody(required = false) EhrStatus ehrStatus) {
+        final UUID ehrId;
+<span class="nc bnc" id="L91" title="All 2 branches missed.">        if (ehrStatus != null) {</span>
+<span class="nc" id="L92">            ehrId = ehrService.create(null, ehrStatus);</span>
+        } else {
+<span class="nc" id="L94">            ehrId = ehrService.create(null, null);</span>
+        }
+
+<span class="nc" id="L97">        return internalPostEhrProcessing(accept, prefer, ehrId);</span>
+    }
+
+    @EhrbaseAuthorization(permission = EhrbasePermission.EHRBASE_EHR_CREATE)
+    @PutMapping(path = &quot;/{ehr_id}&quot;)
+    @ResponseStatus(value = HttpStatus.CREATED)
+    @Override
+    public ResponseEntity&lt;EhrResponseData&gt; createEhrWithId(
+            @RequestHeader(value = &quot;openEHR-VERSION&quot;, required = false) String openehrVersion,
+            @RequestHeader(value = &quot;openEHR-AUDIT_DETAILS&quot;, required = false) String openehrAuditDetails,
+            @RequestHeader(value = HttpHeaders.ACCEPT, required = false) String accept,
+            @RequestHeader(value = PREFER, required = false) String prefer,
+            @PathVariable(value = &quot;ehr_id&quot;) String ehrIdString,
+            @RequestBody(required = false) EhrStatus ehrStatus) {
+
+        UUID ehrId; // can't use getEhrUuid(..) because here another exception needs to be thrown (-&gt; 400, not 404 in
+        // response)
+        try {
+<span class="nc" id="L115">            ehrId = UUID.fromString(ehrIdString);</span>
+<span class="nc" id="L116">        } catch (IllegalArgumentException e) {</span>
+<span class="nc" id="L117">            throw new InvalidApiParameterException(&quot;EHR ID format not a UUID&quot;);</span>
+<span class="nc" id="L118">        }</span>
+
+<span class="nc bnc" id="L120" title="All 2 branches missed.">        if (ehrService.hasEhr(ehrId)) {</span>
+<span class="nc" id="L121">            throw new StateConflictException(&quot;EHR with this ID already exists&quot;);</span>
+        }
+
+        final UUID resultEhrId;
+<span class="nc bnc" id="L125" title="All 2 branches missed.">        if (ehrStatus != null) {</span>
+<span class="nc" id="L126">            resultEhrId = ehrService.create(ehrId, ehrStatus);</span>
+        } else {
+<span class="nc" id="L128">            resultEhrId = ehrService.create(ehrId, null);</span>
+        }
+
+<span class="nc bnc" id="L131" title="All 2 branches missed.">        if (!ehrId.equals(resultEhrId)) {</span>
+<span class="nc" id="L132">            throw new InternalServerException(&quot;Error creating EHR with custom ID and/or status&quot;);</span>
+        }
+
+<span class="nc" id="L135">        return internalPostEhrProcessing(accept, prefer, resultEhrId);</span>
+    }
+
+    private ResponseEntity&lt;EhrResponseData&gt; internalPostEhrProcessing(String accept, String prefer, UUID resultEhrId) {
+<span class="nc" id="L139">        createAuditLogsMsgBuilder(resultEhrId);</span>
+<span class="nc" id="L140">        URI url = createLocationUri(EHR, resultEhrId.toString());</span>
+
+<span class="nc" id="L142">        List&lt;String&gt; headerList =</span>
+<span class="nc" id="L143">                Arrays.asList(CONTENT_TYPE, LOCATION, ETAG, LAST_MODIFIED); // whatever is required by REST spec</span>
+
+        Optional&lt;InternalResponse&lt;EhrResponseData&gt;&gt;
+                respData; // variable to overload with more specific object if requested
+<span class="nc bnc" id="L147" title="All 2 branches missed.">        if (Optional.ofNullable(prefer)</span>
+<span class="nc" id="L148">                .map(i -&gt; i.equals(RETURN_REPRESENTATION))</span>
+<span class="nc" id="L149">                .orElse(false)) { // null safe way to test prefer header</span>
+<span class="nc" id="L150">            respData = buildEhrResponseData(EhrResponseData::new, resultEhrId, accept, headerList);</span>
+        } else { // &quot;minimal&quot; is default fallback
+<span class="nc" id="L152">            respData = buildEhrResponseData(() -&gt; null, resultEhrId, accept, headerList);</span>
+        }
+
+        // returns 201 with body + headers, 204 only with headers or 500 error depending on what processing above yields
+<span class="nc" id="L156">        return respData.map(i -&gt; Optional.ofNullable(i.getResponseData())</span>
+<span class="nc" id="L157">                        .map(j -&gt; ResponseEntity.created(url)</span>
+<span class="nc" id="L158">                                .headers(i.getHeaders())</span>
+<span class="nc" id="L159">                                .body(j))</span>
+                        // when the body is empty
+<span class="nc" id="L161">                        .orElse(ResponseEntity.noContent()</span>
+<span class="nc" id="L162">                                .headers(i.getHeaders())</span>
+<span class="nc" id="L163">                                .build()))</span>
+                // when no response could be created at all
+<span class="nc" id="L165">                .orElse(ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build());</span>
+    }
+
+    private void createAuditLogsMsgBuilder(UUID resultEhrId) {
+<span class="nc" id="L169">        AuditMsgBuilder.getInstance().setEhrIds(resultEhrId);</span>
+<span class="nc" id="L170">    }</span>
+
+    /**
+     * Returns EHR by ID
+     */
+    @EhrbaseAuthorization(permission = EhrbasePermission.EHRBASE_EHR_READ)
+    @GetMapping(path = &quot;/{ehr_id}&quot;)
+    @PreAuthorize(&quot;checkAbacPre(@openehrEhrController.EHR, @ehrService.getSubjectExtRef(#ehrIdString))&quot;)
+    @Override
+    public ResponseEntity&lt;EhrResponseData&gt; retrieveEhrById(
+            @RequestHeader(value = HttpHeaders.ACCEPT, required = false) String accept,
+            @PathVariable(value = &quot;ehr_id&quot;) String ehrIdString) {
+
+<span class="nc" id="L183">        UUID ehrId = getEhrUuid(ehrIdString);</span>
+
+<span class="nc bnc" id="L185" title="All 2 branches missed.">        if (!ehrService.hasEhr(ehrId)) {</span>
+<span class="nc" id="L186">            throw new ObjectNotFoundException(&quot;ehr&quot;, &quot;No EHR with this ID can be found&quot;);</span>
+        }
+
+<span class="nc" id="L189">        return internalGetEhrProcessing(accept, ehrId);</span>
+    }
+
+    /**
+     * Returns EHR by subject (id and namespace)
+     */
+    @EhrbaseAuthorization(permission = EhrbasePermission.EHRBASE_EHR_READ)
+    @GetMapping(params = {&quot;subject_id&quot;, &quot;subject_namespace&quot;})
+    @PreAuthorize(&quot;checkAbacPre(@openehrEhrController.EHR, #subjectId)&quot;)
+    @Override
+    public ResponseEntity&lt;EhrResponseData&gt; retrieveEhrBySubject(
+            @RequestHeader(value = HttpHeaders.ACCEPT, required = false) String accept,
+            @RequestParam(value = &quot;subject_id&quot;) String subjectId,
+            @RequestParam(value = &quot;subject_namespace&quot;) String subjectNamespace) {
+
+<span class="nc" id="L204">        Optional&lt;UUID&gt; ehrIdOpt = ehrService.findBySubject(subjectId, subjectNamespace);</span>
+
+<span class="nc" id="L206">        UUID ehrId = ehrIdOpt.orElseThrow(</span>
+<span class="nc" id="L207">                () -&gt; new ObjectNotFoundException(&quot;ehr&quot;, &quot;No EHR with supplied subject parameters found&quot;));</span>
+
+<span class="nc" id="L209">        return internalGetEhrProcessing(accept, ehrId);</span>
+    }
+
+    private ResponseEntity&lt;EhrResponseData&gt; internalGetEhrProcessing(String accept, UUID ehrId) {
+<span class="nc" id="L213">        createAuditLogsMsgBuilder(ehrId);</span>
+<span class="nc" id="L214">        List&lt;String&gt; headerList =</span>
+<span class="nc" id="L215">                Arrays.asList(CONTENT_TYPE, LOCATION, ETAG, LAST_MODIFIED); // whatever is required by REST spec</span>
+
+<span class="nc" id="L217">        Optional&lt;InternalResponse&lt;EhrResponseData&gt;&gt; respData =</span>
+<span class="nc" id="L218">                buildEhrResponseData(EhrResponseData::new, ehrId, accept, headerList);</span>
+
+<span class="nc" id="L220">        return respData.map(i -&gt; ResponseEntity.ok().headers(i.getHeaders()).body(i.getResponseData()))</span>
+<span class="nc" id="L221">                .orElse(ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build());</span>
+    }
+
+    /**
+     * Builder method to prepare appropriate HTTP response. Flexible to either allow minimal or full representation of resource.
+     *
+     * @param factory    Lambda function to constructor of desired object
+     * @param ehrId      Current object's reference
+     * @param accept     Requested content format
+     * @param headerList Requested headers that need to be set
+     * @param &lt;T&gt;        Either EhrResponseData itself or more specific sub-class EhrResponseDataRepresentation
+     * @return
+     */
+    private &lt;T extends EhrResponseData&gt; Optional&lt;InternalResponse&lt;T&gt;&gt; buildEhrResponseData(
+            Supplier&lt;T&gt; factory, UUID ehrId, /*Action create,*/ String accept, List&lt;String&gt; headerList) {
+        // check for valid format header to produce content accordingly
+<span class="nc" id="L237">        MediaType contentType = resolveContentType(accept);</span>
+
+        // create either null or maximum response data class
+<span class="nc" id="L240">        T minimalOrRepresentation = factory.get();</span>
+
+<span class="nc bnc" id="L242" title="All 2 branches missed.">        if (minimalOrRepresentation != null) {</span>
+
+<span class="nc" id="L244">            EhrStatus ehrStatus = ehrService.getEhrStatus(ehrId);</span>
+            // populate maximum response data
+<span class="nc" id="L246">            EhrResponseData objByReference = minimalOrRepresentation;</span>
+<span class="nc" id="L247">            objByReference.setEhrId(new HierObjectId(ehrId.toString()));</span>
+<span class="nc" id="L248">            objByReference.setEhrStatus(ehrStatus);</span>
+<span class="nc" id="L249">            objByReference.setSystemId(</span>
+<span class="nc" id="L250">                    new HierObjectId(ehrService.getSystemUuid().toString()));</span>
+<span class="nc" id="L251">            DvDateTime timeCreated = ehrService.getCreationTime(ehrId);</span>
+<span class="nc" id="L252">            objByReference.setTimeCreated(timeCreated.getValue().toString());</span>
+            // objByReference.setCompositions(null);    // TODO get actual data from service layer
+            // objByReference.setContributions(null);   // TODO get actual data from service layer
+        }
+
+        // create and supplement headers with data depending on which headers are requested
+<span class="nc" id="L258">        HttpHeaders respHeaders = new HttpHeaders();</span>
+<span class="nc bnc" id="L259" title="All 2 branches missed.">        for (String header : headerList) {</span>
+<span class="nc bnc" id="L260" title="All 5 branches missed.">            switch (header) {</span>
+                case CONTENT_TYPE:
+<span class="nc bnc" id="L262" title="All 2 branches missed.">                    if (minimalOrRepresentation != null) // if response is going to have a body</span>
+<span class="nc" id="L263">                    respHeaders.setContentType(contentType);</span>
+                    break;
+                case LOCATION:
+                    try {
+<span class="nc" id="L267">                        URI url = createLocationUri(EHR, ehrId.toString());</span>
+<span class="nc" id="L268">                        respHeaders.setLocation(url);</span>
+<span class="nc" id="L269">                    } catch (Exception e) {</span>
+<span class="nc" id="L270">                        throw new InternalServerException(e.getMessage());</span>
+<span class="nc" id="L271">                    }</span>
+                    break;
+                case ETAG:
+<span class="nc" id="L274">                    respHeaders.setETag(&quot;\&quot;&quot; + ehrId + &quot;\&quot;&quot;);</span>
+<span class="nc" id="L275">                    break;</span>
+                case LAST_MODIFIED:
+                    // TODO should be VERSION.commit_audit.time_committed.value which is not implemented yet - mock for
+                    // now
+<span class="nc" id="L279">                    respHeaders.setLastModified(123124442);</span>
+<span class="nc" id="L280">                    break;</span>
+                default:
+                    // Ignore header
+            }
+<span class="nc" id="L284">        }</span>
+
+<span class="nc" id="L286">        return Optional.of(new InternalResponse&lt;&gt;(minimalOrRepresentation, respHeaders));</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.7.202105040129</span></div></body></html>

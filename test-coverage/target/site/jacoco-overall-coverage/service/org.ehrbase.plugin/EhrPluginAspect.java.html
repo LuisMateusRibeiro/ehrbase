@@ -1,0 +1,113 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../../jacoco-resources/report.gif" type="image/gif"/><title>EhrPluginAspect.java</title><link rel="stylesheet" href="../../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../../index.html" class="el_report">Overall Coverage</a> &gt; <a href="../index.html" class="el_bundle">service</a> &gt; <a href="index.source.html" class="el_package">org.ehrbase.plugin</a> &gt; <span class="el_source">EhrPluginAspect.java</span></div><h1>EhrPluginAspect.java</h1><pre class="source lang-java linenums">/*
+ * Copyright (c) 2022 vitasystems GmbH and Hannover Medical School.
+ *
+ * This file is part of project EHRbase
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     https://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.ehrbase.plugin;
+
+import static org.ehrbase.plugin.PluginHelper.PLUGIN_MANAGER_PREFIX;
+
+import com.nedap.archie.rm.ehr.EhrStatus;
+import java.util.UUID;
+import java.util.function.BiFunction;
+import java.util.function.Function;
+import org.aspectj.lang.ProceedingJoinPoint;
+import org.aspectj.lang.annotation.Around;
+import org.aspectj.lang.annotation.Aspect;
+import org.ehrbase.plugin.dto.EhrStatusVersionRequestParameters;
+import org.ehrbase.plugin.dto.EhrStatusWithEhrId;
+import org.ehrbase.plugin.extensionpoints.EhrExtensionPoint;
+import org.springframework.beans.factory.ListableBeanFactory;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.stereotype.Component;
+
+/**
+ * @author Stefan Spiska
+ */
+@Component
+@Aspect
+@ConditionalOnProperty(prefix = PLUGIN_MANAGER_PREFIX, name = &quot;enable&quot;, havingValue = &quot;true&quot;)
+public class EhrPluginAspect extends AbstractPluginAspect&lt;EhrExtensionPoint&gt; {
+
+<span class="nc" id="L44">    private static final Function&lt;Object[], EhrStatusWithEhrId&gt; STATUS_WITH_ID_INPUT_FUNCTION =</span>
+<span class="nc" id="L45">            args -&gt; new EhrStatusWithEhrId((EhrStatus) args[1], (UUID) args[0]);</span>
+<span class="nc" id="L46">    private static final BiFunction&lt;EhrStatusWithEhrId, Object[], Object[]&gt; STATUS_WITH_ID_SET_ARGS_FUNCTION =</span>
+<span class="nc" id="L47">            (i, args) -&gt; {</span>
+<span class="nc" id="L48">                args[1] = i.getEhrStatus();</span>
+<span class="nc" id="L49">                args[0] = i.getEhrId();</span>
+<span class="nc" id="L50">                return args;</span>
+<span class="nc" id="L51">            };</span>
+
+    public EhrPluginAspect(ListableBeanFactory beanFactory) {
+<span class="nc" id="L54">        super(beanFactory, EhrExtensionPoint.class);</span>
+<span class="nc" id="L55">    }</span>
+
+    /**
+     * Handle Extension-points for Ehr create
+     *
+     * @param pjp
+     * @return
+     * @see &lt;a href=&quot;I_EHR_SERVICE in openEHR Platform Service
+     * Model&quot;&gt;https://specifications.openehr.org/releases/SM/latest/openehr_platform.html#_i_ehr_service_interface&lt;/a&gt;
+     */
+    @Around(&quot;inServiceLayerPC() &amp;&amp; &quot; + &quot;execution(* org.ehrbase.api.service.EhrService.create(..))&quot;)
+    public Object aroundCreateEhr(ProceedingJoinPoint pjp) {
+
+<span class="nc" id="L68">        return proceedWithPluginExtensionPoints(</span>
+<span class="nc" id="L69">                pjp,</span>
+<span class="nc" id="L70">                EhrExtensionPoint::aroundCreation,</span>
+<span class="nc" id="L71">                STATUS_WITH_ID_INPUT_FUNCTION,</span>
+<span class="nc" id="L72">                STATUS_WITH_ID_SET_ARGS_FUNCTION);</span>
+    }
+
+    /**
+     * Handle Extension-points for EhrStatus update
+     *
+     * @param pjp
+     * @return
+     * @see &lt;a href=&quot;I_EHR_SERVICE in openEHR Platform Service
+     * Model&quot;&gt;https://specifications.openehr.org/releases/SM/latest/openehr_platform.html#_i_ehr_service_interface&lt;/a&gt;
+     */
+    @Around(&quot;inServiceLayerPC() &amp;&amp; &quot; + &quot;execution(* org.ehrbase.api.service.EhrService.updateStatus(..))&quot;)
+    public Object aroundUpdateEhrStatus(ProceedingJoinPoint pjp) {
+
+<span class="nc" id="L86">        return proceedWithPluginExtensionPoints(</span>
+<span class="nc" id="L87">                pjp, EhrExtensionPoint::aroundUpdate, STATUS_WITH_ID_INPUT_FUNCTION, STATUS_WITH_ID_SET_ARGS_FUNCTION);</span>
+    }
+
+    /**
+     * Handle Extension-points for EhrStatus retrieve
+     *
+     * @param pjp
+     * @return
+     * @see &lt;a href=&quot;I_EHR_SERVICE in openEHR Platform Service
+     * Model&quot;&gt;https://specifications.openehr.org/releases/SM/latest/openehr_platform.html#_i_ehr_service_interface&lt;/a&gt;
+     */
+    @Around(&quot;inServiceLayerPC() &amp;&amp; &quot; + &quot;execution(* org.ehrbase.api.service.EhrService.getEhrStatusAtVersion(..))&quot;)
+    public Object aroundRetrieveEhrStatusAtVersion(ProceedingJoinPoint pjp) {
+
+<span class="nc" id="L101">        return proceedWithPluginExtensionPoints(</span>
+<span class="nc" id="L102">                pjp,</span>
+<span class="nc" id="L103">                EhrExtensionPoint::aroundRetrieveAtVersion,</span>
+<span class="nc" id="L104">                args -&gt; new EhrStatusVersionRequestParameters((UUID) args[0], (UUID) args[1], (int) args[2]),</span>
+<span class="nc" id="L105">                (i, args) -&gt; {</span>
+<span class="nc" id="L106">                    args[0] = i.getEhrId();</span>
+<span class="nc" id="L107">                    args[1] = i.getEhrStatusId();</span>
+<span class="nc" id="L108">                    args[2] = i.getEhrStatusVersion();</span>
+<span class="nc" id="L109">                    return args;</span>
+                });
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.7.202105040129</span></div></body></html>

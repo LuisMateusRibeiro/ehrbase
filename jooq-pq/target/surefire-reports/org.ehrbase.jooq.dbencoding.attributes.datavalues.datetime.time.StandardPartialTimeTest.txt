@@ -1,0 +1,4 @@
+-------------------------------------------------------------------------------
+Test set: org.ehrbase.jooq.dbencoding.attributes.datavalues.datetime.time.StandardPartialTimeTest
+-------------------------------------------------------------------------------
+Tests run: 1, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.337 s -- in org.ehrbase.jooq.dbencoding.attributes.datavalues.datetime.time.StandardPartialTimeTest

@@ -1,0 +1,131 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../../jacoco-resources/report.gif" type="image/gif"/><title>LightRawJsonEncoder.java</title><link rel="stylesheet" href="../../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../../index.html" class="el_report">Coverage with Unit Tests</a> &gt; <a href="../index.html" class="el_bundle">jooq-pg</a> &gt; <a href="index.source.html" class="el_package">org.ehrbase.jooq.dbencoding.rawjson</a> &gt; <span class="el_source">LightRawJsonEncoder.java</span></div><h1>LightRawJsonEncoder.java</h1><pre class="source lang-java linenums">/*
+ * Copyright (c) 2019 vitasystems GmbH and Hannover Medical School.
+ *
+ * This file is part of project EHRbase
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     https://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.ehrbase.jooq.dbencoding.rawjson;
+
+import com.google.gson.GsonBuilder;
+import com.google.gson.JsonElement;
+import com.google.gson.internal.LinkedTreeMap;
+import java.util.ArrayList;
+import java.util.Hashtable;
+import java.util.List;
+import java.util.Map;
+import java.util.regex.Pattern;
+import org.ehrbase.jooq.dbencoding.EncodeUtilArchie;
+import org.ehrbase.jooq.dbencoding.wrappers.json.I_DvTypeAdapter;
+import org.ehrbase.jooq.dbencoding.wrappers.json.writer.translator_db2raw.ArchieCompositionProlog;
+import org.ehrbase.jooq.dbencoding.wrappers.json.writer.translator_db2raw.CompositionRoot;
+
+/**
+ * Created by christian on 6/21/2017.
+ */
+public class LightRawJsonEncoder {
+
+    private String jsonbOrigin;
+
+<span class="fc" id="L40">    public LightRawJsonEncoder(String jsonbOrigin) {</span>
+<span class="fc" id="L41">        this.jsonbOrigin = jsonbOrigin;</span>
+<span class="fc" id="L42">    }</span>
+
+    public String encodeContentAsString(String root) {
+
+<span class="pc bpc" id="L46" title="1 of 4 branches missed.">        Object fromDB = db2map(root != null &amp;&amp; root.equals(&quot;value&quot;));</span>
+
+<span class="fc" id="L48">        GsonBuilder gsonRaw = EncodeUtilArchie.getGsonBuilderInstance(I_DvTypeAdapter.AdapterType.DBJSON2RAWJSON);</span>
+<span class="fc" id="L49">        String raw = null;</span>
+<span class="pc bpc" id="L50" title="1 of 2 branches missed.">        if (fromDB instanceof Map) {</span>
+<span class="fc bfc" id="L51" title="All 2 branches covered.">            if (root != null) {</span>
+<span class="fc" id="L52">                Object contentMap = ((Map) fromDB).get(root);</span>
+<span class="pc bpc" id="L53" title="2 of 4 branches missed.">                if (contentMap instanceof LinkedTreeMap &amp;&amp; ((LinkedTreeMap) contentMap).size() == 0) // empty content</span>
+<span class="nc" id="L54">                raw = encodeNullContent();</span>
+<span class="fc" id="L55">                else raw = gsonRaw.create().toJson(((Map) fromDB).get(root));</span>
+<span class="fc" id="L56">            } else raw = gsonRaw.create().toJson(fromDB);</span>
+        }
+
+<span class="fc" id="L59">        return raw;</span>
+    }
+
+    private String encodeNullContent() {
+<span class="nc" id="L63">        Map&lt;String, Object&gt; nullContentMap = new Hashtable&lt;&gt;();</span>
+<span class="nc" id="L64">        nullContentMap.put(&quot;content&quot;, new ArrayList&lt;&gt;());</span>
+<span class="nc" id="L65">        return new GsonBuilder().create().toJson(nullContentMap);</span>
+    }
+
+    public JsonElement encodeContentAsJson(String root) {
+<span class="fc" id="L69">        GsonBuilder gsonRaw = EncodeUtilArchie.getGsonBuilderInstance(I_DvTypeAdapter.AdapterType.DBJSON2RAWJSON);</span>
+<span class="fc bfc" id="L70" title="All 4 branches covered.">        JsonElement jsonElement = gsonRaw.create().toJsonTree(db2map(root != null &amp;&amp; root.equals(&quot;value&quot;)));</span>
+<span class="fc bfc" id="L71" title="All 2 branches covered.">        if (root != null) {</span>
+            // in order to create the canonical form, build the ELEMENT json (hence the type is passed into the embedded
+            // value)
+<span class="fc" id="L74">            jsonElement = jsonElement.getAsJsonObject().get(root);</span>
+        }
+
+<span class="fc" id="L77">        return jsonElement;</span>
+    }
+
+    public String encodeCompositionAsString() {
+        // get the composition root key
+<span class="fc" id="L82">        String root = new CompositionRoot(jsonbOrigin).toString();</span>
+        // convert to raw json
+<span class="fc" id="L84">        String converted = encodeContentAsString(root);</span>
+
+<span class="fc" id="L86">        Map&lt;String, Object&gt; compoMap = (Map&lt;String, Object&gt;) db2map(false);</span>
+
+<span class="fc" id="L88">        String compositionName = (String) ((Map) ((List) compoMap.get(&quot;/name&quot;)).get(0)).get(&quot;value&quot;);</span>
+
+<span class="fc" id="L90">        return converted.replaceFirst(</span>
+<span class="fc" id="L91">                Pattern.quote(&quot;{&quot;), new ArchieCompositionProlog(root, compositionName).toString());</span>
+    }
+
+    public Map&lt;String, Object&gt; encodeOtherDetailsAsMap() {
+<span class="fc" id="L95">        return (Map&lt;String, Object&gt;) db2map(false);</span>
+    }
+
+    @SuppressWarnings(&quot;unchecked&quot;)
+    private Object db2map(boolean isValue) {
+<span class="fc" id="L100">        boolean isArray = false;</span>
+
+<span class="fc" id="L102">        GsonBuilder gsondb = EncodeUtilArchie.getGsonBuilderInstance();</span>
+<span class="fc bfc" id="L103" title="All 2 branches covered.">        if (jsonbOrigin.startsWith(&quot;[&quot;)) {</span>
+<span class="pc bpc" id="L104" title="1 of 2 branches missed.">            if (isValue) {</span>
+<span class="nc" id="L105">                jsonbOrigin = jsonbOrigin.trim().substring(1, jsonbOrigin.length() - 1);</span>
+<span class="fc" id="L106">            } else isArray = true;</span>
+        }
+
+<span class="fc bfc" id="L109" title="All 2 branches covered.">        Object fromDB = gsondb.create().fromJson(jsonbOrigin, isArray ? ArrayList.class : Map.class);</span>
+
+<span class="fc bfc" id="L111" title="All 4 branches covered.">        if (fromDB instanceof Map &amp;&amp; ((Map) fromDB).containsKey(&quot;content&quot;)) {</span>
+            // push contents upward
+<span class="fc" id="L113">            Object contents = ((Map) fromDB).get(&quot;content&quot;);</span>
+
+<span class="pc bpc" id="L115" title="1 of 2 branches missed.">            if (contents instanceof LinkedTreeMap) {</span>
+<span class="fc bfc" id="L116" title="All 2 branches covered.">                for (Object contentItem : ((LinkedTreeMap) contents).entrySet()) {</span>
+<span class="pc bpc" id="L117" title="1 of 2 branches missed.">                    if (contentItem instanceof Map.Entry) {</span>
+<span class="fc" id="L118">                        ((Map) fromDB)</span>
+<span class="fc" id="L119">                                .put(</span>
+<span class="fc" id="L120">                                        ((Map.Entry) contentItem).getKey().toString(),</span>
+<span class="fc" id="L121">                                        ((Map.Entry) contentItem).getValue());</span>
+                    }
+<span class="fc" id="L123">                }</span>
+<span class="fc" id="L124">                ((Map) fromDB).remove(&quot;content&quot;);</span>
+            }
+        }
+
+<span class="fc" id="L128">        return fromDB;</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.7.202105040129</span></div></body></html>

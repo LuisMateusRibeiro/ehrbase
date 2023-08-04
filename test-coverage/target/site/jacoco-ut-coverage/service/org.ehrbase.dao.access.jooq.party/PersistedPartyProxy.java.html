@@ -1,0 +1,161 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../../jacoco-resources/report.gif" type="image/gif"/><title>PersistedPartyProxy.java</title><link rel="stylesheet" href="../../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../../index.html" class="el_report">Coverage with Unit Tests</a> &gt; <a href="../index.html" class="el_bundle">service</a> &gt; <a href="index.source.html" class="el_package">org.ehrbase.dao.access.jooq.party</a> &gt; <span class="el_source">PersistedPartyProxy.java</span></div><h1>PersistedPartyProxy.java</h1><pre class="source lang-java linenums">/*
+ * Copyright (c) 2020 vitasystems GmbH and Hannover Medical School.
+ *
+ * This file is part of project EHRbase
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     https://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.ehrbase.dao.access.jooq.party;
+
+import static org.ehrbase.jooq.pg.Tables.PARTY_IDENTIFIED;
+
+import com.nedap.archie.rm.datavalues.DvIdentifier;
+import com.nedap.archie.rm.generic.PartyIdentified;
+import com.nedap.archie.rm.generic.PartyProxy;
+import com.nedap.archie.rm.support.identification.GenericId;
+import com.nedap.archie.rm.support.identification.PartyRef;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Set;
+import java.util.UUID;
+import java.util.function.BiFunction;
+import java.util.function.Consumer;
+import java.util.stream.Collectors;
+import org.ehrbase.api.exception.InternalServerException;
+import org.ehrbase.dao.access.interfaces.I_DomainAccess;
+import org.ehrbase.jooq.pg.enums.PartyType;
+import org.ehrbase.jooq.pg.tables.records.PartyIdentifiedRecord;
+import org.ehrbase.util.PartyUtils;
+import org.jooq.Result;
+
+/**
+ * Facade to interact with PartyProxy specialization
+ */
+public class PersistedPartyProxy {
+
+    I_DomainAccess domainAccess;
+
+<span class="nc" id="L50">    public PersistedPartyProxy(I_DomainAccess domainAccess) {</span>
+<span class="nc" id="L51">        this.domainAccess = domainAccess;</span>
+<span class="nc" id="L52">    }</span>
+
+    public UUID create(PartyProxy partyProxy, Short sysTenant) {
+<span class="nc bnc" id="L55" title="All 2 branches missed.">        if (PartyUtils.isPartySelf(partyProxy)) {</span>
+<span class="nc" id="L56">            return new PersistedPartySelf(domainAccess).store(partyProxy, sysTenant);</span>
+<span class="nc bnc" id="L57" title="All 2 branches missed.">        } else if (PartyUtils.isPartyRelated(partyProxy)) {</span>
+<span class="nc" id="L58">            return new PersistedPartyRelated(domainAccess).store(partyProxy, sysTenant);</span>
+<span class="nc bnc" id="L59" title="All 2 branches missed.">        } else if (PartyUtils.isPartyIdentified(partyProxy)) {</span>
+<span class="nc" id="L60">            return new PersistedPartyIdentified(domainAccess).store(partyProxy, sysTenant);</span>
+        } else {
+<span class="nc" id="L62">            throw new InternalServerException(</span>
+<span class="nc" id="L63">                    &quot;Unhandled Party type detected:&quot; + partyProxy.getClass().getSimpleName());</span>
+        }
+    }
+
+<span class="nc" id="L67">    private final BiFunction&lt;Result&lt;PartyIdentifiedRecord&gt;, PartyType, Set&lt;PartyIdentifiedRecord&gt;&gt; partyTypeFilter =</span>
+<span class="nc bnc" id="L68" title="All 2 branches missed.">            (result, pt) -&gt; result.stream().filter(r -&gt; r.getPartyType() == pt).collect(Collectors.toSet());</span>
+
+<span class="nc" id="L70">    private final Consumer&lt;Result&lt;PartyIdentifiedRecord&gt;&gt; partyTypeValidator =</span>
+<span class="nc" id="L71">            result -&gt; result.stream().forEach(p -&gt; {</span>
+<span class="nc bnc" id="L72" title="All 2 branches missed.">                switch (p.getPartyType()) {</span>
+                    case party_self:
+                    case party_identified:
+                    case party_related:
+<span class="nc" id="L76">                        return;</span>
+                    default:
+<span class="nc" id="L78">                        throw new InternalServerException(&quot;Inconsistent Party type detected:&quot; + p.getPartyRefType());</span>
+                }
+<span class="nc" id="L80">            });</span>
+
+    public Collection&lt;PartyProxy&gt; retrieveMany(List&lt;UUID&gt; uuids) {
+<span class="nc" id="L83">        Collection&lt;PartyProxy&gt; partyProxies = new ArrayList&lt;&gt;();</span>
+
+<span class="nc bnc" id="L85" title="All 2 branches missed.">        if (uuids.isEmpty()) return partyProxies;</span>
+
+<span class="nc" id="L87">        Result&lt;PartyIdentifiedRecord&gt; result = domainAccess</span>
+<span class="nc" id="L88">                .getContext()</span>
+<span class="nc" id="L89">                .selectFrom(PARTY_IDENTIFIED)</span>
+<span class="nc" id="L90">                .where(PARTY_IDENTIFIED.ID.in(uuids))</span>
+<span class="nc" id="L91">                .fetch();</span>
+
+<span class="nc" id="L93">        partyTypeValidator.accept(result);</span>
+
+<span class="nc" id="L95">        Set&lt;PartyIdentifiedRecord&gt; self = partyTypeFilter.apply(result, PartyType.party_self);</span>
+
+<span class="nc" id="L97">        List&lt;PartyProxy&gt; allParties = new PersistedPartySelf(domainAccess).renderMultiple(self);</span>
+
+<span class="nc" id="L99">        Set&lt;PartyIdentifiedRecord&gt; identified = partyTypeFilter.apply(result, PartyType.party_identified);</span>
+<span class="nc" id="L100">        allParties.addAll(new PersistedPartyIdentified(domainAccess).renderMultiple(identified));</span>
+
+<span class="nc" id="L102">        Set&lt;PartyIdentifiedRecord&gt; related = partyTypeFilter.apply(result, PartyType.party_related);</span>
+<span class="nc" id="L103">        allParties.addAll(new PersistedPartyRelated(domainAccess).renderMultiple(related));</span>
+
+<span class="nc" id="L105">        return allParties;</span>
+    }
+
+    public PartyProxy retrieve(UUID id) {
+<span class="nc" id="L109">        Iterator&lt;PartyProxy&gt; proxy = retrieveMany(List.of(id)).iterator();</span>
+<span class="nc bnc" id="L110" title="All 2 branches missed.">        return proxy.hasNext() ? proxy.next() : null;</span>
+    }
+
+    public UUID getOrCreate(PartyProxy partyProxy, Short sysTenant) {
+<span class="nc bnc" id="L114" title="All 2 branches missed.">        if (PartyUtils.isPartySelf(partyProxy)) {</span>
+<span class="nc" id="L115">            return new PersistedPartySelf(domainAccess).getOrCreate(partyProxy, sysTenant);</span>
+<span class="nc bnc" id="L116" title="All 2 branches missed.">        } else if (PartyUtils.isPartyRelated(partyProxy)) {</span>
+<span class="nc" id="L117">            return new PersistedPartyRelated(domainAccess).getOrCreate(partyProxy, sysTenant);</span>
+<span class="nc bnc" id="L118" title="All 2 branches missed.">        } else if (PartyUtils.isPartyIdentified(partyProxy)) {</span>
+<span class="nc" id="L119">            return new PersistedPartyIdentified(domainAccess).getOrCreate(partyProxy, sysTenant);</span>
+        } else {
+<span class="nc" id="L121">            throw new InternalServerException(</span>
+<span class="nc" id="L122">                    &quot;Unhandled Party type detected:&quot; + partyProxy.getClass().getSimpleName());</span>
+        }
+    }
+
+    /**
+     * Get or create a PartyIdentified instance with the given parameters.
+     */
+    public UUID getOrCreate(
+            String name,
+            String code,
+            String scheme,
+            String namespace,
+            String type,
+            List&lt;DvIdentifier&gt; identifiers,
+            Short sysTenant) {
+        // Check conformance to openEHR spec
+<span class="nc bnc" id="L138" title="All 4 branches missed.">        if (identifiers == null || identifiers.isEmpty()) {</span>
+<span class="nc" id="L139">            throw new IllegalArgumentException(&quot;Can't create PartyIdentified with invalid list of identifiers.&quot;);</span>
+        }
+<span class="nc" id="L141">        identifiers.forEach(dv -&gt; {</span>
+<span class="nc bnc" id="L142" title="All 2 branches missed.">            if (!isValidDvIdentifier(dv))</span>
+<span class="nc" id="L143">                throw new IllegalArgumentException(&quot;Can't create PartyIdentified with an invalid identifier.&quot;);</span>
+<span class="nc" id="L144">        });</span>
+        // Create and persist object
+<span class="nc" id="L146">        var partyIdentified =</span>
+<span class="nc" id="L147">                new PartyIdentified(new PartyRef(new GenericId(code, scheme), namespace, type), name, identifiers);</span>
+<span class="nc" id="L148">        return getOrCreate(partyIdentified, sysTenant);</span>
+    }
+
+    /**
+     * Checks conformance to openEHR spec.&lt;br&gt;
+     * A DvIdentifier needs to have an ID.
+     * @param identifier Input object
+     * @return True if minimal valid object instance
+     */
+    private boolean isValidDvIdentifier(DvIdentifier identifier) {
+<span class="nc bnc" id="L158" title="All 4 branches missed.">        return (identifier.getId() != null) &amp;&amp; (!identifier.getId().isBlank());</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.7.202105040129</span></div></body></html>

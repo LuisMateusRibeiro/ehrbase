@@ -1,0 +1,469 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../../jacoco-resources/report.gif" type="image/gif"/><title>I_CompositionAccess.java</title><link rel="stylesheet" href="../../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../../index.html" class="el_report">Coverage with Unit Tests</a> &gt; <a href="../index.html" class="el_bundle">service</a> &gt; <a href="index.source.html" class="el_package">org.ehrbase.dao.access.interfaces</a> &gt; <span class="el_source">I_CompositionAccess.java</span></div><h1>I_CompositionAccess.java</h1><pre class="source lang-java linenums">/*
+ * Copyright (c) 2019 vitasystems GmbH and Hannover Medical School.
+ *
+ * This file is part of project EHRbase
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     https://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.ehrbase.dao.access.interfaces;
+
+import static org.ehrbase.jooq.pg.Tables.COMPOSITION;
+import static org.ehrbase.jooq.pg.Tables.CONCEPT;
+import static org.ehrbase.jooq.pg.Tables.EVENT_CONTEXT;
+import static org.ehrbase.jooq.pg.Tables.IDENTIFIER;
+import static org.ehrbase.jooq.pg.Tables.LANGUAGE;
+import static org.ehrbase.jooq.pg.Tables.PARTICIPATION;
+import static org.ehrbase.jooq.pg.Tables.PARTY_IDENTIFIED;
+import static org.ehrbase.jooq.pg.Tables.TERRITORY;
+
+import com.nedap.archie.rm.archetyped.FeederAudit;
+import com.nedap.archie.rm.archetyped.Link;
+import com.nedap.archie.rm.composition.Composition;
+import com.nedap.archie.rm.composition.EventContext;
+import com.nedap.archie.rm.support.identification.ObjectVersionId;
+import java.sql.Timestamp;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.UUID;
+import org.ehrbase.api.exception.InternalServerException;
+import org.ehrbase.api.exception.ObjectNotFoundException;
+import org.ehrbase.dao.access.jooq.CompositionAccess;
+import org.ehrbase.ehr.knowledge.I_KnowledgeCache;
+import org.ehrbase.jooq.pg.tables.records.CompositionHistoryRecord;
+import org.ehrbase.jooq.pg.tables.records.CompositionRecord;
+import org.ehrbase.jooq.pg.tables.records.ConceptRecord;
+import org.ehrbase.jooq.pg.tables.records.EventContextRecord;
+import org.ehrbase.jooq.pg.tables.records.IdentifierRecord;
+import org.ehrbase.jooq.pg.tables.records.ParticipationRecord;
+import org.ehrbase.jooq.pg.tables.records.PartyIdentifiedRecord;
+import org.ehrbase.jooq.pg.tables.records.TerritoryRecord;
+import org.jooq.Record1;
+import org.jooq.Result;
+import org.jooq.Table;
+import org.jooq.exception.DataAccessException;
+
+/**
+ * Composition Access Layer Interface&lt;br&gt;
+ * Interface CRUD and specific methods
+ */
+public interface I_CompositionAccess extends I_VersionedCRUD, I_Compensatable {
+
+    // definitions of aliases used in joins
+    String COMPOSITION_JOIN = &quot;composition_join&quot;;
+    String COMPOSER_JOIN = &quot;composer_ref&quot;;
+    String COMPOSER_ID = &quot;composer_id&quot;;
+    String FACILITY_JOIN = &quot;facility_ref&quot;;
+    String FACILITY_ID = &quot;facility_id&quot;;
+    String EVENT_CONTEXT_JOIN = &quot;event_context_ref&quot;;
+    String PARTICIPATION_JOIN = &quot;participation_ref&quot;;
+    String PERFORMER_JOIN = &quot;performer_ref&quot;;
+    String TERRITORY_JOIN = &quot;territory_ref&quot;;
+    String CONCEPT_JOIN = &quot;concept_ref&quot;;
+
+    String F_VERSION = &quot;version&quot;;
+    String F_COMPOSITION_ID = &quot;composition_id&quot;;
+    String F_ENTRY = &quot;jsonb_entry&quot;;
+    String F_ENTRY_TEMPLATE = &quot;template_id&quot;;
+    String F_LANGUAGE = &quot;language&quot;;
+    String F_TERRITORY = &quot;territory&quot;;
+    String F_TERRITORY_CODE = &quot;territory_code&quot;;
+    String F_COMPOSER_NAME = &quot;composer_name&quot;;
+    String F_COMPOSER_REF_VALUE = &quot;composer_ref_value&quot;;
+    String F_COMPOSER_REF_SCHEME = &quot;composer_ref_scheme&quot;;
+    String F_COMPOSER_REF_NAMESPACE = &quot;composer_ref_namespace&quot;;
+    String F_COMPOSER_REF_TYPE = &quot;composer_ref_type&quot;;
+    String F_COMPOSER_ID_VALUE = &quot;composer_id_value&quot;;
+    String F_COMPOSER_ID_ISSUER = &quot;composer_id_issuer&quot;;
+    String F_COMPOSER_ID_TYPE_NAME = &quot;composer_id_type_name&quot;;
+    String F_CONTEXT_START_TIME = &quot;context_start_time&quot;;
+    String F_CONTEXT_START_TIME_TZID = &quot;context_start_time_tzid&quot;;
+    String F_CONTEXT_END_TIME = &quot;context_end_time&quot;;
+    String F_CONTEXT_END_TIME_TZID = &quot;context_end_time_tzid&quot;;
+    String F_CONTEXT_LOCATION = &quot;context_location&quot;;
+    String F_CONTEXT_SETTING = &quot;context_setting&quot;;
+    String F_CONTEXT_OTHER_CONTEXT = &quot;context_other_context&quot;;
+    String F_FACILITY_NAME = &quot;facility_name&quot;;
+    String F_FACILITY_REF_VALUE = &quot;facility_ref_value&quot;;
+    String F_FACILITY_REF_SCHEME = &quot;facility_ref_scheme&quot;;
+    String F_FACILITY_REF_NAMESPACE = &quot;facility_ref_namespace&quot;;
+    String F_FACILITY_REF_TYPE = &quot;facility_ref_type&quot;;
+    String F_FACILITY_ID_VALUE = &quot;facility_id_value&quot;;
+    String F_FACILITY_ID_ISSUER = &quot;facility_id_issuer&quot;;
+    String F_FACILITY_ID_TYPE_NAME = &quot;facility_id_type_name&quot;;
+    String F_PARTICIPATION_FUNCTION = &quot;participation_function&quot;;
+    String F_PARTICIPATION_MODE = &quot;participation_mode&quot;;
+    String F_PARTICIPATION_START_TIME = &quot;participation_start_time&quot;;
+    String F_PARTICIPATION_START_TIME_TZID = &quot;participation_start_time_tzid&quot;;
+    String F_PERFORMER_NAME = &quot;performer_name&quot;;
+    String F_PERFORMER_REF_VALUE = &quot;performer_ref_value&quot;;
+    String F_PERFORMER_REF_SCHEME = &quot;performer_ref_scheme&quot;;
+    String F_PERFORMER_REF_NAMESPACE = &quot;performer_ref_namespace&quot;;
+    String F_PERFORMER_REF_TYPE = &quot;performer_ref_type&quot;;
+    String F_PERFORMER_ID_VALUE = &quot;performer_id_value&quot;;
+    String F_PERFORMER_ID_ISSUER = &quot;performer_id_issuer&quot;;
+    String F_PERFORMER_ID_TYPE_NAME = &quot;performer_id_type_name&quot;;
+    String F_CONCEPT_ID = &quot;concept_id&quot;;
+    String F_CONCEPT_DESCRIPTION = &quot;concept_description&quot;;
+
+<span class="nc" id="L119">    Table&lt;CompositionRecord&gt; compositionRef = COMPOSITION.as(COMPOSITION_JOIN);</span>
+<span class="nc" id="L120">    Table&lt;PartyIdentifiedRecord&gt; composerRef = PARTY_IDENTIFIED.as(COMPOSER_JOIN);</span>
+<span class="nc" id="L121">    Table&lt;IdentifierRecord&gt; composerId = IDENTIFIER.as(COMPOSER_ID);</span>
+<span class="nc" id="L122">    Table&lt;PartyIdentifiedRecord&gt; facilityRef = PARTY_IDENTIFIED.as(FACILITY_JOIN);</span>
+<span class="nc" id="L123">    Table&lt;IdentifierRecord&gt; facilityId = IDENTIFIER.as(FACILITY_ID);</span>
+<span class="nc" id="L124">    Table&lt;EventContextRecord&gt; eventContextRef = EVENT_CONTEXT.as(EVENT_CONTEXT_JOIN);</span>
+<span class="nc" id="L125">    Table&lt;ParticipationRecord&gt; participationRef = PARTICIPATION.as(PARTICIPATION_JOIN);</span>
+<span class="nc" id="L126">    Table&lt;PartyIdentifiedRecord&gt; performerRef = PARTY_IDENTIFIED.as(PERFORMER_JOIN);</span>
+<span class="nc" id="L127">    Table&lt;TerritoryRecord&gt; territoryRef = TERRITORY.as(TERRITORY_JOIN);</span>
+<span class="nc" id="L128">    Table&lt;ConceptRecord&gt; conceptRef = CONCEPT.as(CONCEPT_JOIN);</span>
+
+    /**
+     * Get a new Composition Access Instance
+     *
+     * @param domain      SQL context, knowledge
+     * @param composition a valid RM composition
+     * @param ehrId       the EHR holding this instance
+     * @return {@link I_CompositionAccess} object of the new access instance
+     * @throws IllegalArgumentException when retrieval failed because of wrong input
+     */
+    static I_CompositionAccess getNewInstance(
+            I_DomainAccess domain, Composition composition, UUID ehrId, Short sysTenant) {
+<span class="nc" id="L141">        return new CompositionAccess(domain, composition, ehrId, sysTenant);</span>
+    }
+
+    /**
+     * Retrieve composition(s) for an identified version
+     *
+     * @param domainAccess SQL context
+     * @param id           the versioned_object uuid
+     * @param version      version number
+     * @return {@link I_CompositionAccess} object of the matching access instance
+     * @throws IllegalArgumentException when version number is not greater 0
+     * @throws ObjectNotFoundException  when not matching composition can't be found
+     */
+    static I_CompositionAccess retrieveCompositionVersion(I_DomainAccess domainAccess, UUID id, int version) {
+<span class="nc" id="L155">        return CompositionAccess.retrieveCompositionVersion(domainAccess, id, version);</span>
+    }
+
+    /**
+     * Calculate the version corresponding to a {@link com.nedap.archie.rm.ehr.VersionedComposition}  which is the closest in time (before) the {@link Timestamp} provided.
+     *
+     * @param domainAccess    The {@link I_DomainAccess} containing the persistence information and DB connection parameters for persisting a composition.
+     * @param vCompositionUid The {@link UUID} corresponding to a {@link com.nedap.archie.rm.ehr.VersionedComposition}
+     * @param timeCommitted   {@link Timestamp} of commit
+     * @return version number
+     * @throws IllegalArgumentException if no version is available for the {@link Timestamp} provided.
+     * @throws InternalServerException  when SQL statements fail due to internal problems.
+     */
+    static int getVersionFromTimeStamp(I_DomainAccess domainAccess, UUID vCompositionUid, Timestamp timeCommitted) {
+<span class="nc" id="L169">        return CompositionAccess.getVersionFromTimeStamp(domainAccess, vCompositionUid, timeCommitted);</span>
+    }
+
+    /**
+     * Returns the instance of a {@link com.nedap.archie.rm.ehr.VersionedComposition} corresponding to the version which is the closest in time before the timeCommitted provided.
+     *
+     * @param domainAccess    {@link I_DomainAccess} with the persistence SQL Context and knowledge cache
+     * @param compositionUid {@link UUID} that identifies the composition.
+     * @param timeCommitted   {java.sql.Timestamp} that indicates the point in time to search version for the composition backwards.
+     * @return the number of the version that is the  closest  in time (before) the timeCommitted parameter provided. If a null timeCommitted is provided the latest composition will be returned.
+     * @throws IllegalArgumentException
+     * @throws InternalServerException
+     * @throws ObjectNotFoundException
+     */
+    static I_CompositionAccess retrieveInstanceByTimestamp(
+            I_DomainAccess domainAccess, UUID compositionUid, Timestamp timeCommitted) {
+<span class="nc" id="L185">        return CompositionAccess.retrieveInstanceByTimestamp(domainAccess, compositionUid, timeCommitted);</span>
+    }
+
+    /**
+     * Retrieve a composition access instance from the persistence layer
+     *
+     * @param domainAccess SQL context, knowledge
+     * @param id           a composition uuid
+     * @return a valid {@link I_CompositionAccess}
+     */
+    static I_CompositionAccess retrieveInstance(I_DomainAccess domainAccess, UUID id) {
+<span class="nc" id="L196">        return CompositionAccess.retrieveInstance(domainAccess, id);</span>
+    }
+
+    /**
+     * Retrieve a map of composition accesses for all compositions referencing a contribution
+     *
+     * @param domainAccess   SQL context, knowledge
+     * @param contributionId contribution object uuid
+     * @param node Name of local node, for creation of object version ID
+     * @return a map of {@link I_CompositionAccess} and their version ID, that match the condition
+     * @throws IllegalArgumentException on DB inconsistency
+     */
+    static Map&lt;ObjectVersionId, I_CompositionAccess&gt; retrieveInstancesInContribution(
+            I_DomainAccess domainAccess, UUID contributionId, String node) {
+<span class="nc" id="L210">        return CompositionAccess.retrieveCompositionsInContribution(domainAccess, contributionId, node);</span>
+    }
+
+    /**
+     * check if a composition has a previous version in history
+     *
+     * @param domainAccess
+     * @param compositionId
+     * @return
+     */
+    static boolean hasPreviousVersion(I_DomainAccess domainAccess, UUID compositionId) {
+<span class="nc" id="L221">        return CompositionAccess.hasPreviousVersion(domainAccess, compositionId);</span>
+    }
+
+    /**
+     * Creates Map containing all versions as their Access object with their matching version number.
+     *
+     * @param domainAccess  Data Access
+     * @param compositionId Given composition ID
+     * @return Map referencing all versions by their version number
+     */
+    static Map&lt;Integer, I_CompositionAccess&gt; getVersionMapOfComposition(
+            I_DomainAccess domainAccess, UUID compositionId) {
+<span class="nc" id="L233">        return CompositionAccess.getVersionMapOfComposition(domainAccess, compositionId);</span>
+    }
+
+    /**
+     * retrieve the number of versions for this composition or 1 if no history present
+     *
+     * @param domainAccess
+     * @param compositionId
+     * @return
+     */
+    static Integer getLastVersionNumber(I_DomainAccess domainAccess, UUID compositionId) {
+<span class="nc" id="L244">        return CompositionAccess.getLastVersionNumber(domainAccess, compositionId);</span>
+    }
+
+    // TODO: doc! what's the logic behind the returned int code?
+    static int fetchTerritoryCode(I_DomainAccess domainAccess, String territoryAsString) {
+<span class="nc" id="L249">        I_KnowledgeCache.TerritoryValue territory = domainAccess</span>
+<span class="nc" id="L250">                .getKnowledgeManager()</span>
+<span class="nc" id="L251">                .getTerritoryCodeByTwoLetterCode(territoryAsString, tlc -&gt; domainAccess</span>
+<span class="nc" id="L252">                        .getContext()</span>
+<span class="nc" id="L253">                        .fetchOptional(TERRITORY, TERRITORY.TWOLETTER.equal(territoryAsString))</span>
+<span class="nc" id="L254">                        .map(r -&gt; new I_KnowledgeCache.TerritoryValue(</span>
+<span class="nc" id="L255">                                r.getCode(), r.getTwoletter(), r.getThreeletter(), r.getText()))</span>
+<span class="nc" id="L256">                        .orElse(null));</span>
+<span class="nc bnc" id="L257" title="All 2 branches missed.">        if (territory == null) return -1;</span>
+<span class="nc" id="L258">        return territory.getCode();</span>
+    }
+
+    static boolean isValidLanguageCode(I_DomainAccess domainAccess, String languageCode) {
+
+<span class="nc" id="L263">        I_KnowledgeCache.LanguageValue language = domainAccess</span>
+<span class="nc" id="L264">                .getKnowledgeManager()</span>
+<span class="nc" id="L265">                .getLanguageByCode(languageCode, lc -&gt; domainAccess</span>
+<span class="nc" id="L266">                        .getContext()</span>
+<span class="nc" id="L267">                        .fetchOptional(LANGUAGE, LANGUAGE.CODE.equal(lc))</span>
+<span class="nc" id="L268">                        .map(r -&gt; new I_KnowledgeCache.LanguageValue(r.getCode(), r.getDescription()))</span>
+<span class="nc" id="L269">                        .orElse(null));</span>
+<span class="nc bnc" id="L270" title="All 2 branches missed.">        return language != null;</span>
+    }
+
+    static UUID getEhrId(I_DomainAccess domainAccess, UUID compositionId) {
+<span class="nc" id="L274">        return Optional.ofNullable(domainAccess</span>
+<span class="nc" id="L275">                        .getContext()</span>
+<span class="nc" id="L276">                        .select(COMPOSITION.EHR_ID)</span>
+<span class="nc" id="L277">                        .from(COMPOSITION)</span>
+<span class="nc" id="L278">                        .where(COMPOSITION.ID.equal(compositionId))</span>
+<span class="nc" id="L279">                        .fetchOne())</span>
+<span class="nc" id="L280">                .map(Record1::component1)</span>
+<span class="nc" id="L281">                .orElse(null);</span>
+    }
+
+    Timestamp getSysTransaction();
+
+    /**
+     * Gets time_committed from contribution of composition.
+     *
+     * @return Timestamp of time of commitment
+     */
+    Timestamp getTimeCommitted();
+
+    /**
+     * get the composition Id
+     *
+     * @return
+     */
+    UUID getId();
+
+    /**
+     * get the EHR id to which this composition belongs to
+     *
+     * @return {@link UUID}
+     */
+    UUID getEhrid();
+
+    /**
+     * set the EHR id
+     *
+     * @param ehrId {@link UUID}
+     */
+    void setEhrid(UUID ehrId);
+
+    /**
+     * get the composer Id
+     *
+     * @return {@link UUID}
+     */
+    UUID getComposerId();
+
+    /**
+     * set the composer id
+     *
+     * @param composerId {@link UUID}
+     */
+    void setComposerId(UUID composerId);
+
+    /**
+     * get the event context id
+     *
+     * @return Optional with ID if it exists, otherwise empty Optional
+     */
+    Optional&lt;UUID&gt; getContextId();
+
+    /**
+     * get the contribution id
+     *
+     * @return {@link UUID}
+     */
+    UUID getContributionId();
+
+    /**
+     * get the language code for this composition (eg. 'en', 'fr' etc.)
+     *
+     * @return language code as string
+     */
+    String getLanguageCode();
+
+    /**
+     * set the language code
+     *
+     * @param code String
+     */
+    void setLanguageCode(String code);
+
+    /**
+     * FIXME: bug? comment says 2-letter while methods are saying Integer
+     * get the 2-letters country code
+     *
+     * @return
+     */
+    Integer getTerritoryCode();
+
+    /**
+     * FIXME: bug? comment says 2-letter while methods are saying Integer
+     * set the 2-letters territory code
+     *
+     * @param code String
+     */
+    void setTerritoryCode(Integer code);
+
+    String getFeederAudit();
+
+    void setFeederAudit(FeederAudit feederAudit);
+
+    void setLinks(List&lt;Link&gt; links);
+
+    String getLinks();
+
+    /**
+     * set the event context id
+     *
+     * @param contextId {@link UUID}
+     * @throws DataAccessException on problem updating context
+     */
+    void setContextCompositionId(UUID contextId);
+
+    /**
+     * Get the entry linked to the composition.
+     *
+     * @return the entry
+     * @see I_EntryAccess
+     */
+    I_EntryAccess getContent();
+
+    void setContent(I_EntryAccess content);
+
+    /**
+     * set the contribution id for this composition
+     *
+     * @param contributionId
+     */
+    void setContributionId(UUID contributionId);
+
+    void setCompositionRecord(CompositionRecord record);
+
+    /**
+     * Set the record via converting from a history record.
+     * @param record History record
+     */
+    void setCompositionRecord(CompositionHistoryRecord record);
+
+    /**
+     * @throws IllegalArgumentException when handling of record failed
+     */
+    void setCompositionRecord(Result&lt;?&gt; records);
+
+    void setComposition(Composition composition);
+
+    void setContributionAccess(I_ContributionAccess contributionAccess);
+
+    void setAuditDetailsAccess(I_AuditDetailsAccess auditDetailsAccess);
+
+    Integer getVersion();
+
+    /**
+     * @throws IllegalArgumentException when seeking language code, territory code or composer ID failed
+     */
+    void updateCompositionData(Composition newComposition);
+
+    void setContext(EventContext historicalEventContext);
+
+    UUID getAuditDetailsId();
+
+    I_AuditDetailsAccess getAuditDetailsAccess();
+
+    void setAuditDetailsId(UUID auditId);
+
+    /**
+     * Checks if the given versionedObjectID points to an existing composition.
+     * @param domainAccess Data access object
+     * @param versionedObjectId ID to be checked
+     * @return True if exists
+     * @throws ObjectNotFoundException if ID does not exist
+     */
+    static boolean exists(I_DomainAccess domainAccess, UUID versionedObjectId) {
+<span class="nc" id="L447">        return CompositionAccess.exists(domainAccess, versionedObjectId);</span>
+    }
+
+    /**
+     * Checks if given composition ID is ID of a logically deleted composition.
+     * @param domainAccess Data access object
+     * @param versionedObjectId ID to be checked
+     * @return True if deleted, false if not
+     * @throws ObjectNotFoundException If no composition entries at all can be found
+     * @throws InternalServerException If DB is inconsistent or some other problem occurs
+     */
+    static boolean isDeleted(I_DomainAccess domainAccess, UUID versionedObjectId) {
+<span class="nc" id="L459">        return CompositionAccess.isDeleted(domainAccess, versionedObjectId);</span>
+    }
+
+    /**
+     * Invoke physical deletion.
+     */
+    void adminDelete();
+
+    UUID getAttestationRef();
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.7.202105040129</span></div></body></html>

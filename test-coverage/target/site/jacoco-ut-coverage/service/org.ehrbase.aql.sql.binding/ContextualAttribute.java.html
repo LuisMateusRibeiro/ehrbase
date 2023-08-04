@@ -1,0 +1,74 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../../jacoco-resources/report.gif" type="image/gif"/><title>ContextualAttribute.java</title><link rel="stylesheet" href="../../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../../index.html" class="el_report">Coverage with Unit Tests</a> &gt; <a href="../index.html" class="el_bundle">service</a> &gt; <a href="index.source.html" class="el_package">org.ehrbase.aql.sql.binding</a> &gt; <span class="el_source">ContextualAttribute.java</span></div><h1>ContextualAttribute.java</h1><pre class="source lang-java linenums">/*
+ * Copyright (c) 2019 vitasystems GmbH and Hannover Medical School.
+ *
+ * This file is part of project EHRbase
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     https://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.ehrbase.aql.sql.binding;
+
+import java.util.Iterator;
+import org.ehrbase.aql.definition.I_VariableDefinition;
+import org.ehrbase.aql.sql.queryimpl.*;
+
+/**
+ * convert a field that is not identied as an EHR or a COMPOSITION (content or attribute). For example a CLUSTER
+ * in other_context
+ */
+@SuppressWarnings({&quot;java:S3776&quot;, &quot;java:S3740&quot;, &quot;java:S1452&quot;})
+public class ContextualAttribute {
+
+    private final CompositionAttributeQuery compositionAttributeQuery;
+    private final JsonbEntryQuery jsonbEntryQuery;
+    private final IQueryImpl.Clause clause;
+
+    public ContextualAttribute(
+            CompositionAttributeQuery compositionAttributeQuery,
+            JsonbEntryQuery jsonbEntryQuery,
+<span class="nc" id="L38">            IQueryImpl.Clause clause) {</span>
+<span class="nc" id="L39">        this.compositionAttributeQuery = compositionAttributeQuery;</span>
+<span class="nc" id="L40">        this.jsonbEntryQuery = jsonbEntryQuery;</span>
+<span class="nc" id="L41">        this.clause = clause;</span>
+<span class="nc" id="L42">    }</span>
+
+    public MultiFields toSql(String templateId, I_VariableDefinition variableDefinition)
+            throws UnknownVariableException {
+<span class="nc" id="L46">        String inTemplatePath =</span>
+<span class="nc" id="L47">                compositionAttributeQuery.variableTemplatePath(templateId, variableDefinition.getIdentifier());</span>
+<span class="nc bnc" id="L48" title="All 2 branches missed.">        if (inTemplatePath.startsWith(&quot;/&quot;))</span>
+<span class="nc" id="L49">            inTemplatePath = inTemplatePath.substring(</span>
+                    1); // conventionally, composition attribute path have the leading '/' striped.
+<span class="nc" id="L51">        String originalPath = variableDefinition.getPath();</span>
+<span class="nc" id="L52">        variableDefinition.setPath(</span>
+<span class="nc bnc" id="L53" title="All 2 branches missed.">                inTemplatePath + (variableDefinition.getPath() == null ? &quot;&quot; : &quot;/&quot; + variableDefinition.getPath()));</span>
+<span class="nc" id="L54">        CompositionAttribute compositionAttribute =</span>
+                new CompositionAttribute(compositionAttributeQuery, jsonbEntryQuery, clause);
+<span class="nc" id="L56">        MultiFields fields =</span>
+<span class="nc" id="L57">                compositionAttribute.toSql(variableDefinition, templateId, variableDefinition.getIdentifier());</span>
+
+<span class="nc bnc" id="L59" title="All 2 branches missed.">        if (clause.equals(IQueryImpl.Clause.SELECT)) {</span>
+<span class="nc" id="L60">            for (Iterator&lt;QualifiedAqlField&gt; qualifiedAqlFieldIterator = fields.iterator();</span>
+<span class="nc bnc" id="L61" title="All 2 branches missed.">                    qualifiedAqlFieldIterator.hasNext(); ) {</span>
+<span class="nc" id="L62">                QualifiedAqlField field = qualifiedAqlFieldIterator.next();</span>
+<span class="nc" id="L63">                variableDefinition.setPath(originalPath);</span>
+<span class="nc bnc" id="L64" title="All 2 branches missed.">                if (originalPath != null) {</span>
+<span class="nc bnc" id="L65" title="All 2 branches missed.">                    if (variableDefinition.getAlias() != null)</span>
+<span class="nc" id="L66">                        field.setField(field.getSQLField().as(variableDefinition.getAlias()));</span>
+<span class="nc" id="L67">                    else field.setField(field.getSQLField().as(&quot;/&quot; + originalPath));</span>
+<span class="nc" id="L68">                } else field.setField(field.getSQLField().as(variableDefinition.getIdentifier()));</span>
+<span class="nc" id="L69">            }</span>
+        }
+<span class="nc" id="L71">        return fields;</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.7.202105040129</span></div></body></html>

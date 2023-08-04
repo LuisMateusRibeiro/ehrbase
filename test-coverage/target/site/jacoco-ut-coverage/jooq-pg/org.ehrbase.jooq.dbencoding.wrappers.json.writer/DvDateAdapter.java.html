@@ -1,0 +1,67 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../../jacoco-resources/report.gif" type="image/gif"/><title>DvDateAdapter.java</title><link rel="stylesheet" href="../../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../../index.html" class="el_report">Coverage with Unit Tests</a> &gt; <a href="../index.html" class="el_bundle">jooq-pg</a> &gt; <a href="index.source.html" class="el_package">org.ehrbase.jooq.dbencoding.wrappers.json.writer</a> &gt; <span class="el_source">DvDateAdapter.java</span></div><h1>DvDateAdapter.java</h1><pre class="source lang-java linenums">/*
+ * Copyright (c) 2019 vitasystems GmbH and Hannover Medical School.
+ *
+ * This file is part of project EHRbase
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     https://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.ehrbase.jooq.dbencoding.wrappers.json.writer;
+
+import com.google.gson.stream.JsonReader;
+import com.google.gson.stream.JsonWriter;
+import com.nedap.archie.rm.datavalues.quantity.datetime.DvDate;
+import java.io.IOException;
+import org.ehrbase.jooq.dbencoding.attributes.datavalues.datetime.date.DvDateAttributes;
+import org.ehrbase.jooq.dbencoding.wrappers.json.I_DvTypeAdapter;
+import org.ehrbase.openehr.sdk.util.ObjectSnakeCase;
+
+/**
+ * GSON adapter for DvDateTime
+ * Required since JSON does not support natively a DateTime data type
+ */
+public class DvDateAdapter extends DvTypeAdapter&lt;DvDate&gt; {
+
+    public DvDateAdapter(AdapterType adapterType) {
+<span class="nc" id="L35">        super(adapterType);</span>
+<span class="nc" id="L36">    }</span>
+
+<span class="fc" id="L38">    public DvDateAdapter() {}</span>
+
+    @Override
+    public DvDate read(JsonReader arg0) {
+<span class="nc" id="L42">        return null;</span>
+    }
+
+    @Override
+    public void write(JsonWriter writer, DvDate dvalue) throws IOException {
+<span class="nc bnc" id="L47" title="All 2 branches missed.">        if (dvalue == null) {</span>
+<span class="nc" id="L48">            writer.nullValue();</span>
+<span class="nc" id="L49">            return;</span>
+        }
+
+<span class="nc" id="L52">        DvDateAttributes dvDateAttributes = DvDateAttributes.instanceFromValue(dvalue);</span>
+
+<span class="nc bnc" id="L54" title="All 2 branches missed.">        if (adapterType == I_DvTypeAdapter.AdapterType.PG_JSONB) {</span>
+<span class="nc" id="L55">            writer.beginObject();</span>
+<span class="nc" id="L56">            writer.name(VALUE).value(dvDateAttributes.getValueAsProvided().toString());</span>
+<span class="nc" id="L57">            writer.name(EPOCH_OFFSET).value(dvDateAttributes.getTimeStamp());</span>
+<span class="nc" id="L58">            writer.endObject();</span>
+<span class="nc bnc" id="L59" title="All 2 branches missed.">        } else if (adapterType == I_DvTypeAdapter.AdapterType.RAW_JSON) {</span>
+<span class="nc" id="L60">            writer.beginObject();</span>
+<span class="nc" id="L61">            writer.name(I_DvTypeAdapter.TAG_CLASS_RAW_JSON).value(new ObjectSnakeCase(dvalue).camelToUpperSnake());</span>
+<span class="nc" id="L62">            writer.name(VALUE).value(dvalue.getValue().toString());</span>
+<span class="nc" id="L63">            writer.endObject();</span>
+        }
+<span class="nc" id="L65">    }</span>
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.7.202105040129</span></div></body></html>

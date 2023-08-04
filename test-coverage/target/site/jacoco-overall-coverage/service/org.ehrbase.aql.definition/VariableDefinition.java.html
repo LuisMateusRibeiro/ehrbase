@@ -1,0 +1,225 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../../jacoco-resources/report.gif" type="image/gif"/><title>VariableDefinition.java</title><link rel="stylesheet" href="../../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../../index.html" class="el_report">Overall Coverage</a> &gt; <a href="../index.html" class="el_bundle">service</a> &gt; <a href="index.source.html" class="el_package">org.ehrbase.aql.definition</a> &gt; <span class="el_source">VariableDefinition.java</span></div><h1>VariableDefinition.java</h1><pre class="source lang-java linenums">/*
+ * Copyright (c) 2019 vitasystems GmbH and Hannover Medical School.
+ *
+ * This file is part of project EHRbase
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     https://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.ehrbase.aql.definition;
+
+import java.util.*;
+import org.jooq.DataType;
+
+/**
+ * Container of a variable (symbol) with its path and alias (AS 'alias')
+ * Created by christian on 5/3/2016.
+ */
+public class VariableDefinition implements I_VariableDefinition {
+
+    private String path;
+    private String alias;
+<span class="fc" id="L31">    private boolean isVoidAlias = true;</span>
+    private String identifier;
+    private String substituteFieldVariable;
+    private boolean isDistinct;
+    private boolean isHidden;
+<span class="fc" id="L36">    private Map&lt;String, Set&lt;LateralJoinDefinition&gt;&gt; lateralJoinDefinitions = new HashMap&lt;&gt;();</span>
+    private PredicateDefinition predicateDefinition;
+    private DataType selectDataType;
+
+<span class="fc" id="L40">    public VariableDefinition(String path, String alias, String identifier, boolean isDistinct) {</span>
+<span class="fc" id="L41">        this.path = path;</span>
+<span class="fc" id="L42">        this.alias = alias;</span>
+<span class="fc" id="L43">        this.identifier = identifier;</span>
+<span class="fc" id="L44">        this.isDistinct = isDistinct;</span>
+<span class="fc" id="L45">        this.isHidden = false;</span>
+<span class="fc" id="L46">    }</span>
+
+<span class="fc" id="L48">    public VariableDefinition(</span>
+            String path, String alias, String identifier, boolean isDistinct, PredicateDefinition predicateDefinition) {
+<span class="fc" id="L50">        this.path = path;</span>
+<span class="fc" id="L51">        this.alias = alias;</span>
+<span class="fc" id="L52">        this.identifier = identifier;</span>
+<span class="fc" id="L53">        this.isDistinct = isDistinct;</span>
+<span class="fc" id="L54">        this.isHidden = false;</span>
+<span class="fc" id="L55">        this.predicateDefinition = predicateDefinition;</span>
+<span class="fc" id="L56">    }</span>
+
+    /**
+     * used whenever a variable is added for technical reason (f.e. a order by field not present in the select clause)
+     * @param path
+     * @param alias
+     * @param identifier
+     * @param isDistinct
+     * @param isHidden
+     */
+<span class="fc" id="L66">    public VariableDefinition(String path, String alias, String identifier, boolean isDistinct, boolean isHidden) {</span>
+<span class="fc" id="L67">        this.path = path;</span>
+<span class="fc" id="L68">        this.alias = alias;</span>
+<span class="fc" id="L69">        this.identifier = identifier;</span>
+<span class="fc" id="L70">        this.isDistinct = isDistinct;</span>
+<span class="fc" id="L71">        this.isHidden = isHidden;</span>
+<span class="fc" id="L72">    }</span>
+
+    @Override
+    public String getPath() {
+<span class="fc" id="L76">        return path;</span>
+    }
+
+    @Override
+    public String getAlias() {
+<span class="fc" id="L81">        return alias;</span>
+    }
+
+    @Override
+    public String getIdentifier() {
+<span class="fc" id="L86">        return identifier;</span>
+    }
+
+    @Override
+    public String toString() {
+<span class="fc" id="L91">        return identifier + &quot;::&quot; + path;</span>
+    }
+
+    @Override
+    public boolean isConstant() {
+<span class="fc" id="L96">        return false;</span>
+    }
+
+    @Override
+    public boolean isLateralJoin(String templateId) {
+<span class="fc bfc" id="L101" title="All 4 branches covered.">        return !lateralJoinDefinitions.isEmpty() &amp;&amp; lateralJoinDefinitions.get(templateId) != null;</span>
+    }
+
+    @Override
+    public Set&lt;LateralJoinDefinition&gt; getLateralJoinDefinitions(String templateId) {
+<span class="fc" id="L106">        return lateralJoinDefinitions.get(templateId);</span>
+    }
+
+    @Override
+    public LateralJoinDefinition getLateralJoinDefinition(String templateId, int index) {
+<span class="fc" id="L111">        Set&lt;LateralJoinDefinition&gt; definitions = getLateralJoinDefinitions(templateId);</span>
+<span class="pc bpc" id="L112" title="1 of 2 branches missed.">        if (index &gt; definitions.size() - 1) return null;</span>
+<span class="fc" id="L113">        return definitions.toArray(new LateralJoinDefinition[] {})[index];</span>
+    }
+
+    @Override
+    public int getLateralJoinsSize(String templateId) {
+<span class="pc bpc" id="L118" title="1 of 2 branches missed.">        if (isLateralJoinsEmpty(templateId)) return 0;</span>
+<span class="fc" id="L119">        return lateralJoinDefinitions.get(templateId).size();</span>
+    }
+
+    @Override
+    public boolean isLateralJoinsEmpty(String templateId) {
+<span class="fc bfc" id="L124" title="All 2 branches covered.">        if (lateralJoinDefinitions.isEmpty()</span>
+<span class="pc bpc" id="L125" title="1 of 2 branches missed.">                || lateralJoinDefinitions.get(templateId) == null</span>
+<span class="pc bpc" id="L126" title="1 of 2 branches missed.">                || lateralJoinDefinitions.get(templateId).isEmpty()) return true;</span>
+<span class="fc" id="L127">        return false;</span>
+    }
+
+    @Override
+    public LateralJoinDefinition getLastLateralJoin(String templateId) {
+<span class="fc bfc" id="L132" title="All 2 branches covered.">        if (isLateralJoinsEmpty(templateId)) return null;</span>
+<span class="fc" id="L133">        return Arrays.asList(lateralJoinDefinitions.get(templateId).toArray(new LateralJoinDefinition[] {}))</span>
+<span class="fc" id="L134">                .get(getLateralJoinsSize(templateId) - 1);</span>
+    }
+
+    @Override
+    public void setLateralJoinTable(String templateId, LateralJoinDefinition lateralJoinDefinition) {
+<span class="fc" id="L139">        lateralJoinDefinitions.computeIfAbsent(templateId, k -&gt; new HashSet&lt;&gt;());</span>
+
+        // do not add duplicate join
+<span class="fc" id="L142">        this.lateralJoinDefinitions.get(templateId).add(lateralJoinDefinition);</span>
+<span class="fc" id="L143">    }</span>
+
+    @Override
+    public boolean isDistinct() {
+<span class="fc" id="L147">        return isDistinct;</span>
+    }
+
+    @Override
+    public boolean isFunction() {
+<span class="fc" id="L152">        return false;</span>
+    }
+
+    @Override
+    public boolean isExtension() {
+<span class="fc" id="L157">        return false;</span>
+    }
+
+    @Override
+    public boolean isHidden() {
+<span class="nc" id="L162">        return isHidden;</span>
+    }
+
+    @Override
+    public List&lt;FuncParameter&gt; getFuncParameters() {
+<span class="nc" id="L167">        return new ArrayList&lt;&gt;();</span>
+    }
+
+    @Override
+    public void setPath(String path) {
+<span class="nc" id="L172">        this.path = path;</span>
+<span class="nc" id="L173">    }</span>
+
+    @Override
+    public void setDistinct(boolean distinct) {
+<span class="fc" id="L177">        this.isDistinct = distinct;</span>
+<span class="fc" id="L178">    }</span>
+
+    @Override
+    public void setHidden(boolean hidden) {
+<span class="fc" id="L182">        this.isHidden = hidden;</span>
+<span class="fc" id="L183">    }</span>
+
+    @Override
+    public I_VariableDefinition duplicate() {
+<span class="fc" id="L187">        return new VariableDefinition(this.path, this.alias, this.identifier, this.isDistinct, this.isHidden);</span>
+    }
+
+    @Override
+    public void setAlias(String alias) {
+<span class="fc" id="L192">        this.alias = alias;</span>
+<span class="fc" id="L193">    }</span>
+
+    public PredicateDefinition getPredicateDefinition() {
+<span class="fc" id="L196">        return predicateDefinition;</span>
+    }
+
+    public String getSubstituteFieldVariable() {
+<span class="fc" id="L200">        return substituteFieldVariable;</span>
+    }
+
+    public void setSubstituteFieldVariable(String substituteFieldVariable) {
+<span class="fc" id="L204">        this.substituteFieldVariable = substituteFieldVariable;</span>
+<span class="fc" id="L205">    }</span>
+
+    public void setSelectType(DataType sqlDataType) {
+<span class="fc" id="L208">        this.selectDataType = sqlDataType;</span>
+<span class="fc" id="L209">    }</span>
+
+    public DataType getSelectType() {
+<span class="fc" id="L212">        return this.selectDataType;</span>
+    }
+
+    @Override
+    public boolean isVoidAlias() {
+<span class="nc" id="L217">        return isVoidAlias;</span>
+    }
+
+    @Override
+    public void setVoidAlias(boolean isVoidAlias) {
+<span class="fc" id="L222">        this.isVoidAlias = isVoidAlias;</span>
+<span class="fc" id="L223">    }</span>
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.7.202105040129</span></div></body></html>

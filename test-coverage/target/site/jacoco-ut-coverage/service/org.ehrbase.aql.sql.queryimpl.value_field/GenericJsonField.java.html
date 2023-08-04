@@ -1,0 +1,229 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../../jacoco-resources/report.gif" type="image/gif"/><title>GenericJsonField.java</title><link rel="stylesheet" href="../../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../../index.html" class="el_report">Coverage with Unit Tests</a> &gt; <a href="../index.html" class="el_bundle">service</a> &gt; <a href="index.source.html" class="el_package">org.ehrbase.aql.sql.queryimpl.value_field</a> &gt; <span class="el_source">GenericJsonField.java</span></div><h1>GenericJsonField.java</h1><pre class="source lang-java linenums">/*
+ * Copyright (c) 2019-2022 vitasystems GmbH and Hannover Medical School.
+ *
+ * This file is part of project EHRbase
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     https://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.ehrbase.aql.sql.queryimpl.value_field;
+
+import static org.ehrbase.aql.sql.queryimpl.AqlRoutines.jsonArraySplitElements;
+import static org.ehrbase.aql.sql.queryimpl.AqlRoutines.jsonpathItem;
+import static org.ehrbase.aql.sql.queryimpl.AqlRoutines.jsonpathItemAsText;
+import static org.ehrbase.aql.sql.queryimpl.AqlRoutines.jsonpathParameters;
+import static org.ehrbase.aql.sql.queryimpl.QueryImplConstants.AQL_NODE_ITERATIVE_MARKER;
+import static org.ehrbase.aql.sql.queryimpl.value_field.Functions.apply;
+
+import java.sql.Timestamp;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.List;
+import java.util.Optional;
+import java.util.UUID;
+import java.util.function.Function;
+import org.ehrbase.aql.sql.queryimpl.FunctionBasedNodePredicateCall;
+import org.ehrbase.aql.sql.queryimpl.IQueryImpl;
+import org.ehrbase.aql.sql.queryimpl.QueryImplConstants;
+import org.ehrbase.aql.sql.queryimpl.attribute.AttributePath;
+import org.ehrbase.aql.sql.queryimpl.attribute.FieldResolutionContext;
+import org.ehrbase.aql.sql.queryimpl.attribute.GenericJsonPath;
+import org.ehrbase.aql.sql.queryimpl.attribute.IRMObjectAttribute;
+import org.ehrbase.aql.sql.queryimpl.attribute.JoinSetup;
+import org.ehrbase.aql.sql.queryimpl.attribute.JsonbSelect;
+import org.ehrbase.aql.sql.queryimpl.attribute.RMObjectAttribute;
+import org.ehrbase.jooq.pg.Routines;
+import org.ehrbase.jooq.pg.udt.records.DvCodedTextRecord;
+import org.jooq.Configuration;
+import org.jooq.Field;
+import org.jooq.Function2;
+import org.jooq.Function4;
+import org.jooq.JSON;
+import org.jooq.JSONB;
+import org.jooq.TableField;
+import org.jooq.impl.DSL;
+
+/**
+ * @author Christian Chevalley
+ * @since 1.0
+ */
+@SuppressWarnings({&quot;java:S3776&quot;, &quot;java:S3740&quot;})
+public class GenericJsonField extends RMObjectAttribute {
+
+<span class="fc" id="L62">    protected Optional&lt;String&gt; jsonPath = Optional.empty();</span>
+
+    private static final String ITERATIVE_MARKER = &quot;'&quot; + AQL_NODE_ITERATIVE_MARKER + &quot;'&quot;;
+
+    public GenericJsonField(FieldResolutionContext fieldContext, JoinSetup joinSetup) {
+<span class="fc" id="L67">        super(fieldContext, joinSetup);</span>
+<span class="fc" id="L68">    }</span>
+
+    public Field hierObjectId(Field&lt;UUID&gt; uuidField) {
+<span class="fc" id="L71">        String rmType = &quot;HIER_OBJECT_ID&quot;;</span>
+<span class="fc" id="L72">        Function&lt;Field&lt;UUID&gt;, Field&lt;JSON&gt;&gt; function = Routines::jsCanonicalHierObjectId1;</span>
+<span class="fc" id="L73">        return jsonField(rmType, function, (TableField) uuidField);</span>
+    }
+
+    public Field dvCodedText(Field&lt;DvCodedTextRecord&gt; dvCodedTextRecordTableField) {
+<span class="fc" id="L77">        String rmType = &quot;DV_CODED_TEXT&quot;;</span>
+<span class="fc" id="L78">        Function&lt;Field&lt;DvCodedTextRecord&gt;, Field&lt;JSON&gt;&gt; function = Routines::jsDvCodedTextInner1;</span>
+<span class="fc" id="L79">        return jsonField(rmType, function, (TableField) dvCodedTextRecordTableField);</span>
+    }
+
+    public Field eventContext(Field&lt;UUID&gt; uuidField) {
+<span class="nc" id="L83">        String rmType = &quot;EVENT_CONTEXT&quot;;</span>
+<span class="nc" id="L84">        Function&lt;Field&lt;UUID&gt;, Field&lt;JSON&gt;&gt; function = Routines::jsContext;</span>
+<span class="nc" id="L85">        return jsonField(rmType, function, (TableField) uuidField);</span>
+    }
+
+    public Field participations(Field&lt;UUID&gt; uuidField) {
+<span class="nc" id="L89">        String rmType = &quot;PARTICIPATION&quot;;</span>
+<span class="nc" id="L90">        Function&lt;Field&lt;UUID&gt;, Field&lt;JSONB[]&gt;&gt; function = Routines::jsParticipations;</span>
+<span class="nc" id="L91">        return jsonField(rmType, function, (TableField) uuidField);</span>
+    }
+
+    public Field partyRef(Field&lt;String&gt; namespace, Field&lt;String&gt; type, Field&lt;String&gt; scheme, Field&lt;String&gt; value) {
+<span class="fc" id="L95">        String rmType = &quot;PARTY_REF&quot;;</span>
+<span class="fc" id="L96">        Function4&lt;Field&lt;String&gt;, Field&lt;String&gt;, Field&lt;String&gt;, Field&lt;String&gt;, Field&lt;JSON&gt;&gt; function =</span>
+<span class="fc" id="L97">                Routines::jsPartyRef;</span>
+<span class="fc" id="L98">        return jsonField(</span>
+<span class="fc" id="L99">                rmType, function, (TableField) namespace, (TableField) type, (TableField) scheme, (TableField) value);</span>
+    }
+
+    public Field dvDateTime(Field&lt;Timestamp&gt; dateTime, Field&lt;String&gt; timeZoneId) {
+<span class="fc" id="L103">        String rmType = &quot;DV_DATE_TIME&quot;;</span>
+<span class="fc" id="L104">        Function2&lt;Field&lt;Timestamp&gt;, Field&lt;String&gt;, Field&lt;JSON&gt;&gt; function = Routines::jsDvDateTime;</span>
+<span class="fc" id="L105">        return jsonField(rmType, function, (TableField) dateTime, (TableField) timeZoneId);</span>
+    }
+
+    public Field ehrStatus(Field&lt;UUID&gt; uuidField, Field&lt;String&gt; serverId) {
+<span class="nc" id="L109">        String rmType = null;</span>
+<span class="nc" id="L110">        Function2&lt;Field&lt;UUID&gt;, Field&lt;String&gt;, Field&lt;JSON&gt;&gt; function = Routines::jsEhrStatus2;</span>
+<span class="nc" id="L111">        return jsonField(rmType, function, (TableField) uuidField, (TableField) serverId);</span>
+    }
+
+    public Field ehrStatus(Field&lt;UUID&gt; uuidField) {
+<span class="fc" id="L115">        String rmType = null;</span>
+<span class="fc" id="L116">        Function&lt;Field&lt;UUID&gt;, Field&lt;JSON&gt;&gt; function = Routines::jsEhrStatus1;</span>
+<span class="fc" id="L117">        return jsonField(rmType, function, (TableField) uuidField);</span>
+    }
+
+    public Field canonicalPartyIdendified(Field&lt;UUID&gt; uuidField) {
+<span class="nc" id="L121">        String rmType = &quot;PARTY_IDENTIFIED&quot;;</span>
+<span class="nc" id="L122">        Function&lt;Field&lt;UUID&gt;, Field&lt;JSON&gt;&gt; function = Routines::jsCanonicalPartyIdentified;</span>
+<span class="nc" id="L123">        return jsonField(rmType, function, (TableField) uuidField);</span>
+    }
+
+    public Field feederAudit(Field&lt;?&gt; feederAudit) {
+<span class="fc" id="L127">        String rmType = &quot;FEEDER_AUDIT&quot;;</span>
+<span class="fc" id="L128">        return jsonField(rmType, null, (TableField) feederAudit);</span>
+    }
+
+    public Field jsonField(String rmType, Object function, TableField... tableFields) {
+<span class="fc" id="L132">        fieldContext.setRmType(rmType);</span>
+<span class="fc" id="L133">        Configuration configuration = fieldContext.getContext().configuration();</span>
+
+        Field jsonField;
+
+<span class="fc bfc" id="L137" title="All 2 branches covered.">        if (jsonPath.isPresent()) {</span>
+<span class="fc" id="L138">            List&lt;String&gt; tokenized = Arrays.asList(jsonpathParameters(jsonPath.get()));</span>
+
+<span class="pc bpc" id="L140" title="1 of 2 branches missed.">            if (tokenized.contains(QueryImplConstants.AQL_NODE_NAME_PREDICATE_MARKER)) {</span>
+                // replace the ITERATIVE_MARKERs by default index
+<span class="nc" id="L142">                Collections.replaceAll(tokenized, ITERATIVE_MARKER, &quot;'0'&quot;);</span>
+<span class="nc" id="L143">                jsonField = new FunctionBasedNodePredicateCall(fieldContext, tokenized).resolve(function, tableFields);</span>
+<span class="pc bfc" id="L144" title="All 2 branches covered.">            } else if (tokenized.contains(ITERATIVE_MARKER))</span>
+<span class="fc" id="L145">                jsonField = fieldWithJsonArrayIteration(configuration, tokenized, function, tableFields);</span>
+            else
+<span class="fc" id="L147">                jsonField = DSL.field(jsonpathItemAsText(</span>
+<span class="fc" id="L148">                        configuration,</span>
+<span class="fc" id="L149">                        DSL.field(apply(function, tableFields).toString()).cast(JSONB.class),</span>
+<span class="fc" id="L150">                        tokenized.toArray(new String[] {})));</span>
+
+<span class="fc" id="L152">        } else jsonField = DSL.field(apply(function, tableFields).toString()).cast(String.class);</span>
+
+        // check if the SQL expression contains a set returned in a WHERE clause (implying a lateral join)
+<span class="fc bfc" id="L155" title="All 2 branches covered.">        if (jsonField.toString().contains(QueryImplConstants.AQL_NODE_ITERATIVE_FUNCTION)</span>
+<span class="pc bpc" id="L156" title="1 of 2 branches missed.">                &amp;&amp; fieldContext.getClause().equals(IQueryImpl.Clause.WHERE))</span>
+<span class="nc" id="L157">            jsonField = DSL.field(DSL.select(jsonField));</span>
+
+<span class="fc" id="L159">        return as(DSL.field(jsonField));</span>
+    }
+
+    private Field fieldWithJsonArrayIteration(
+            Configuration configuration, List&lt;String&gt; tokenized, Object function, TableField... tableFields) {
+
+<span class="fc" id="L165">        String[] prefix =</span>
+<span class="fc" id="L166">                tokenized.subList(0, tokenized.indexOf(ITERATIVE_MARKER)).toArray(new String[] {});</span>
+<span class="fc" id="L167">        String[] remaining = tokenized</span>
+<span class="fc" id="L168">                .subList(tokenized.indexOf(ITERATIVE_MARKER) + 1, tokenized.size())</span>
+<span class="fc" id="L169">                .toArray(new String[] {});</span>
+
+        // initial
+<span class="fc" id="L172">        Field field = jsonpathItem(</span>
+<span class="fc" id="L173">                configuration,</span>
+<span class="fc" id="L174">                DSL.field(apply(function, tableFields).toString()).cast(JSONB.class),</span>
+<span class="fc" id="L175">                prefix);</span>
+
+<span class="fc bfc" id="L177" title="All 2 branches covered.">        while (remaining.length &gt; 0) {</span>
+<span class="fc" id="L178">            List&lt;String&gt; tokens = Arrays.asList(remaining.clone());</span>
+<span class="pc bpc" id="L179" title="1 of 2 branches missed.">            if (tokens.contains(ITERATIVE_MARKER)) {</span>
+<span class="nc" id="L180">                prefix = tokens.subList(0, tokens.indexOf(ITERATIVE_MARKER)).toArray(new String[] {});</span>
+<span class="nc" id="L181">                remaining = tokens.subList(tokens.indexOf(ITERATIVE_MARKER) + 1, tokens.size())</span>
+<span class="nc" id="L182">                        .toArray(new String[] {});</span>
+<span class="nc" id="L183">            } else {</span>
+<span class="fc" id="L184">                prefix = remaining;</span>
+<span class="fc" id="L185">                remaining = new String[] {};</span>
+            }
+
+<span class="fc" id="L188">            field = DSL.field(jsonpathItemAsText(</span>
+<span class="fc" id="L189">                    configuration, jsonArraySplitElements(configuration, field.cast(JSONB.class)), prefix));</span>
+        }
+
+<span class="fc" id="L192">        return field;</span>
+    }
+
+    @Override
+    public Field sqlField() {
+<span class="nc" id="L197">        return null;</span>
+    }
+
+    @Override
+    public IRMObjectAttribute forTableField(TableField tableField) {
+<span class="nc" id="L202">        return this;</span>
+    }
+
+    public GenericJsonField forJsonPath(String jsonPath) {
+<span class="pc bpc" id="L206" title="2 of 4 branches missed.">        if (jsonPath == null || jsonPath.isEmpty()) {</span>
+<span class="nc" id="L207">            this.jsonPath = Optional.empty();</span>
+<span class="nc" id="L208">            return this;</span>
+        }
+
+<span class="fc" id="L211">        GenericJsonPath genericJsonPath = new GenericJsonPath(jsonPath);</span>
+
+<span class="fc" id="L213">        this.jsonPath = Optional.of(genericJsonPath.jqueryPath());</span>
+<span class="fc" id="L214">        fieldContext.setUsingSetReturningFunction(genericJsonPath.isIterative());</span>
+
+<span class="fc" id="L216">        return this;</span>
+    }
+
+    public GenericJsonField forJsonPath(String root, String jsonPath) {
+<span class="fc" id="L220">        String actualPath = new AttributePath(root).redux(jsonPath);</span>
+<span class="fc" id="L221">        return forJsonPath(actualPath);</span>
+    }
+
+    public GenericJsonField forJsonPath(String[] path) {
+<span class="fc" id="L225">        this.jsonPath = Optional.of(new JsonbSelect(Arrays.asList(path)).field());</span>
+<span class="fc" id="L226">        return this;</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.7.202105040129</span></div></body></html>

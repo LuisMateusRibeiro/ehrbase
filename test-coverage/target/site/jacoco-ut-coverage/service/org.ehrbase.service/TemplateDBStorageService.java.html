@@ -1,0 +1,100 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../../jacoco-resources/report.gif" type="image/gif"/><title>TemplateDBStorageService.java</title><link rel="stylesheet" href="../../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../../index.html" class="el_report">Coverage with Unit Tests</a> &gt; <a href="../index.html" class="el_bundle">service</a> &gt; <a href="index.source.html" class="el_package">org.ehrbase.service</a> &gt; <span class="el_source">TemplateDBStorageService.java</span></div><h1>TemplateDBStorageService.java</h1><pre class="source lang-java linenums">/*
+ * Copyright (c) 2019 vitasystems GmbH and Hannover Medical School.
+ *
+ * This file is part of project EHRbase
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     https://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.ehrbase.service;
+
+import java.util.List;
+import java.util.Optional;
+import java.util.Set;
+import org.ehrbase.api.definitions.ServerConfig;
+import org.ehrbase.dao.access.interfaces.I_DomainAccess;
+import org.ehrbase.dao.access.interfaces.I_TemplateStoreAccess;
+import org.ehrbase.dao.access.support.ServiceDataAccess;
+import org.ehrbase.ehr.knowledge.TemplateMetaData;
+import org.jooq.DSLContext;
+import org.openehr.schemas.v1.OPERATIONALTEMPLATE;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+@Service
+@Transactional
+public class TemplateDBStorageService implements TemplateStorage {
+    private final DSLContext context;
+    private final ServerConfig serverConfig;
+
+<span class="nc" id="L39">    public TemplateDBStorageService(DSLContext context, ServerConfig serverConfig) {</span>
+<span class="nc" id="L40">        this.context = context;</span>
+<span class="nc" id="L41">        this.serverConfig = serverConfig;</span>
+<span class="nc" id="L42">    }</span>
+
+    @Override
+    public List&lt;TemplateMetaData&gt; listAllOperationalTemplates() {
+<span class="nc" id="L46">        return I_TemplateStoreAccess.fetchAll(getDataAccess());</span>
+    }
+
+    @Override
+    public Set&lt;String&gt; findAllTemplateIds() {
+<span class="nc" id="L51">        return I_TemplateStoreAccess.fetchAllTemplateIds(getDataAccess());</span>
+    }
+
+    @Override
+    public void storeTemplate(OPERATIONALTEMPLATE template, Short sysTenant) {
+<span class="nc bnc" id="L56" title="All 2 branches missed.">        if (readOperationaltemplate(template.getTemplateId().getValue()).isPresent()) {</span>
+<span class="nc" id="L57">            I_TemplateStoreAccess.getInstance(getDataAccess(), template, sysTenant)</span>
+<span class="nc" id="L58">                    .update();</span>
+<span class="nc" id="L59">        } else {</span>
+<span class="nc" id="L60">            I_TemplateStoreAccess.getInstance(getDataAccess(), template, sysTenant)</span>
+<span class="nc" id="L61">                    .commit();</span>
+        }
+<span class="nc" id="L63">    }</span>
+
+    @Override
+    public Optional&lt;OPERATIONALTEMPLATE&gt; readOperationaltemplate(String templateId) {
+<span class="nc" id="L67">        return Optional.ofNullable(I_TemplateStoreAccess.retrieveInstanceByTemplateId(getDataAccess(), templateId)</span>
+<span class="nc" id="L68">                .getTemplate());</span>
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    @Override
+    public String adminUpdateTemplate(OPERATIONALTEMPLATE template) {
+<span class="nc" id="L76">        return I_TemplateStoreAccess.adminUpdateTemplate(getDataAccess(), template);</span>
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    @Override
+    public boolean deleteTemplate(String templateId) {
+
+<span class="nc" id="L85">        return I_TemplateStoreAccess.deleteTemplate(getDataAccess(), templateId);</span>
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    @Override
+    public int adminDeleteAllTemplates(List&lt;TemplateMetaData&gt; templateMetaDataList) {
+<span class="nc" id="L93">        return I_TemplateStoreAccess.adminDeleteAllTemplates(getDataAccess());</span>
+    }
+
+    protected I_DomainAccess getDataAccess() {
+<span class="nc" id="L97">        return new ServiceDataAccess(context, null, null, this.serverConfig);</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.7.202105040129</span></div></body></html>

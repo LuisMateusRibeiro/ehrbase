@@ -1,0 +1,234 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../../jacoco-resources/report.gif" type="image/gif"/><title>OpenehrDefinitionQueryController.java</title><link rel="stylesheet" href="../../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../../index.html" class="el_report">Overall Coverage</a> &gt; <a href="../index.html" class="el_bundle">rest-openehr</a> &gt; <a href="index.source.html" class="el_package">org.ehrbase.rest.openehr</a> &gt; <span class="el_source">OpenehrDefinitionQueryController.java</span></div><h1>OpenehrDefinitionQueryController.java</h1><pre class="source lang-java linenums">/*
+ * Copyright (c) 2022 vitasystems GmbH and Hannover Medical School.
+ *
+ * This file is part of project EHRbase
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     https://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.ehrbase.rest.openehr;
+
+import static org.apache.commons.lang3.StringUtils.isBlank;
+import static org.springframework.http.MediaType.*;
+import static org.springframework.web.util.UriComponentsBuilder.fromPath;
+
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import java.util.Objects;
+import java.util.Optional;
+import org.ehrbase.api.annotations.TenantAware;
+import org.ehrbase.api.audit.msg.AuditMsgBuilder;
+import org.ehrbase.api.authorization.EhrbaseAuthorization;
+import org.ehrbase.api.authorization.EhrbasePermission;
+import org.ehrbase.api.exception.GeneralRequestProcessingException;
+import org.ehrbase.api.exception.UnexpectedSwitchCaseException;
+import org.ehrbase.api.exception.UnsupportedMediaTypeException;
+import org.ehrbase.api.service.QueryService;
+import org.ehrbase.openehr.sdk.response.dto.ErrorBodyPayload;
+import org.ehrbase.openehr.sdk.response.dto.QueryDefinitionListResponseData;
+import org.ehrbase.openehr.sdk.response.dto.QueryDefinitionResponseData;
+import org.ehrbase.openehr.sdk.response.dto.ehrscape.QueryDefinitionResultDto;
+import org.ehrbase.rest.BaseController;
+import org.ehrbase.rest.openehr.specification.DefinitionQueryApiSpecification;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
+import org.springframework.lang.Nullable;
+import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
+
+@TenantAware
+@RestController
+@RequestMapping(
+        path = BaseController.API_CONTEXT_PATH_WITH_VERSION + &quot;/definition/query&quot;,
+        produces = {APPLICATION_JSON_VALUE, APPLICATION_XML_VALUE})
+public class OpenehrDefinitionQueryController extends BaseController implements DefinitionQueryApiSpecification {
+
+    private static final String AQL = &quot;AQL&quot;;
+
+<span class="nc" id="L70">    private final Logger logger = LoggerFactory.getLogger(getClass());</span>
+
+    private final QueryService queryService;
+
+    @Autowired
+<span class="nc" id="L75">    public OpenehrDefinitionQueryController(QueryService queryService) {</span>
+<span class="nc" id="L76">        this.queryService = Objects.requireNonNull(queryService);</span>
+<span class="nc" id="L77">    }</span>
+
+    // ----- DEFINITION: Manage Stored Query, From definition package
+    // https://openehr.github.io/specifications-ITS-REST/definitions.html#definitions-stored-query
+
+    /**
+     * Get a stored query
+     *
+     * @param accept
+     * @param qualifiedQueryName
+     * @return
+     */
+    @Override
+    @GetMapping(value = {&quot;/{qualified_query_name}&quot;, &quot;&quot;})
+    @EhrbaseAuthorization(permission = EhrbasePermission.EHRBASE_QUERY_READ)
+    public ResponseEntity&lt;QueryDefinitionListResponseData&gt; getStoredQueryList(
+            @RequestHeader(value = ACCEPT, required = false) String accept,
+            @PathVariable(value = &quot;qualified_query_name&quot;, required = false) String qualifiedQueryName) {
+
+<span class="nc" id="L96">        logger.debug(&quot;getStoredQueryList invoked with the following input: {}&quot;, qualifiedQueryName);</span>
+
+<span class="nc" id="L98">        createAuditLogsMsgBuilder(qualifiedQueryName, null);</span>
+<span class="nc" id="L99">        QueryDefinitionListResponseData responseData =</span>
+<span class="nc" id="L100">                new QueryDefinitionListResponseData(queryService.retrieveStoredQueries(qualifiedQueryName));</span>
+<span class="nc" id="L101">        AuditMsgBuilder.getInstance().setQueryId(qualifiedQueryName);</span>
+
+<span class="nc" id="L103">        return ResponseEntity.ok(responseData);</span>
+    }
+
+    @Override
+    @GetMapping(value = {&quot;/{qualified_query_name}/{version}&quot;})
+    @EhrbaseAuthorization(permission = EhrbasePermission.EHRBASE_QUERY_READ)
+    public ResponseEntity&lt;QueryDefinitionResponseData&gt; getStoredQueryVersion(
+            @RequestHeader(value = ACCEPT, required = false) String accept,
+            @PathVariable(value = &quot;qualified_query_name&quot;) String qualifiedQueryName,
+            @PathVariable(value = &quot;version&quot;) Optional&lt;String&gt; version) {
+
+<span class="nc" id="L114">        logger.debug(</span>
+                &quot;getStoredQueryVersion invoked with the following input: {}, version:{}&quot;, qualifiedQueryName, version);
+
+<span class="nc" id="L117">        createAuditLogsMsgBuilder(qualifiedQueryName, version.orElse(null));</span>
+
+<span class="nc" id="L119">        QueryDefinitionResponseData queryDefinitionResponseData = new QueryDefinitionResponseData(</span>
+<span class="nc" id="L120">                queryService.retrieveStoredQuery(qualifiedQueryName, version.orElse(null)));</span>
+<span class="nc" id="L121">        AuditMsgBuilder.getInstance().setQueryId(qualifiedQueryName);</span>
+
+<span class="nc" id="L123">        return ResponseEntity.ok(queryDefinitionResponseData);</span>
+    }
+
+    @Override
+    @EhrbaseAuthorization(permission = EhrbasePermission.EHRBASE_QUERY_CREATE)
+    @PutMapping(
+            value = {&quot;/{qualified_query_name}/{version}&quot;, &quot;/{qualified_query_name}&quot;},
+            consumes = {TEXT_PLAIN_VALUE, APPLICATION_JSON_VALUE},
+            produces = {APPLICATION_JSON_VALUE})
+    public ResponseEntity&lt;QueryDefinitionResponseData&gt; putStoredQuery(
+            @RequestHeader(value = CONTENT_TYPE, required = false) String contentType,
+            @RequestHeader(value = ACCEPT, required = false) String accept,
+            @PathVariable(value = &quot;qualified_query_name&quot;) String qualifiedQueryName,
+            @PathVariable(value = &quot;version&quot;) Optional&lt;String&gt; version,
+            @RequestParam(value = &quot;type&quot;, required = false, defaultValue = &quot;AQL&quot;) String type,
+            @RequestBody String queryPayload) {
+
+<span class="nc" id="L140">        logger.debug(</span>
+                &quot;putStoreQuery invoked with the following input: {}, version: {}, query: {}, type: {}&quot;,
+                qualifiedQueryName,
+                version,
+                queryPayload,
+                type);
+
+<span class="nc bnc" id="L147" title="All 2 branches missed.">        if (!AQL.equalsIgnoreCase(type)) {</span>
+<span class="nc" id="L148">            return new ResponseEntity(</span>
+<span class="nc" id="L149">                    new ErrorBodyPayload(&quot;Invalid query&quot;, String.format(&quot;Query type:%s not supported!&quot;, type))</span>
+<span class="nc" id="L150">                            .toString(),</span>
+                    HttpStatus.BAD_REQUEST);
+        }
+
+<span class="nc" id="L154">        MediaType mediaType = MediaType.parseMediaType(contentType);</span>
+        String aql;
+<span class="nc bnc" id="L156" title="All 2 branches missed.">        if (APPLICATION_JSON.isCompatibleWith(mediaType)) {</span>
+            // assume same format as adhoc POST
+<span class="nc" id="L158">            aql = Optional.of(queryPayload)</span>
+<span class="nc" id="L159">                    .map(p -&gt; {</span>
+                        try {
+<span class="nc" id="L161">                            return new ObjectMapper().readTree(p);</span>
+<span class="nc" id="L162">                        } catch (JsonProcessingException e) {</span>
+<span class="nc" id="L163">                            throw new GeneralRequestProcessingException(&quot;Invalid content format&quot;, e);</span>
+                        }
+                    })
+<span class="nc" id="L166">                    .map(n -&gt; n.get(&quot;q&quot;))</span>
+<span class="nc" id="L167">                    .filter(JsonNode::isTextual)</span>
+<span class="nc" id="L168">                    .map(JsonNode::asText)</span>
+<span class="nc" id="L169">                    .orElse(null);</span>
+
+<span class="nc bnc" id="L171" title="All 2 branches missed.">        } else if (TEXT_PLAIN.isCompatibleWith(mediaType)) {</span>
+<span class="nc" id="L172">            aql = queryPayload;</span>
+        } else {
+<span class="nc" id="L174">            throw new UnsupportedMediaTypeException(mediaType.getType());</span>
+        }
+
+<span class="nc bnc" id="L177" title="All 2 branches missed.">        if (isBlank(aql)) {</span>
+<span class="nc" id="L178">            return new ResponseEntity(</span>
+<span class="nc" id="L179">                    new ErrorBodyPayload(&quot;Invalid query&quot;, &quot;no aql query provided&quot;).toString(), HttpStatus.BAD_REQUEST);</span>
+        }
+
+<span class="nc" id="L182">        createAuditLogsMsgBuilder(qualifiedQueryName, version.orElse(null));</span>
+
+<span class="nc" id="L184">        QueryDefinitionResultDto storedQuery =</span>
+<span class="nc" id="L185">                queryService.createStoredQuery(qualifiedQueryName, version.orElse(null), aql);</span>
+<span class="nc" id="L186">        AuditMsgBuilder.getInstance().setQueryId(qualifiedQueryName);</span>
+
+<span class="nc" id="L188">        return getPutDefenitionResponseEntity(mediaType, storedQuery);</span>
+    }
+
+    @Override
+    @DeleteMapping(value = {&quot;/{qualified_query_name}/{version}&quot;})
+    @EhrbaseAuthorization(permission = EhrbasePermission.EHRBASE_QUERY_DELETE)
+    public ResponseEntity&lt;QueryDefinitionResponseData&gt; deleteStoredQuery(
+            @RequestHeader(value = ACCEPT, required = false) String accept,
+            @PathVariable(value = &quot;qualified_query_name&quot;) String qualifiedQueryName,
+            @PathVariable(value = &quot;version&quot;) String version) {
+
+<span class="nc" id="L199">        logger.debug(&quot;deleteStoredQuery for the following input: {} , version: {}&quot;, qualifiedQueryName, version);</span>
+
+<span class="nc" id="L201">        createAuditLogsMsgBuilder(qualifiedQueryName, version);</span>
+
+<span class="nc" id="L203">        QueryDefinitionResponseData queryDefinitionResponseData =</span>
+<span class="nc" id="L204">                new QueryDefinitionResponseData(queryService.deleteStoredQuery(qualifiedQueryName, version));</span>
+<span class="nc" id="L205">        AuditMsgBuilder.getInstance().setQueryId(qualifiedQueryName);</span>
+
+<span class="nc" id="L207">        return ResponseEntity.ok(queryDefinitionResponseData);</span>
+    }
+
+    private ResponseEntity&lt;QueryDefinitionResponseData&gt; getPutDefenitionResponseEntity(
+            MediaType mediaType, QueryDefinitionResultDto storedQuery) {
+<span class="nc bnc" id="L212" title="All 2 branches missed.">        if (APPLICATION_JSON.isCompatibleWith(mediaType)) {</span>
+<span class="nc" id="L213">            return ResponseEntity.ok(new QueryDefinitionResponseData(storedQuery));</span>
+<span class="nc bnc" id="L214" title="All 2 branches missed.">        } else if (TEXT_PLAIN.isCompatibleWith(mediaType)) {</span>
+<span class="nc" id="L215">            HttpHeaders respHeaders = new HttpHeaders();</span>
+<span class="nc" id="L216">            respHeaders.setContentType(APPLICATION_JSON);</span>
+<span class="nc" id="L217">            respHeaders.setLocation(</span>
+<span class="nc" id="L218">                    createLocationUri(DEFINITION, QUERY, storedQuery.getQualifiedName(), storedQuery.getVersion()));</span>
+
+<span class="nc" id="L220">            return ResponseEntity.ok().headers(respHeaders).build();</span>
+        } else {
+<span class="nc" id="L222">            throw new UnexpectedSwitchCaseException(mediaType.getType());</span>
+        }
+    }
+
+    private void createAuditLogsMsgBuilder(String queryName, @Nullable String version) {
+<span class="nc" id="L227">        AuditMsgBuilder.getInstance()</span>
+<span class="nc" id="L228">                .setLocation(fromPath(&quot;&quot;)</span>
+<span class="nc" id="L229">                        .pathSegment(DEFINITION, QUERY, queryName, version)</span>
+<span class="nc" id="L230">                        .build()</span>
+<span class="nc" id="L231">                        .toString());</span>
+<span class="nc" id="L232">    }</span>
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.7.202105040129</span></div></body></html>

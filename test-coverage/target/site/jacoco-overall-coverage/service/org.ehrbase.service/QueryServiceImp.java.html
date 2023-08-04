@@ -1,0 +1,314 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../../jacoco-resources/report.gif" type="image/gif"/><title>QueryServiceImp.java</title><link rel="stylesheet" href="../../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../../index.html" class="el_report">Overall Coverage</a> &gt; <a href="../index.html" class="el_bundle">service</a> &gt; <a href="index.source.html" class="el_package">org.ehrbase.service</a> &gt; <span class="el_source">QueryServiceImp.java</span></div><h1>QueryServiceImp.java</h1><pre class="source lang-java linenums">/*
+ * Copyright (c) 2019 vitasystems GmbH and Hannover Medical School.
+ *
+ * This file is part of project EHRbase
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     https://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.ehrbase.service;
+
+import static java.lang.String.format;
+
+import com.google.gson.JsonElement;
+import java.sql.Timestamp;
+import java.time.Instant;
+import java.time.ZoneId;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.Set;
+import java.util.function.BiConsumer;
+import java.util.function.Supplier;
+import org.apache.commons.lang3.StringUtils;
+import org.ehrbase.api.definitions.ServerConfig;
+import org.ehrbase.api.exception.BadGatewayException;
+import org.ehrbase.api.exception.GeneralRequestProcessingException;
+import org.ehrbase.api.exception.InternalServerException;
+import org.ehrbase.api.exception.InvalidApiParameterException;
+import org.ehrbase.api.exception.ObjectNotFoundException;
+import org.ehrbase.api.exception.StateConflictException;
+import org.ehrbase.api.service.QueryService;
+import org.ehrbase.api.service.TenantService;
+import org.ehrbase.aql.compiler.AqlExpression;
+import org.ehrbase.aql.sql.AqlResult;
+import org.ehrbase.dao.access.interfaces.I_StoredQueryAccess;
+import org.ehrbase.dao.access.jooq.AqlQueryHandler;
+import org.ehrbase.dao.access.jooq.StoredQueryAccess;
+import org.ehrbase.dao.access.util.InvalidVersionFormatException;
+import org.ehrbase.dao.access.util.SemVer;
+import org.ehrbase.dao.access.util.SemVerUtil;
+import org.ehrbase.dao.access.util.VersionConflictException;
+import org.ehrbase.openehr.sdk.response.dto.ehrscape.QueryDefinitionResultDto;
+import org.ehrbase.openehr.sdk.response.dto.ehrscape.QueryResultDto;
+import org.ehrbase.openehr.sdk.response.dto.ehrscape.StructuredString;
+import org.ehrbase.openehr.sdk.response.dto.ehrscape.StructuredStringFormat;
+import org.ehrbase.openehr.sdk.response.dto.ehrscape.query.ResultHolder;
+import org.ehrbase.openehr.sdk.validation.terminology.ExternalTerminologyValidation;
+import org.jooq.DSLContext;
+import org.jooq.Field;
+import org.jooq.Record;
+import org.jooq.exception.DataAccessException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Service;
+import org.springframework.web.client.RestClientException;
+
+@Service
+@SuppressWarnings(&quot;unchecked&quot;)
+public class QueryServiceImp extends BaseServiceImp implements QueryService {
+<span class="nc" id="L71">    private final Logger logger = LoggerFactory.getLogger(getClass());</span>
+    private final ExternalTerminologyValidation tsAdapter;
+    private final TenantService tenantService;
+
+    @Autowired
+    public QueryServiceImp(
+            KnowledgeCacheService knowledgeCacheService,
+            DSLContext context,
+            ServerConfig serverConfig,
+            ExternalTerminologyValidation tsAdapter,
+            TenantService tenantService) {
+
+<span class="nc" id="L83">        super(knowledgeCacheService, context, serverConfig);</span>
+<span class="nc" id="L84">        this.tsAdapter = tsAdapter;</span>
+<span class="nc" id="L85">        this.tenantService = tenantService;</span>
+<span class="nc" id="L86">    }</span>
+
+<span class="nc" id="L88">    private static BiConsumer&lt;Map&lt;?, ?&gt;, String&gt; checkNonNull = (map, errMsg) -&gt; {</span>
+<span class="nc bnc" id="L89" title="All 2 branches missed.">        if (map == null) throw new IllegalArgumentException(errMsg);</span>
+<span class="nc" id="L90">    };</span>
+
+    @Override
+    public QueryResultDto query(
+            String queryString,
+            Map&lt;String, Object&gt; parameters,
+            boolean explain,
+            Map&lt;String, Set&lt;Object&gt;&gt; auditResultMap) {
+
+<span class="nc" id="L99">        AqlQueryHandler handler = new AqlQueryHandler(getDataAccess(), tsAdapter);</span>
+<span class="nc" id="L100">        return queryAql(</span>
+<span class="nc" id="L101">                queryString,</span>
+<span class="nc" id="L102">                explain,</span>
+<span class="nc bnc" id="L103" title="All 2 branches missed.">                () -&gt; parameters == null ? handler.process(queryString) : handler.process(queryString, parameters),</span>
+<span class="nc" id="L104">                auditResultMap);</span>
+    }
+
+    private QueryResultDto formatResult(AqlResult aqlResult, String queryString, boolean explain) {
+<span class="nc" id="L108">        QueryResultDto dto = new QueryResultDto();</span>
+<span class="nc" id="L109">        dto.setExecutedAQL(queryString);</span>
+<span class="nc" id="L110">        dto.setVariables(aqlResult.getVariables());</span>
+
+<span class="nc" id="L112">        List&lt;ResultHolder&gt; resultList = new ArrayList&lt;&gt;();</span>
+<span class="nc bnc" id="L113" title="All 2 branches missed.">        for (Record record : aqlResult.getRecords()) {</span>
+<span class="nc" id="L114">            ResultHolder fieldMap = new ResultHolder();</span>
+<span class="nc bnc" id="L115" title="All 2 branches missed.">            for (Field field : record.fields()) {</span>
+                // process non-hidden variables
+<span class="nc bnc" id="L117" title="All 2 branches missed.">                if (aqlResult.variablesContains(field.getName())) {</span>
+                    // check whether to use field name or alias
+<span class="nc bnc" id="L119" title="All 2 branches missed.">                    if (record.getValue(field) instanceof JsonElement) {</span>
+<span class="nc" id="L120">                        fieldMap.putResult(</span>
+<span class="nc" id="L121">                                field.getName(),</span>
+<span class="nc" id="L122">                                new StructuredString((record.getValue(field)).toString(), StructuredStringFormat.JSON));</span>
+<span class="nc" id="L123">                    } else fieldMap.putResult(field.getName(), record.getValue(field));</span>
+                }
+            }
+
+<span class="nc" id="L127">            resultList.add(fieldMap);</span>
+        }
+
+<span class="nc" id="L130">        dto.setResultSet(resultList);</span>
+<span class="nc bnc" id="L131" title="All 2 branches missed.">        if (explain) {</span>
+<span class="nc" id="L132">            dto.setExplain(aqlResult.getExplain());</span>
+        }
+
+<span class="nc" id="L135">        return dto;</span>
+    }
+
+<span class="nc" id="L138">    private static final String ERR_MAP_NON_NULL = &quot;Arg[%s] must not be null&quot;;</span>
+
+    private QueryResultDto queryAql(
+            String queryString,
+            boolean explain,
+            Supplier&lt;AqlResult&gt; resultSupplier,
+            Map&lt;String, Set&lt;Object&gt;&gt; auditResultMap) {
+<span class="nc" id="L145">        checkNonNull.accept(auditResultMap, format(ERR_MAP_NON_NULL, &quot;auditResultMap&quot;));</span>
+        try {
+<span class="nc" id="L147">            AqlResult aqlResult = resultSupplier.get();</span>
+<span class="nc" id="L148">            auditResultMap.putAll(aqlResult.getAuditResultMap());</span>
+<span class="nc" id="L149">            return formatResult(aqlResult, queryString, explain);</span>
+<span class="nc" id="L150">        } catch (RestClientException e) {</span>
+<span class="nc" id="L151">            throw new BadGatewayException(</span>
+<span class="nc" id="L152">                    &quot;Bad gateway exception: &quot; + e.getCause().getMessage());</span>
+<span class="nc" id="L153">        } catch (DataAccessException e) {</span>
+<span class="nc" id="L154">            throw new GeneralRequestProcessingException(</span>
+<span class="nc" id="L155">                    &quot;Data Access Error: &quot; + e.getCause().getMessage());</span>
+<span class="nc" id="L156">        } catch (IllegalArgumentException e) {</span>
+<span class="nc" id="L157">            throw e;</span>
+<span class="nc" id="L158">        } catch (RuntimeException e) {</span>
+<span class="nc" id="L159">            throw new IllegalArgumentException(&quot;Could not process query/stored-query, reason: &quot; + e);</span>
+        }
+    }
+
+    // === DEFINITION: manage stored queries
+    @Override
+    public List&lt;QueryDefinitionResultDto&gt; retrieveStoredQueries(String fullyQualifiedName) {
+<span class="nc" id="L166">        String name = StringUtils.defaultIfEmpty(fullyQualifiedName, null);</span>
+        try {
+<span class="nc" id="L168">            List&lt;StoredQueryAccess&gt; storedQueries = StoredQueryAccess.retrieveQualifiedList(getDataAccess(), name);</span>
+<span class="nc" id="L169">            return storedQueries.stream()</span>
+<span class="nc" id="L170">                    .map(QueryServiceImp::mapToQueryDefinitionDto)</span>
+<span class="nc" id="L171">                    .toList();</span>
+<span class="nc" id="L172">        } catch (DataAccessException e) {</span>
+<span class="nc" id="L173">            throw new GeneralRequestProcessingException(</span>
+<span class="nc" id="L174">                    &quot;Data Access Error: &quot; + e.getCause().getMessage(), e);</span>
+<span class="nc" id="L175">        } catch (IllegalArgumentException e) {</span>
+<span class="nc" id="L176">            throw e;</span>
+<span class="nc" id="L177">        } catch (RuntimeException e) {</span>
+<span class="nc" id="L178">            throw new IllegalArgumentException(&quot;Could not retrieve stored query, reason: &quot; + e, e);</span>
+        }
+    }
+
+    @Override
+    public QueryDefinitionResultDto retrieveStoredQuery(String qualifiedName, String version) {
+<span class="nc" id="L184">        SemVer requestedVersion = parseRequestSemVer(version);</span>
+
+        Optional&lt;StoredQueryAccess&gt; storedQueryAccess;
+        try {
+<span class="nc" id="L188">            storedQueryAccess = StoredQueryAccess.retrieveQualified(getDataAccess(), qualifiedName, requestedVersion);</span>
+<span class="nc" id="L189">        } catch (DataAccessException e) {</span>
+<span class="nc" id="L190">            throw new GeneralRequestProcessingException(</span>
+<span class="nc" id="L191">                    &quot;Data Access Error: &quot; + e.getCause().getMessage(), e);</span>
+<span class="nc" id="L192">        } catch (RuntimeException e) {</span>
+<span class="nc" id="L193">            throw new InternalServerException(e.getMessage());</span>
+        }
+
+<span class="nc" id="L196">        return storedQueryAccess</span>
+<span class="nc" id="L197">                .map(QueryServiceImp::mapToQueryDefinitionDto)</span>
+<span class="nc" id="L198">                .orElseThrow(() -&gt; new IllegalArgumentException(</span>
+<span class="nc" id="L199">                        &quot;Could not retrieve stored query for qualified name: &quot; + qualifiedName));</span>
+    }
+
+    @Override
+    public QueryDefinitionResultDto createStoredQuery(String qualifiedName, String version, String queryString) {
+
+<span class="nc" id="L205">        SemVer requestedVersion = parseRequestSemVer(version);</span>
+
+        // validate the query syntax
+        try {
+<span class="nc" id="L209">            new AqlExpression().parse(queryString);</span>
+<span class="nc" id="L210">        } catch (RuntimeException e) {</span>
+<span class="nc" id="L211">            throw new IllegalArgumentException(&quot;Invalid query, reason:&quot; + e, e);</span>
+        }
+
+        // lookup version in db
+<span class="nc" id="L215">        SemVer dbSemVer = StoredQueryAccess.retrieveQualified(getDataAccess(), qualifiedName, requestedVersion)</span>
+<span class="nc" id="L216">                .map(q -&gt; SemVer.parse(q.getSemver()))</span>
+<span class="nc" id="L217">                .orElse(SemVer.NO_VERSION);</span>
+
+<span class="nc" id="L219">        checkVersionCombination(requestedVersion, dbSemVer);</span>
+
+<span class="nc" id="L221">        SemVer newVersion = SemVerUtil.determineVersion(requestedVersion, dbSemVer);</span>
+
+<span class="nc" id="L223">        Short sysTenant = tenantService.getCurrentSysTenant();</span>
+<span class="nc" id="L224">        I_StoredQueryAccess storedQueryAccess =</span>
+<span class="nc" id="L225">                new StoredQueryAccess(getDataAccess(), qualifiedName, newVersion, queryString, sysTenant);</span>
+
+        // if not final version and already existing: update
+<span class="nc" id="L228">        boolean isUpdate = dbSemVer.isPreRelease();</span>
+
+        try {
+<span class="nc bnc" id="L231" title="All 2 branches missed.">            if (isUpdate) {</span>
+<span class="nc" id="L232">                storedQueryAccess.update(Timestamp.from(Instant.now()));</span>
+<span class="nc" id="L233">            } else {</span>
+<span class="nc" id="L234">                storedQueryAccess.commit();</span>
+            }
+<span class="nc" id="L236">        } catch (DataAccessException e) {</span>
+<span class="nc" id="L237">            throw new GeneralRequestProcessingException(</span>
+<span class="nc" id="L238">                    &quot;Data Access Error: &quot; + e.getCause().getMessage(), e);</span>
+<span class="nc" id="L239">        } catch (VersionConflictException e) {</span>
+<span class="nc" id="L240">            throw new IllegalArgumentException(e.getMessage(), e);</span>
+        }
+<span class="nc" id="L242">        return mapToQueryDefinitionDto(storedQueryAccess);</span>
+    }
+
+    private static void checkVersionCombination(SemVer requestSemVer, SemVer dbSemVer) {
+<span class="nc bnc" id="L246" title="All 2 branches missed.">        if (dbSemVer.isNoVersion()) {</span>
+            // Noop: no issue
+<span class="nc bnc" id="L248" title="All 2 branches missed.">        } else if (dbSemVer.isPartial()) {</span>
+<span class="nc" id="L249">            throw new IllegalStateException(&quot;The database contains stored queries with partial versions&quot;);</span>
+
+<span class="nc bnc" id="L251" title="All 2 branches missed.">        } else if (dbSemVer.isPreRelease()) {</span>
+<span class="nc bnc" id="L252" title="All 2 branches missed.">            if (!requestSemVer.isPreRelease()) {</span>
+<span class="nc" id="L253">                throw new RuntimeException(</span>
+<span class="nc" id="L254">                        &quot;Pre-release &quot; + dbSemVer + &quot; was provided when &quot; + requestSemVer + &quot; was requested&quot;);</span>
+            }
+        } else {
+            // release
+<span class="nc bnc" id="L258" title="All 2 branches missed.">            if (requestSemVer.isPreRelease()) {</span>
+<span class="nc" id="L259">                throw new RuntimeException(</span>
+<span class="nc" id="L260">                        &quot;Version &quot; + dbSemVer + &quot; was provided when pre-release &quot; + requestSemVer + &quot; was requested&quot;);</span>
+
+<span class="nc bnc" id="L262" title="All 2 branches missed.">            } else if (requestSemVer.isRelease()) {</span>
+<span class="nc" id="L263">                throw new StateConflictException(&quot;Version already exists&quot;);</span>
+            }
+        }
+<span class="nc" id="L266">    }</span>
+
+    @Override
+    public QueryDefinitionResultDto deleteStoredQuery(String qualifiedName, String version) {
+
+<span class="nc" id="L271">        SemVer requestedVersion = parseRequestSemVer(version);</span>
+<span class="nc bnc" id="L272" title="All 4 branches missed.">        if (requestedVersion.isNoVersion() || requestedVersion.isPartial()) {</span>
+<span class="nc" id="L273">            throw new InvalidApiParameterException(&quot;A qualified version has to be specified&quot;);</span>
+        }
+
+        try {
+<span class="nc" id="L277">            I_StoredQueryAccess storedQueryAccess = StoredQueryAccess.retrieveQualified(</span>
+<span class="nc" id="L278">                            getDataAccess(), qualifiedName, requestedVersion)</span>
+<span class="nc" id="L279">                    .orElseThrow(() -&gt; new ObjectNotFoundException(</span>
+<span class="nc" id="L280">                            &quot;stored query&quot;,</span>
+<span class="nc" id="L281">                            &quot;Could not retrieve stored query for qualified name: &quot; + qualifiedName + &quot; version:&quot;</span>
+<span class="nc" id="L282">                                    + version));</span>
+
+<span class="nc" id="L284">            storedQueryAccess.delete();</span>
+<span class="nc" id="L285">            return mapToQueryDefinitionDto(storedQueryAccess);</span>
+<span class="nc" id="L286">        } catch (ObjectNotFoundException e) {</span>
+<span class="nc" id="L287">            throw e;</span>
+<span class="nc" id="L288">        } catch (DataAccessException dae) {</span>
+<span class="nc" id="L289">            throw new GeneralRequestProcessingException(</span>
+<span class="nc" id="L290">                    &quot;Data Access Error:&quot; + dae.getCause().getMessage());</span>
+<span class="nc" id="L291">        } catch (RuntimeException e) {</span>
+<span class="nc" id="L292">            throw new InternalServerException(e.getMessage());</span>
+        }
+    }
+
+    private static SemVer parseRequestSemVer(String version) {
+        try {
+<span class="nc" id="L298">            return SemVer.parse(version);</span>
+<span class="nc" id="L299">        } catch (InvalidVersionFormatException e) {</span>
+<span class="nc" id="L300">            throw new InvalidApiParameterException(&quot;Incorrect version. Use the SEMVER format.&quot;, e);</span>
+        }
+    }
+
+    private static QueryDefinitionResultDto mapToQueryDefinitionDto(I_StoredQueryAccess storedQueryAccess) {
+<span class="nc" id="L305">        QueryDefinitionResultDto dto = new QueryDefinitionResultDto();</span>
+<span class="nc" id="L306">        dto.setSaved(storedQueryAccess.getCreationDate().toInstant().atZone(ZoneId.systemDefault()));</span>
+<span class="nc" id="L307">        dto.setQualifiedName(storedQueryAccess.getReverseDomainName() + &quot;::&quot; + storedQueryAccess.getSemanticId());</span>
+<span class="nc" id="L308">        dto.setVersion(storedQueryAccess.getSemver());</span>
+<span class="nc" id="L309">        dto.setQueryText(storedQueryAccess.getQueryText());</span>
+<span class="nc" id="L310">        dto.setType(storedQueryAccess.getQueryType());</span>
+<span class="nc" id="L311">        return dto;</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.7.202105040129</span></div></body></html>

@@ -1,0 +1,113 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../../jacoco-resources/report.gif" type="image/gif"/><title>PersistenceConfig.java</title><link rel="stylesheet" href="../../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../../index.html" class="el_report">Coverage with Unit Tests</a> &gt; <a href="../index.html" class="el_bundle">service</a> &gt; <a href="index.source.html" class="el_package">org.ehrbase.service</a> &gt; <span class="el_source">PersistenceConfig.java</span></div><h1>PersistenceConfig.java</h1><pre class="source lang-java linenums">/*
+ * Copyright (c) 2019 vitasystems GmbH and Hannover Medical School.
+ *
+ * This file is part of project EHRbase
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     https://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.ehrbase.service;
+
+import static org.ehrbase.api.tenant.TenantAuthentication.DEFAULT_SYS_TENANT;
+
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.SQLException;
+import javax.sql.DataSource;
+import org.jooq.ExecuteContext;
+import org.jooq.SQLDialect;
+import org.jooq.exception.DataAccessException;
+import org.jooq.impl.*;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Primary;
+import org.springframework.jdbc.datasource.DataSourceTransactionManager;
+import org.springframework.jdbc.datasource.TransactionAwareDataSourceProxy;
+import org.springframework.jdbc.support.SQLErrorCodeSQLExceptionTranslator;
+import org.springframework.jdbc.support.SQLExceptionTranslator;
+import org.springframework.transaction.annotation.EnableTransactionManagement;
+
+@Configuration
+@EnableTransactionManagement
+<span class="nc" id="L43">public class PersistenceConfig {</span>
+
+<span class="nc" id="L45">    static class ExceptionTranslator extends DefaultExecuteListener {</span>
+        @Override
+        public void exception(ExecuteContext context) {
+<span class="nc" id="L48">            SQLDialect dialect = context.configuration().dialect();</span>
+<span class="nc" id="L49">            SQLExceptionTranslator translator = new SQLErrorCodeSQLExceptionTranslator(dialect.name());</span>
+<span class="nc" id="L50">            context.exception(</span>
+<span class="nc" id="L51">                    translator.translate(&quot;Access database using Jooq&quot;, context.sql(), context.sqlException()));</span>
+<span class="nc" id="L52">        }</span>
+    }
+
+    @Qualifier(&quot;dataSource&quot;)
+    @Autowired
+    private DataSource dataSource;
+
+    public TransactionAwareDataSourceProxy transactionAwareDataSource() {
+<span class="nc" id="L60">        return new TransactionAwareDataSourceProxy(dataSource);</span>
+    }
+
+    @Bean
+    public DataSourceTransactionManager transactionManager() {
+<span class="nc" id="L65">        return new DataSourceTransactionManager(dataSource);</span>
+    }
+
+    @Bean
+    public DataSourceConnectionProvider connectionProvider() {
+<span class="nc" id="L70">        return new DataSourceConnectionProvider(transactionAwareDataSource()) {</span>
+            public static final String DB_SET_TENANT_ID = &quot;select  set_config('ehrbase.current_tenant', ?, false)&quot;;
+
+            public Connection acquire() {
+<span class="nc" id="L74">                Connection connection = super.acquire();</span>
+<span class="nc" id="L75">                try (PreparedStatement sql = connection.prepareStatement(DB_SET_TENANT_ID)) {</span>
+<span class="nc" id="L76">                    sql.setString(1, Short.toString(DEFAULT_SYS_TENANT));</span>
+<span class="nc" id="L77">                    sql.execute();</span>
+<span class="nc" id="L78">                    return connection;</span>
+<span class="nc" id="L79">                } catch (SQLException e) {</span>
+                    try {
+<span class="nc" id="L81">                        super.release(connection);</span>
+<span class="nc" id="L82">                    } finally {</span>
+<span class="nc" id="L83">                        throw new DataAccessException(&quot;Failed to set default tenant&quot;, e);</span>
+                    }
+                }
+            }
+        };
+    }
+
+    @Bean
+    public ExceptionTranslator exceptionTransformer() {
+<span class="nc" id="L92">        return new ExceptionTranslator();</span>
+    }
+
+    @Bean
+    @Primary
+    public DefaultDSLContext dsl(DefaultConfiguration cfg) {
+<span class="nc" id="L98">        return new DefaultDSLContext(cfg);</span>
+    }
+
+    @Bean
+    public DefaultConfiguration configuration(DataSourceConnectionProvider provider) {
+<span class="nc" id="L103">        DefaultConfiguration jooqConfiguration = new DefaultConfiguration();</span>
+<span class="nc" id="L104">        jooqConfiguration.set(provider);</span>
+<span class="nc" id="L105">        jooqConfiguration.set(new DefaultExecuteListenerProvider(exceptionTransformer()));</span>
+
+<span class="nc" id="L107">        SQLDialect dialect = SQLDialect.POSTGRES;</span>
+<span class="nc" id="L108">        jooqConfiguration.set(dialect);</span>
+
+<span class="nc" id="L110">        return jooqConfiguration;</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.7.202105040129</span></div></body></html>

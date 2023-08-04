@@ -1,0 +1,124 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../../jacoco-resources/report.gif" type="image/gif"/><title>CompositionResolver.java</title><link rel="stylesheet" href="../../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../../index.html" class="el_report">Overall Coverage</a> &gt; <a href="../index.html" class="el_bundle">service</a> &gt; <a href="index.source.html" class="el_package">org.ehrbase.aql.sql.queryimpl.attribute.composition</a> &gt; <span class="el_source">CompositionResolver.java</span></div><h1>CompositionResolver.java</h1><pre class="source lang-java linenums">/*
+ * Copyright (c) 2019 vitasystems GmbH and Hannover Medical School.
+ *
+ * This file is part of project EHRbase
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     https://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.ehrbase.aql.sql.queryimpl.attribute.composition;
+
+import static org.ehrbase.jooq.pg.Tables.ENTRY;
+
+import org.ehrbase.aql.sql.binding.JoinBinder;
+import org.ehrbase.aql.sql.queryimpl.IQueryImpl;
+import org.ehrbase.aql.sql.queryimpl.QueryImplConstants;
+import org.ehrbase.aql.sql.queryimpl.attribute.AttributePath;
+import org.ehrbase.aql.sql.queryimpl.attribute.AttributeResolver;
+import org.ehrbase.aql.sql.queryimpl.attribute.FieldResolutionContext;
+import org.ehrbase.aql.sql.queryimpl.attribute.JoinSetup;
+import org.ehrbase.aql.sql.queryimpl.attribute.concept.ConceptResolver;
+import org.ehrbase.aql.sql.queryimpl.value_field.GenericJsonField;
+import org.jooq.Field;
+
+@SuppressWarnings(&quot;java:S1452&quot;)
+public class CompositionResolver extends AttributeResolver {
+
+    public static final String FEEDER_AUDIT = &quot;feeder_audit&quot;;
+    public static final String FEEDER_SYSTEM_IDS = &quot;feeder_system_item_ids&quot;;
+
+    public CompositionResolver(FieldResolutionContext fieldResolutionContext, JoinSetup joinSetup) {
+<span class="fc" id="L40">        super(fieldResolutionContext, joinSetup);</span>
+<span class="fc" id="L41">        joinSetup.setJoinComposition(true);</span>
+<span class="fc" id="L42">    }</span>
+
+    public Field&lt;?&gt; sqlField(String path) {
+
+<span class="pc bpc" id="L46" title="2 of 4 branches missed.">        if (path == null || path.isEmpty())</span>
+<span class="nc" id="L47">            return new FullCompositionJson(fieldResolutionContext, joinSetup).sqlField();</span>
+
+<span class="fc bfc" id="L49" title="All 2 branches covered.">        if (path.startsWith(&quot;category&quot;))</span>
+<span class="fc" id="L50">            return new ConceptResolver(fieldResolutionContext, joinSetup)</span>
+<span class="fc" id="L51">                    .forTableField(ENTRY.CATEGORY)</span>
+<span class="fc" id="L52">                    .sqlField(new AttributePath(&quot;category&quot;).redux(path));</span>
+
+<span class="fc bfc" id="L54" title="All 2 branches covered.">        if (path.startsWith(FEEDER_AUDIT)) {</span>
+            Field&lt;?&gt; retField;
+<span class="pc bpc" id="L56" title="3 of 4 branches missed.">            if (path.contains(FEEDER_SYSTEM_IDS) &amp;&amp; !path.endsWith(FEEDER_SYSTEM_IDS)) {</span>
+<span class="nc" id="L57">                path = path.substring(path.indexOf(FEEDER_SYSTEM_IDS) + FEEDER_SYSTEM_IDS.length() + 1);</span>
+                // we insert a tag to indicate that the path operates on a json array
+<span class="nc" id="L59">                fieldResolutionContext.setUsingSetReturningFunction(true); // to generate lateral join</span>
+<span class="nc" id="L60">                retField = new GenericJsonField(fieldResolutionContext, joinSetup)</span>
+<span class="nc" id="L61">                        .forJsonPath(</span>
+                                FEEDER_SYSTEM_IDS + &quot;/&quot; + QueryImplConstants.AQL_NODE_ITERATIVE_MARKER + &quot;/&quot; + path)
+<span class="nc" id="L63">                        .feederAudit(JoinBinder.compositionRecordTable.field(FEEDER_AUDIT));</span>
+            } else
+<span class="fc" id="L65">                retField = new GenericJsonField(fieldResolutionContext, joinSetup)</span>
+<span class="fc" id="L66">                        .forJsonPath(FEEDER_AUDIT, path)</span>
+<span class="fc" id="L67">                        .feederAudit(JoinBinder.compositionRecordTable.field(FEEDER_AUDIT));</span>
+
+<span class="fc" id="L69">            String regexpTerminalValues = &quot;.*(id|issuer|assigner|type|formalism|system_id|name|namespace|value)$&quot;;</span>
+<span class="pc bpc" id="L70" title="1 of 2 branches missed.">            if (path.matches(regexpTerminalValues)) fieldResolutionContext.setJsonDatablock(false);</span>
+
+<span class="fc" id="L72">            return retField;</span>
+        }
+
+<span class="pc bpc" id="L75" title="5 of 8 branches missed.">        switch (path) {</span>
+            case &quot;uid&quot;:
+<span class="nc" id="L77">                return new FullCompositionJson(fieldResolutionContext, joinSetup)</span>
+<span class="nc" id="L78">                        .forJsonPath(new String[] {&quot;uid&quot;, &quot;&quot;})</span>
+<span class="nc" id="L79">                        .sqlField();</span>
+            case &quot;uid/value&quot;:
+                // this is an optimization
+                // in WHERE clause, we can only select on UUID without versioning as it is not supported at this time
+<span class="pc bpc" id="L83" title="1 of 2 branches missed.">                if (fieldResolutionContext.getClause().equals(IQueryImpl.Clause.WHERE))</span>
+<span class="nc" id="L84">                    return new CompositionUidValue(fieldResolutionContext, joinSetup)</span>
+<span class="nc" id="L85">                            .forTableField(NULL_FIELD)</span>
+<span class="nc" id="L86">                            .sqlField();</span>
+                else
+                    // in SELECT we do return the full versioned composition id (as a UID_BASED_ID)
+<span class="fc" id="L89">                    return new FullCompositionJson(fieldResolutionContext, joinSetup)</span>
+<span class="fc" id="L90">                            .forJsonPath(new String[] {&quot;uid&quot;, &quot;value&quot;})</span>
+<span class="fc" id="L91">                            .sqlField();</span>
+            case &quot;name&quot;:
+                // we force the path to use the single attribute 'value' from the name encoding
+<span class="nc" id="L94">                return new FullCompositionJson(fieldResolutionContext, joinSetup)</span>
+<span class="nc" id="L95">                        .forJsonPath(new String[] {&quot;name&quot;, &quot;&quot;})</span>
+<span class="nc" id="L96">                        .sqlField();</span>
+            case &quot;name/value&quot;:
+                // we force the path to use the single attribute 'value' from the name encoding
+<span class="fc" id="L99">                return new GenericJsonField(fieldResolutionContext, joinSetup)</span>
+<span class="fc" id="L100">                        .forJsonPath(new String[] {&quot;value&quot;, &quot;&quot;})</span>
+<span class="fc" id="L101">                        .dvCodedText(ENTRY.NAME);</span>
+            case &quot;archetype_node_id&quot;:
+<span class="nc" id="L103">                return new SimpleCompositionAttribute(fieldResolutionContext, joinSetup)</span>
+<span class="nc" id="L104">                        .forTableField(ENTRY.ARCHETYPE_ID)</span>
+<span class="nc" id="L105">                        .sqlField();</span>
+            case &quot;template_id&quot;:
+<span class="fc" id="L107">                return new SimpleCompositionAttribute(fieldResolutionContext, joinSetup)</span>
+<span class="fc" id="L108">                        .forTableField(ENTRY.TEMPLATE_ID)</span>
+<span class="fc" id="L109">                        .sqlField();</span>
+            case &quot;archetype_details/template_id/value&quot;:
+<span class="nc" id="L111">                return new SimpleCompositionAttribute(fieldResolutionContext, joinSetup)</span>
+<span class="nc" id="L112">                        .forTableField(ENTRY.TEMPLATE_ID)</span>
+<span class="nc" id="L113">                        .sqlField();</span>
+            default:
+                break;
+        }
+        // else assume a partial json path
+
+<span class="nc" id="L119">        return new FullCompositionJson(fieldResolutionContext, joinSetup)</span>
+<span class="nc" id="L120">                .forJsonPath(path)</span>
+<span class="nc" id="L121">                .sqlField();</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.7.202105040129</span></div></body></html>

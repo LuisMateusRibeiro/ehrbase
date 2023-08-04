@@ -1,0 +1,215 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../../jacoco-resources/report.gif" type="image/gif"/><title>SysPeriodBinder.java</title><link rel="stylesheet" href="../../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../../index.html" class="el_report">Overall Coverage</a> &gt; <a href="../index.html" class="el_bundle">jooq-pg</a> &gt; <a href="index.source.html" class="el_package">org.ehrbase.jooq.binding</a> &gt; <span class="el_source">SysPeriodBinder.java</span></div><h1>SysPeriodBinder.java</h1><pre class="source lang-java linenums">/*
+ * Copyright (c) 2020-2022 vitasystems GmbH and Hannover Medical School.
+ *
+ * This file is part of project EHRbase
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     https://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.ehrbase.jooq.binding;
+
+import static java.time.format.DateTimeFormatter.ISO_OFFSET_DATE_TIME;
+
+import java.sql.SQLException;
+import java.sql.SQLFeatureNotSupportedException;
+import java.sql.Types;
+import java.time.OffsetDateTime;
+import java.util.AbstractMap;
+import java.util.Objects;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+import org.jooq.Binding;
+import org.jooq.BindingGetResultSetContext;
+import org.jooq.BindingGetSQLInputContext;
+import org.jooq.BindingGetStatementContext;
+import org.jooq.BindingRegisterContext;
+import org.jooq.BindingSQLContext;
+import org.jooq.BindingSetSQLOutputContext;
+import org.jooq.BindingSetStatementContext;
+import org.jooq.Converter;
+import org.jooq.conf.ParamType;
+import org.jooq.impl.DSL;
+
+/**
+ * Binding &lt;T&gt; = Object (unknown DB type), and &lt;U&gt; = {@link AbstractMap.SimpleEntry&lt;OffsetDateTime, OffsetDateTime&gt;} (user type) for &quot;sys_period&quot; column (of STATUS table).
+ * See pom.xml of this module for further configuration, like what columns are linked with this binding.
+ * Source: https://www.jooq.org/doc/3.12/manual/code-generation/custom-data-type-bindings/
+ *
+ * @author Jake Smolka
+ * @author Renaud Subiger
+ * @since 1.0
+ */
+@SuppressWarnings(&quot;serial&quot;)
+<span class="fc" id="L52">public class SysPeriodBinder implements Binding&lt;Object, AbstractMap.SimpleEntry&lt;OffsetDateTime, OffsetDateTime&gt;&gt; {</span>
+
+    // source of pattern: https://gist.github.com/gregopet/8d0feb4fe4075a8525c1175243ee38b0
+    private static final String DATE_OR_EMPTY = &quot;(?:(?:\&quot;([^\&quot;]+)\&quot;)?)&quot;;
+<span class="fc" id="L56">    private static final Pattern PATTERN = Pattern.compile(&quot;[(\\[(]&quot; + DATE_OR_EMPTY + &quot;,&quot; + DATE_OR_EMPTY + &quot;[\\])]&quot;);</span>
+
+    // The converter does all the work
+    @Override
+    public Converter&lt;Object, AbstractMap.SimpleEntry&lt;OffsetDateTime, OffsetDateTime&gt;&gt; converter() {
+<span class="fc" id="L61">        return new Converter&lt;&gt;() {</span>
+
+            @SuppressWarnings(&quot;unchecked&quot;)
+            @Override
+            public AbstractMap.SimpleEntry&lt;OffsetDateTime, OffsetDateTime&gt; from(Object databaseObject) {
+<span class="nc bnc" id="L66" title="All 2 branches missed.">                if (databaseObject == null) {</span>
+<span class="nc" id="L67">                    return null;</span>
+<span class="nc bnc" id="L68" title="All 2 branches missed.">                } else if (databaseObject instanceof AbstractMap.SimpleEntry)</span>
+<span class="nc" id="L69">                    return (AbstractMap.SimpleEntry&lt;OffsetDateTime, OffsetDateTime&gt;) databaseObject;</span>
+                else {
+<span class="nc" id="L71">                    Matcher m = PATTERN.matcher(&quot;&quot; + databaseObject);</span>
+<span class="nc bnc" id="L72" title="All 2 branches missed.">                    if (m.find()) {</span>
+<span class="nc" id="L73">                        String lowerStr = m.group(1).replace(&quot; &quot;, &quot;T&quot;);</span>
+<span class="nc" id="L74">                        String upperStr = m.group(2);</span>
+
+<span class="nc" id="L76">                        OffsetDateTime lower = OffsetDateTime.parse(lowerStr);</span>
+
+<span class="nc bnc" id="L78" title="All 2 branches missed.">                        if (upperStr != null) { // can be empty</span>
+<span class="nc" id="L79">                            upperStr = upperStr.replace(&quot; &quot;, &quot;T&quot;);</span>
+<span class="nc" id="L80">                            OffsetDateTime upper = OffsetDateTime.parse(upperStr);</span>
+<span class="nc" id="L81">                            return new AbstractMap.SimpleEntry&lt;&gt;(lower, upper);</span>
+                        } else {
+<span class="nc" id="L83">                            return new AbstractMap.SimpleEntry&lt;&gt;(lower, null);</span>
+                        }
+                    } else {
+<span class="nc" id="L86">                        throw new IllegalArgumentException(&quot;Unsupported range : &quot; + databaseObject);</span>
+                    }
+                }
+            }
+
+            @Override
+            public Object to(AbstractMap.SimpleEntry&lt;OffsetDateTime, OffsetDateTime&gt; userObject) {
+<span class="nc bnc" id="L93" title="All 2 branches missed.">                if (userObject == null) {</span>
+<span class="nc" id="L94">                    return null;</span>
+                }
+
+<span class="nc" id="L97">                String lower = userObject.getKey().format(ISO_OFFSET_DATE_TIME).replace(&quot;T&quot;, &quot; &quot;);</span>
+<span class="nc" id="L98">                String upper = &quot;&quot;;</span>
+<span class="nc bnc" id="L99" title="All 2 branches missed.">                if (userObject.getValue() != null) // upper bound can be empty</span>
+<span class="nc" id="L100">                upper = userObject.getValue().format(ISO_OFFSET_DATE_TIME).replace(&quot;T&quot;, &quot; &quot;);</span>
+
+<span class="nc bnc" id="L102" title="All 2 branches missed.">                if (upper.isEmpty()) {</span>
+<span class="nc" id="L103">                    return &quot;[\&quot;&quot; + lower + &quot;\&quot;,)&quot;;</span>
+                } else {
+<span class="nc" id="L105">                    return &quot;[\&quot;&quot; + lower + &quot;\&quot;,)\&quot;&quot; + lower + &quot;\&quot;)&quot;;</span>
+                }
+            }
+
+            @Override
+            public Class&lt;Object&gt; fromType() {
+<span class="fc" id="L111">                return Object.class;</span>
+            }
+
+            @SuppressWarnings({&quot;unchecked&quot;, &quot;rawtypes&quot;})
+            @Override
+            public Class&lt;AbstractMap.SimpleEntry&lt;OffsetDateTime, OffsetDateTime&gt;&gt; toType() {
+<span class="fc" id="L117">                return (Class) AbstractMap.SimpleEntry.class;</span>
+            }
+        };
+    }
+
+    // Methods below are mapping the converter from above to specific scenarios, i.e. calling via different jooq and
+    // jooq-compatible sql executions. For instance, .store() or manually building a InsertQuery.
+
+    /**
+     * Rending a bind variable for the binding context's value and casting it to the AbstractMap.SimpleEntry&lt;OffsetDateTime, OffsetDateTime&gt; type
+     *
+     * @param ctx internal DB context
+     * @throws SQLException when SQL execution failed
+     */
+    @Override
+    public void sql(BindingSQLContext&lt;AbstractMap.SimpleEntry&lt;OffsetDateTime, OffsetDateTime&gt;&gt; ctx)
+            throws SQLException {
+        // Depending on how you generate your SQL, you may need to explicitly distinguish
+        // between jOOQ generating bind variables or inlined literals.
+<span class="nc bnc" id="L136" title="All 2 branches missed.">        if (ctx.render().paramType() == ParamType.INLINED)</span>
+<span class="nc" id="L137">            ctx.render().visit(DSL.inline(ctx.convert(converter()).value())).sql(&quot;::tstzrange&quot;);</span>
+<span class="nc" id="L138">        else ctx.render().sql(&quot;?::tstzrange&quot;);</span>
+<span class="nc" id="L139">    }</span>
+
+    /**
+     * Registering VARCHAR types for JDBC CallableStatement OUT parameters
+     *
+     * @param ctx internal DB context
+     * @throws SQLException when SQL execution failed
+     */
+    @Override
+    public void register(BindingRegisterContext&lt;AbstractMap.SimpleEntry&lt;OffsetDateTime, OffsetDateTime&gt;&gt; ctx)
+            throws SQLException {
+<span class="nc" id="L150">        ctx.statement().registerOutParameter(ctx.index(), Types.VARCHAR);</span>
+<span class="nc" id="L151">    }</span>
+
+    /**
+     * Converting the AbstractMap.SimpleEntry&lt;OffsetDateTime, OffsetDateTime&gt; to a String value and setting that on a JDBC PreparedStatement
+     *
+     * @param ctx internal DB context
+     * @throws SQLException when SQL execution failed
+     */
+    @Override
+    public void set(BindingSetStatementContext&lt;AbstractMap.SimpleEntry&lt;OffsetDateTime, OffsetDateTime&gt;&gt; ctx)
+            throws SQLException {
+<span class="nc" id="L162">        ctx.statement()</span>
+<span class="nc" id="L163">                .setString(</span>
+<span class="nc" id="L164">                        ctx.index(), Objects.toString(ctx.convert(converter()).value(), null));</span>
+<span class="nc" id="L165">    }</span>
+
+    /**
+     * Getting a String value from a JDBC ResultSet and converting that to a AbstractMap.SimpleEntry&lt;OffsetDateTime, OffsetDateTime&gt;
+     *
+     * @param ctx internal DB context
+     * @throws SQLException when SQL execution failed
+     */
+    @Override
+    public void get(BindingGetResultSetContext&lt;AbstractMap.SimpleEntry&lt;OffsetDateTime, OffsetDateTime&gt;&gt; ctx)
+            throws SQLException {
+<span class="nc" id="L176">        ctx.convert(converter()).value(ctx.resultSet().getString(ctx.index()));</span>
+<span class="nc" id="L177">    }</span>
+
+    /**
+     * Getting a String value from a JDBC CallableStatement and converting that to a AbstractMap.SimpleEntry&lt;OffsetDateTime, OffsetDateTime&gt;
+     *
+     * @param ctx internal DB context
+     * @throws SQLException when SQL execution failed
+     */
+    @Override
+    public void get(BindingGetStatementContext&lt;AbstractMap.SimpleEntry&lt;OffsetDateTime, OffsetDateTime&gt;&gt; ctx)
+            throws SQLException {
+<span class="nc" id="L188">        ctx.convert(converter()).value(ctx.statement().getString(ctx.index()));</span>
+<span class="nc" id="L189">    }</span>
+
+    /**
+     * Getting a value from a JDBC SQLInput (useful for Oracle OBJECT types)
+     *
+     * @param ctx internal DB context
+     * @throws SQLException when SQL execution failed
+     */
+    @Override
+    public void get(BindingGetSQLInputContext&lt;AbstractMap.SimpleEntry&lt;OffsetDateTime, OffsetDateTime&gt;&gt; ctx)
+            throws SQLException {
+<span class="nc" id="L200">        throw new SQLFeatureNotSupportedException();</span>
+    }
+
+    /**
+     * Setting a value on a JDBC SQLOutput (useful for Oracle OBJECT types)
+     *
+     * @param ctx internal DB context
+     * @throws SQLException when SQL execution failed
+     */
+    @Override
+    public void set(BindingSetSQLOutputContext&lt;AbstractMap.SimpleEntry&lt;OffsetDateTime, OffsetDateTime&gt;&gt; ctx)
+            throws SQLException {
+<span class="nc" id="L212">        throw new SQLFeatureNotSupportedException();</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.7.202105040129</span></div></body></html>

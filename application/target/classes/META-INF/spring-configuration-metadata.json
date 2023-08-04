@@ -1,0 +1,328 @@
+{
+  "groups": [
+    {
+      "name": "abac",
+      "type": "org.ehrbase.application.abac.AbacConfig",
+      "sourceType": "org.ehrbase.application.abac.AbacConfig"
+    },
+    {
+      "name": "cache",
+      "type": "org.ehrbase.application.config.cache.CacheProperties",
+      "sourceType": "org.ehrbase.application.config.cache.CacheProperties"
+    },
+    {
+      "name": "client",
+      "type": "org.ehrbase.application.config.client.HttpClientProperties",
+      "sourceType": "org.ehrbase.application.config.client.HttpClientProperties"
+    },
+    {
+      "name": "client.proxy",
+      "type": "org.ehrbase.application.config.client.HttpClientProperties$Proxy",
+      "sourceType": "org.ehrbase.application.config.client.HttpClientProperties",
+      "sourceMethod": "getProxy()"
+    },
+    {
+      "name": "client.ssl",
+      "type": "org.ehrbase.application.config.client.HttpClientProperties$Ssl",
+      "sourceType": "org.ehrbase.application.config.client.HttpClientProperties",
+      "sourceMethod": "getSsl()"
+    },
+    {
+      "name": "httpclient",
+      "type": "org.ehrbase.application.config.HttpClientConfig",
+      "sourceType": "org.ehrbase.application.config.HttpClientConfig"
+    },
+    {
+      "name": "plugin-manager",
+      "type": "org.ehrbase.application.config.plugin.PluginManagerProperties",
+      "sourceType": "org.ehrbase.application.config.plugin.PluginManagerProperties"
+    },
+    {
+      "name": "security",
+      "type": "org.ehrbase.application.config.security.SecurityProperties",
+      "sourceType": "org.ehrbase.application.config.security.SecurityProperties"
+    },
+    {
+      "name": "server",
+      "type": "org.ehrbase.application.config.ServerConfigImp",
+      "sourceType": "org.ehrbase.application.config.ServerConfigImp"
+    },
+    {
+      "name": "server.aql-config",
+      "type": "org.ehrbase.application.config.ServerConfigImp$AqlConfig",
+      "sourceType": "org.ehrbase.application.config.ServerConfigImp",
+      "sourceMethod": "getAqlConfig()"
+    },
+    {
+      "name": "validation.external-terminology",
+      "type": "org.ehrbase.application.config.validation.ValidationProperties",
+      "sourceType": "org.ehrbase.application.config.validation.ValidationProperties"
+    },
+    {
+      "name": "web.cors",
+      "type": "org.ehrbase.application.config.web.CorsProperties",
+      "sourceType": "org.ehrbase.application.config.web.CorsProperties"
+    }
+  ],
+  "properties": [
+    {
+      "name": "abac.organization-claim",
+      "type": "java.lang.String",
+      "sourceType": "org.ehrbase.application.abac.AbacConfig"
+    },
+    {
+      "name": "abac.patient-claim",
+      "type": "java.lang.String",
+      "sourceType": "org.ehrbase.application.abac.AbacConfig"
+    },
+    {
+      "name": "abac.policy",
+      "type": "java.util.Map<org.ehrbase.application.abac.AbacConfig$AbacType,org.ehrbase.application.abac.AbacConfig$Policy>",
+      "sourceType": "org.ehrbase.application.abac.AbacConfig"
+    },
+    {
+      "name": "abac.server",
+      "type": "java.net.URI",
+      "sourceType": "org.ehrbase.application.abac.AbacConfig"
+    },
+    {
+      "name": "cache.init-on-startup",
+      "type": "java.lang.Boolean",
+      "description": "Whether to initialize the caches during application startup.",
+      "sourceType": "org.ehrbase.application.config.cache.CacheProperties",
+      "defaultValue": true
+    },
+    {
+      "name": "cache.pre-build-queries",
+      "type": "java.lang.Boolean",
+      "description": "Whether to pre-build queries when a new template is added.",
+      "sourceType": "org.ehrbase.application.config.cache.CacheProperties",
+      "defaultValue": true
+    },
+    {
+      "name": "cache.pre-build-queries-depth",
+      "type": "java.lang.Integer",
+      "description": "The default node depth for pre-built queries.",
+      "sourceType": "org.ehrbase.application.config.cache.CacheProperties",
+      "defaultValue": 4
+    },
+    {
+      "name": "client.proxy.host",
+      "type": "java.lang.String",
+      "sourceType": "org.ehrbase.application.config.client.HttpClientProperties$Proxy"
+    },
+    {
+      "name": "client.proxy.password",
+      "type": "java.lang.String",
+      "sourceType": "org.ehrbase.application.config.client.HttpClientProperties$Proxy"
+    },
+    {
+      "name": "client.proxy.port",
+      "type": "java.lang.Integer",
+      "sourceType": "org.ehrbase.application.config.client.HttpClientProperties$Proxy"
+    },
+    {
+      "name": "client.proxy.username",
+      "type": "java.lang.String",
+      "sourceType": "org.ehrbase.application.config.client.HttpClientProperties$Proxy"
+    },
+    {
+      "name": "client.ssl.enabled",
+      "type": "java.lang.Boolean",
+      "sourceType": "org.ehrbase.application.config.client.HttpClientProperties$Ssl",
+      "defaultValue": false
+    },
+    {
+      "name": "client.ssl.key-password",
+      "type": "java.lang.String",
+      "sourceType": "org.ehrbase.application.config.client.HttpClientProperties$Ssl"
+    },
+    {
+      "name": "client.ssl.key-store",
+      "type": "java.lang.String",
+      "sourceType": "org.ehrbase.application.config.client.HttpClientProperties$Ssl"
+    },
+    {
+      "name": "client.ssl.key-store-password",
+      "type": "java.lang.String",
+      "sourceType": "org.ehrbase.application.config.client.HttpClientProperties$Ssl"
+    },
+    {
+      "name": "client.ssl.key-store-type",
+      "type": "java.lang.String",
+      "sourceType": "org.ehrbase.application.config.client.HttpClientProperties$Ssl"
+    },
+    {
+      "name": "client.ssl.trust-store",
+      "type": "java.lang.String",
+      "sourceType": "org.ehrbase.application.config.client.HttpClientProperties$Ssl"
+    },
+    {
+      "name": "client.ssl.trust-store-password",
+      "type": "java.lang.String",
+      "sourceType": "org.ehrbase.application.config.client.HttpClientProperties$Ssl"
+    },
+    {
+      "name": "client.ssl.trust-store-type",
+      "type": "java.lang.String",
+      "sourceType": "org.ehrbase.application.config.client.HttpClientProperties$Ssl"
+    },
+    {
+      "name": "httpclient.proxy",
+      "type": "java.net.URI",
+      "sourceType": "org.ehrbase.application.config.HttpClientConfig"
+    },
+    {
+      "name": "httpclient.proxy-port",
+      "type": "java.lang.Integer",
+      "sourceType": "org.ehrbase.application.config.HttpClientConfig",
+      "defaultValue": 0
+    },
+    {
+      "name": "plugin-manager.enable",
+      "type": "java.lang.Boolean",
+      "sourceType": "org.ehrbase.application.config.plugin.PluginManagerProperties",
+      "defaultValue": false
+    },
+    {
+      "name": "plugin-manager.plugin-config-dir",
+      "type": "java.nio.file.Path",
+      "sourceType": "org.ehrbase.application.config.plugin.PluginManagerProperties"
+    },
+    {
+      "name": "plugin-manager.plugin-context-path",
+      "type": "java.lang.String",
+      "sourceType": "org.ehrbase.application.config.plugin.PluginManagerProperties"
+    },
+    {
+      "name": "plugin-manager.plugin-dir",
+      "type": "java.nio.file.Path",
+      "sourceType": "org.ehrbase.application.config.plugin.PluginManagerProperties"
+    },
+    {
+      "name": "security.auth-admin-password",
+      "type": "java.lang.String",
+      "description": "Password for the admin user.",
+      "sourceType": "org.ehrbase.application.config.security.SecurityProperties"
+    },
+    {
+      "name": "security.auth-admin-user",
+      "type": "java.lang.String",
+      "description": "Admin username.",
+      "sourceType": "org.ehrbase.application.config.security.SecurityProperties"
+    },
+    {
+      "name": "security.auth-password",
+      "type": "java.lang.String",
+      "description": "Password for the user.",
+      "sourceType": "org.ehrbase.application.config.security.SecurityProperties"
+    },
+    {
+      "name": "security.auth-type",
+      "type": "org.ehrbase.application.config.security.SecurityProperties$AuthTypes",
+      "description": "Authentication type.",
+      "sourceType": "org.ehrbase.application.config.security.SecurityProperties"
+    },
+    {
+      "name": "security.auth-user",
+      "type": "java.lang.String",
+      "description": "Username.",
+      "sourceType": "org.ehrbase.application.config.security.SecurityProperties"
+    },
+    {
+      "name": "security.oauth2-admin-role",
+      "type": "java.lang.String",
+      "description": "Admin role name used with OAuth2 authentication type.",
+      "sourceType": "org.ehrbase.application.config.security.SecurityProperties"
+    },
+    {
+      "name": "security.oauth2-user-role",
+      "type": "java.lang.String",
+      "description": "User role name used with OAuth2 authentication type.",
+      "sourceType": "org.ehrbase.application.config.security.SecurityProperties"
+    },
+    {
+      "name": "server.aql-config.ignore-iterative-node-list",
+      "type": "java.lang.String",
+      "sourceType": "org.ehrbase.application.config.ServerConfigImp$AqlConfig"
+    },
+    {
+      "name": "server.aql-config.iteration-scan-depth",
+      "type": "java.lang.Integer",
+      "sourceType": "org.ehrbase.application.config.ServerConfigImp$AqlConfig",
+      "defaultValue": 1
+    },
+    {
+      "name": "server.disable-strict-validation",
+      "type": "java.lang.Boolean",
+      "sourceType": "org.ehrbase.application.config.ServerConfigImp",
+      "defaultValue": false
+    },
+    {
+      "name": "server.nodename",
+      "type": "java.lang.String",
+      "sourceType": "org.ehrbase.application.config.ServerConfigImp",
+      "defaultValue": "local.ehrbase.org"
+    },
+    {
+      "name": "server.port",
+      "type": "java.lang.Integer",
+      "sourceType": "org.ehrbase.application.config.ServerConfigImp",
+      "defaultValue": 0
+    },
+    {
+      "name": "validation.external-terminology.enabled",
+      "type": "java.lang.Boolean",
+      "sourceType": "org.ehrbase.application.config.validation.ValidationProperties",
+      "defaultValue": false
+    },
+    {
+      "name": "validation.external-terminology.fail-on-error",
+      "type": "java.lang.Boolean",
+      "sourceType": "org.ehrbase.application.config.validation.ValidationProperties",
+      "defaultValue": false
+    },
+    {
+      "name": "validation.external-terminology.provider",
+      "type": "java.util.Map<java.lang.String,org.ehrbase.application.config.validation.ValidationProperties$Provider>",
+      "sourceType": "org.ehrbase.application.config.validation.ValidationProperties"
+    },
+    {
+      "name": "web.cors.allow-credentials",
+      "type": "java.lang.Boolean",
+      "sourceType": "org.ehrbase.application.config.web.CorsProperties"
+    },
+    {
+      "name": "web.cors.allowed-headers",
+      "type": "java.util.List<java.lang.String>",
+      "sourceType": "org.ehrbase.application.config.web.CorsProperties"
+    },
+    {
+      "name": "web.cors.allowed-methods",
+      "type": "java.util.List<java.lang.String>",
+      "sourceType": "org.ehrbase.application.config.web.CorsProperties"
+    },
+    {
+      "name": "web.cors.allowed-origin-patterns",
+      "type": "java.util.List<java.lang.String>",
+      "sourceType": "org.ehrbase.application.config.web.CorsProperties"
+    },
+    {
+      "name": "web.cors.allowed-origins",
+      "type": "java.util.List<java.lang.String>",
+      "sourceType": "org.ehrbase.application.config.web.CorsProperties"
+    },
+    {
+      "name": "web.cors.exposed-headers",
+      "type": "java.util.List<java.lang.String>",
+      "sourceType": "org.ehrbase.application.config.web.CorsProperties"
+    },
+    {
+      "name": "web.cors.max-age",
+      "type": "java.time.Duration",
+      "sourceType": "org.ehrbase.application.config.web.CorsProperties",
+      "defaultValue": "1800s"
+    }
+  ],
+  "hints": []
+}

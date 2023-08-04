@@ -1,0 +1,157 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../../jacoco-resources/report.gif" type="image/gif"/><title>EhrScapeExceptionHandler.java</title><link rel="stylesheet" href="../../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../../index.html" class="el_report">Coverage with Unit Tests</a> &gt; <a href="../index.html" class="el_bundle">rest-ehr-scape</a> &gt; <a href="index.source.html" class="el_package">org.ehrbase.rest.ehrscape</a> &gt; <span class="el_source">EhrScapeExceptionHandler.java</span></div><h1>EhrScapeExceptionHandler.java</h1><pre class="source lang-java linenums">/*
+ * Copyright (c) 2022 vitasystems GmbH and Hannover Medical School.
+ *
+ * This file is part of project EHRbase
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     https://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.ehrbase.rest.ehrscape;
+
+import java.net.URI;
+import java.nio.file.AccessDeniedException;
+import java.util.HashMap;
+import java.util.Map;
+import org.ehrbase.api.exception.GeneralRequestProcessingException;
+import org.ehrbase.api.exception.InvalidApiParameterException;
+import org.ehrbase.api.exception.NotAcceptableException;
+import org.ehrbase.api.exception.ObjectNotFoundException;
+import org.ehrbase.api.exception.PreconditionFailedException;
+import org.ehrbase.api.exception.StateConflictException;
+import org.ehrbase.api.exception.UnprocessableEntityException;
+import org.ehrbase.api.exception.UnsupportedMediaTypeException;
+import org.ehrbase.api.exception.ValidationException;
+import org.ehrbase.openehr.sdk.serialisation.exception.UnmarshalException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.validation.BindException;
+import org.springframework.web.HttpMediaTypeNotAcceptableException;
+import org.springframework.web.HttpMediaTypeNotSupportedException;
+import org.springframework.web.bind.ServletRequestBindingException;
+import org.springframework.web.bind.annotation.ExceptionHandler;
+import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
+import org.springframework.web.multipart.support.MissingServletRequestPartException;
+import org.springframework.web.server.ResponseStatusException;
+
+/**
+ * EhrScape API exception handler.
+ *
+ * @author Renaud Subiger
+ * @since 1.0.0
+ */
+@RestControllerAdvice(basePackages = &quot;org.ehrbase.rest.ehrscape.controller&quot;)
+<span class="nc" id="L57">public class EhrScapeExceptionHandler {</span>
+
+<span class="nc" id="L59">    private final Logger logger = LoggerFactory.getLogger(getClass());</span>
+
+    // 400
+    @ExceptionHandler({
+        // Spring MVC
+        HttpMessageNotReadableException.class,
+        MethodArgumentTypeMismatchException.class,
+        MissingServletRequestPartException.class,
+        BindException.class,
+        ServletRequestBindingException.class,
+        // Java/third party Library
+        IllegalArgumentException.class,
+        // ehrbase/SDK
+        GeneralRequestProcessingException.class,
+        InvalidApiParameterException.class,
+        UnprocessableEntityException.class,
+        ValidationException.class,
+        UnmarshalException.class,
+    })
+    public ResponseEntity&lt;Object&gt; handleBadRequestExceptions(Exception ex) {
+<span class="nc" id="L79">        return handleExceptionInternal(ex, ex.getMessage(), new HttpHeaders(), HttpStatus.BAD_REQUEST);</span>
+    }
+
+    @ExceptionHandler(AccessDeniedException.class)
+    public ResponseEntity&lt;Object&gt; handleObjectNotFoundException(AccessDeniedException ex) {
+<span class="nc" id="L84">        return handleExceptionInternal(ex, ex.getMessage(), new HttpHeaders(), HttpStatus.FORBIDDEN);</span>
+    }
+
+    // 404
+    @ExceptionHandler(ObjectNotFoundException.class)
+    public ResponseEntity&lt;Object&gt; handleObjectNotFoundException(ObjectNotFoundException ex) {
+<span class="nc" id="L90">        return handleExceptionInternal(ex, ex.getMessage(), new HttpHeaders(), HttpStatus.NOT_FOUND);</span>
+    }
+
+    // 406
+    @ExceptionHandler({HttpMediaTypeNotAcceptableException.class, NotAcceptableException.class})
+    public ResponseEntity&lt;Object&gt; handleNotAcceptableException(NotAcceptableException ex) {
+<span class="nc" id="L96">        return handleExceptionInternal(ex, ex.getMessage(), new HttpHeaders(), HttpStatus.NOT_ACCEPTABLE);</span>
+    }
+
+    // 409
+    @ExceptionHandler(StateConflictException.class)
+    public ResponseEntity&lt;Object&gt; handleStateConflictException(StateConflictException ex) {
+<span class="nc" id="L102">        return handleExceptionInternal(ex, ex.getMessage(), new HttpHeaders(), HttpStatus.CONFLICT);</span>
+    }
+
+    // 412
+    @ExceptionHandler(PreconditionFailedException.class)
+    public ResponseEntity&lt;Object&gt; handlePreconditionFailedException(PreconditionFailedException ex) {
+
+<span class="nc" id="L109">        var headers = new HttpHeaders();</span>
+
+<span class="nc bnc" id="L111" title="All 4 branches missed.">        if (ex.getUrl() != null &amp;&amp; ex.getCurrentVersionUid() != null) {</span>
+<span class="nc" id="L112">            headers.setETag(&quot;\&quot;&quot; + ex.getCurrentVersionUid() + &quot;\&quot;&quot;);</span>
+<span class="nc" id="L113">            headers.setLocation(URI.create(ex.getUrl()));</span>
+        }
+
+<span class="nc" id="L116">        return handleExceptionInternal(ex, ex.getMessage(), headers, HttpStatus.PRECONDITION_FAILED);</span>
+    }
+
+    // 415
+    @ExceptionHandler({HttpMediaTypeNotSupportedException.class, UnsupportedMediaTypeException.class})
+    public ResponseEntity&lt;Object&gt; handleUnsupportedMediaTypeException(UnsupportedMediaTypeException ex) {
+<span class="nc" id="L122">        return handleExceptionInternal(ex, ex.getMessage(), new HttpHeaders(), HttpStatus.UNSUPPORTED_MEDIA_TYPE);</span>
+    }
+
+    // custom status
+    @ExceptionHandler(ResponseStatusException.class)
+    public ResponseEntity&lt;Object&gt; handleSpringResponseStatusException(ResponseStatusException ex) {
+        // rethrow will not work properly, so we handle it
+<span class="nc" id="L129">        return handleExceptionInternal(ex, ex.getReason(), ex.getResponseHeaders(), ex.getStatus());</span>
+    }
+
+    // 500 - general
+    @ExceptionHandler(Exception.class)
+    public ResponseEntity&lt;Object&gt; handleUncaughtException(Exception ex) {
+<span class="nc" id="L135">        var message = &quot;An internal error has occurred. Please contact your administrator.&quot;;</span>
+<span class="nc" id="L136">        return handleExceptionInternal(ex, message, new HttpHeaders(), HttpStatus.INTERNAL_SERVER_ERROR);</span>
+    }
+
+    private ResponseEntity&lt;Object&gt; handleExceptionInternal(
+            Exception ex, String message, HttpHeaders headers, HttpStatus status) {
+
+<span class="nc bnc" id="L142" title="All 2 branches missed.">        if (status.is5xxServerError()) {</span>
+<span class="nc" id="L143">            logger.error(&quot;&quot;, ex);</span>
+        } else {
+<span class="nc" id="L145">            logger.warn(ex.getMessage());</span>
+<span class="nc bnc" id="L146" title="All 2 branches missed.">            if (logger.isDebugEnabled()) {</span>
+<span class="nc" id="L147">                logger.debug(&quot;Exception stack trace&quot;, ex);</span>
+            }
+        }
+
+<span class="nc" id="L151">        Map&lt;String, Object&gt; body = new HashMap&lt;&gt;();</span>
+<span class="nc" id="L152">        body.put(&quot;error&quot;, status.getReasonPhrase());</span>
+<span class="nc" id="L153">        body.put(&quot;message&quot;, message);</span>
+<span class="nc" id="L154">        return new ResponseEntity&lt;&gt;(body, headers, status);</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.7.202105040129</span></div></body></html>

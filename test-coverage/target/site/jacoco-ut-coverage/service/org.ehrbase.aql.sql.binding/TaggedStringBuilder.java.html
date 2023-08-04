@@ -1,0 +1,108 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../../jacoco-resources/report.gif" type="image/gif"/><title>TaggedStringBuilder.java</title><link rel="stylesheet" href="../../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../../index.html" class="el_report">Coverage with Unit Tests</a> &gt; <a href="../index.html" class="el_bundle">service</a> &gt; <a href="index.source.html" class="el_package">org.ehrbase.aql.sql.binding</a> &gt; <span class="el_source">TaggedStringBuilder.java</span></div><h1>TaggedStringBuilder.java</h1><pre class="source lang-java linenums">/*
+ * Copyright (c) 2019 vitasystems GmbH and Hannover Medical School.
+ *
+ * This file is part of project EHRbase
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     https://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.ehrbase.aql.sql.binding;
+
+public class TaggedStringBuilder implements I_TaggedStringBuilder {
+
+    private StringBuilder stringBuffer;
+    private TagField tagField;
+
+<span class="nc" id="L25">    public TaggedStringBuilder(TagField tagField) {</span>
+<span class="nc" id="L26">        this.stringBuffer = new StringBuilder();</span>
+<span class="nc" id="L27">        this.tagField = tagField;</span>
+<span class="nc" id="L28">    }</span>
+
+<span class="fc" id="L30">    public TaggedStringBuilder() {</span>
+<span class="fc" id="L31">        this.stringBuffer = new StringBuilder();</span>
+<span class="fc" id="L32">    }</span>
+
+<span class="fc" id="L34">    public TaggedStringBuilder(String string, TagField tagField) {</span>
+<span class="fc" id="L35">        this.stringBuffer = new StringBuilder();</span>
+<span class="fc" id="L36">        stringBuffer.append(string);</span>
+<span class="fc" id="L37">        this.tagField = tagField;</span>
+<span class="fc" id="L38">    }</span>
+
+    @Override
+    public StringBuilder append(String string) {
+<span class="fc" id="L42">        return stringBuffer.append(string);</span>
+    }
+
+    @Override
+    public void replaceLast(String previous, String newString) {
+<span class="fc" id="L47">        int lastPos = stringBuffer.lastIndexOf(previous);</span>
+<span class="pc bpc" id="L48" title="1 of 2 branches missed.">        if (lastPos &gt;= 0) {</span>
+<span class="fc" id="L49">            stringBuffer.delete(lastPos, lastPos + previous.length());</span>
+<span class="fc" id="L50">            stringBuffer.insert(lastPos, newString);</span>
+        }
+<span class="fc" id="L52">    }</span>
+
+    @Override
+    public int lastIndexOf(String string) {
+<span class="nc" id="L56">        return stringBuffer.lastIndexOf(string);</span>
+    }
+
+    @Override
+    public int indexOf(String string) {
+<span class="nc" id="L61">        return stringBuffer.indexOf(string);</span>
+    }
+
+    @Override
+    public void replace(String previous, String newString) {
+<span class="nc" id="L66">        int indexOf = stringBuffer.indexOf(previous);</span>
+<span class="nc bnc" id="L67" title="All 2 branches missed.">        if (indexOf &gt;= 0) {</span>
+<span class="nc" id="L68">            stringBuffer.delete(indexOf, indexOf + previous.length());</span>
+<span class="nc" id="L69">            stringBuffer.insert(indexOf, newString);</span>
+        }
+<span class="nc" id="L71">    }</span>
+
+    @Override
+    public void replace(Integer start, Integer end, String replacement) {
+<span class="nc" id="L75">        stringBuffer.replace(start, end, replacement);</span>
+<span class="nc" id="L76">    }</span>
+
+    @Override
+    public void insert(Integer offset, String toInsert) {
+<span class="nc" id="L80">        stringBuffer.insert(offset, toInsert);</span>
+<span class="nc" id="L81">    }</span>
+
+    @Override
+    public String toString() {
+<span class="fc" id="L85">        return stringBuffer.toString();</span>
+    }
+
+    @Override
+    public int length() {
+<span class="nc" id="L90">        return stringBuffer.length();</span>
+    }
+
+    @Override
+    public TagField getTagField() {
+<span class="fc" id="L95">        return tagField;</span>
+    }
+
+    @Override
+    public void setTagField(TagField tagField) {
+<span class="fc" id="L100">        this.tagField = tagField;</span>
+<span class="fc" id="L101">    }</span>
+
+    @Override
+    public boolean startWith(String tag) {
+<span class="nc bnc" id="L105" title="All 2 branches missed.">        return stringBuffer.indexOf(tag) == 1; // starts with a quote!</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.7.202105040129</span></div></body></html>

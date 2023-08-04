@@ -1,0 +1,143 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../../jacoco-resources/report.gif" type="image/gif"/><title>GenericJsonPath.java</title><link rel="stylesheet" href="../../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../../index.html" class="el_report">Coverage with Unit Tests</a> &gt; <a href="../index.html" class="el_bundle">service</a> &gt; <a href="index.source.html" class="el_package">org.ehrbase.aql.sql.queryimpl.attribute</a> &gt; <span class="el_source">GenericJsonPath.java</span></div><h1>GenericJsonPath.java</h1><pre class="source lang-java linenums">/*
+ * Copyright (c) 2022 vitasystems GmbH and Hannover Medical School.
+ *
+ * This file is part of project EHRbase
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     https://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.ehrbase.aql.sql.queryimpl.attribute;
+
+import static org.ehrbase.jooq.dbencoding.CompositionSerializer.TAG_OTHER_DETAILS;
+
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
+import java.util.stream.Collectors;
+import org.ehrbase.aql.sql.queryimpl.JqueryPath;
+import org.ehrbase.aql.sql.queryimpl.JsonbEntryQuery;
+import org.ehrbase.aql.sql.queryimpl.NormalizedRmAttributePath;
+import org.ehrbase.aql.sql.queryimpl.QueryImplConstants;
+import org.ehrbase.jooq.dbencoding.wrappers.json.I_DvTypeAdapter;
+
+public class GenericJsonPath {
+
+    public static final String CONTEXT = &quot;context&quot;;
+    public static final String FEEDER_AUDIT = &quot;feeder_audit&quot;;
+    public static final String ORIGINATING_SYSTEM_ITEM_IDS = &quot;originating_system_item_ids&quot;;
+    public static final String FEEDER_SYSTEM_ITEM_IDS = &quot;feeder_system_item_ids&quot;;
+    public static final String ORIGINAL_CONTENT = &quot;original_content&quot;;
+    public static final String ORIGINATING_SYSTEM_AUDIT = &quot;originating_system_audit&quot;;
+    public static final String FEEDER_SYSTEM_AUDIT = &quot;feeder_system_audit&quot;;
+    public static final String SETTING = &quot;setting&quot;;
+    public static final String HEALTH_CARE_FACILITY = &quot;health_care_facility&quot;;
+    public static final String ITEMS = &quot;items&quot;;
+    public static final String CONTENT = &quot;content&quot;;
+    public static final String VALUE = &quot;value&quot;;
+    public static final String NAME = &quot;name&quot;;
+    public static final String OTHER_DETAILS = &quot;other_details&quot;;
+    public static final String OTHER_CONTEXT = &quot;other_context&quot;;
+    public static final String TERMINOLOGY_ID = &quot;terminology_id&quot;;
+    public static final String PURPOSE = &quot;purpose&quot;;
+    public static final String TARGET = &quot;target&quot;;
+    public static final String ARCHETYPE_NODE_ID = &quot;archetype_node_id&quot;;
+    private final String path;
+<span class="fc" id="L54">    private boolean isIterative = false;</span>
+
+<span class="fc" id="L56">    public GenericJsonPath(String path) {</span>
+<span class="fc" id="L57">        this.path = path;</span>
+<span class="fc" id="L58">    }</span>
+
+    public String jqueryPath() {
+<span class="pc bpc" id="L61" title="2 of 4 branches missed.">        if (path == null || path.isEmpty()) return path;</span>
+
+<span class="fc" id="L63">        JqueryPath jqueryPath = new JqueryPath(JsonbEntryQuery.PATH_PART.VARIABLE_PATH_PART, path, &quot;0&quot;);</span>
+
+<span class="fc" id="L65">        List&lt;String&gt; jqueryPaths = new NormalizedRmAttributePath(jqueryPath.evaluate()).transformStartingAt(0);</span>
+
+<span class="pc bpc" id="L67" title="2 of 4 branches missed.">        if (!jqueryPaths.isEmpty() &amp;&amp; jqueryPaths.get(0).startsWith(TAG_OTHER_DETAILS)) {</span>
+<span class="nc" id="L68">            jqueryPaths.set(0, jqueryPaths.get(0).replace(TAG_OTHER_DETAILS, OTHER_DETAILS));</span>
+<span class="pc bpc" id="L69" title="2 of 4 branches missed.">        } else if (!jqueryPaths.isEmpty() &amp;&amp; jqueryPaths.get(0).startsWith(&quot;/other_context&quot;))</span>
+<span class="nc" id="L70">            jqueryPaths.set(0, jqueryPaths.get(0).replace(&quot;/other_context&quot;, OTHER_CONTEXT));</span>
+<span class="pc bpc" id="L71" title="2 of 4 branches missed.">        else if (!jqueryPaths.isEmpty() &amp;&amp; jqueryPaths.get(0).startsWith(&quot;/feeder_system_item_ids&quot;))</span>
+<span class="nc" id="L72">            jqueryPaths.set(0, jqueryPaths.get(0).replace(&quot;/feeder_system_item_ids&quot;, FEEDER_SYSTEM_ITEM_IDS));</span>
+<span class="fc bfc" id="L73" title="All 2 branches covered.">        else if (jqueryPaths.size() == 1</span>
+<span class="fc bfc" id="L74" title="All 2 branches covered.">                &amp;&amp; !jqueryPaths.get(0).startsWith(OTHER_DETAILS)</span>
+<span class="pc bpc" id="L75" title="1 of 2 branches missed.">                &amp;&amp; !jqueryPaths.get(0).startsWith(OTHER_CONTEXT)) {</span>
+<span class="fc" id="L76">            jqueryPaths.set(0, jqueryPaths.get(0).replace(&quot;/&quot;, &quot;&quot;));</span>
+        }
+
+        // substitute all fixed indexes by an iterative marker forcing an array elements fct in SQL expression
+<span class="fc bfc" id="L80" title="All 2 branches covered.">        if (jqueryPaths.contains(&quot;0&quot;)) {</span>
+<span class="fc" id="L81">            jqueryPaths = jqueryPaths.stream()</span>
+<span class="fc bfc" id="L82" title="All 2 branches covered.">                    .map(s -&gt; s.equals(&quot;0&quot;) ? QueryImplConstants.AQL_NODE_ITERATIVE_MARKER : s)</span>
+<span class="fc" id="L83">                    .collect(Collectors.toList());</span>
+        }
+
+<span class="fc" id="L86">        return new JsonbSelect(jqueryPaths).field();</span>
+    }
+
+    /**
+     * @deprecated 12.6.21, use a common path resolution instead.
+     * @return
+     */
+    @Deprecated(forRemoval = true)
+    public String jqueryPathAttributeLevel() {
+<span class="nc bnc" id="L95" title="All 4 branches missed.">        if (path == null || path.isEmpty()) return path;</span>
+
+<span class="nc" id="L97">        List&lt;String&gt; jqueryPaths = Arrays.asList(path.split(&quot;/|,&quot;));</span>
+<span class="nc" id="L98">        List&lt;String&gt; actualPaths = new ArrayList&lt;&gt;();</span>
+
+<span class="nc bnc" id="L100" title="All 2 branches missed.">        for (int i = 0; i &lt; jqueryPaths.size(); i++) {</span>
+<span class="nc" id="L101">            String segment = jqueryPaths.get(i);</span>
+<span class="nc bnc" id="L102" title="All 2 branches missed.">            if ((segment.matches(NAME)</span>
+<span class="nc bnc" id="L103" title="All 2 branches missed.">                            &amp;&amp; isTerminalValue(jqueryPaths, i)</span>
+<span class="nc bnc" id="L104" title="All 2 branches missed.">                            &amp;&amp; jqueryPaths.get(0).equals(OTHER_DETAILS))</span>
+<span class="nc bnc" id="L105" title="All 2 branches missed.">                    || (segment.startsWith(ITEMS))) {</span>
+<span class="nc" id="L106">                actualPaths.add(&quot;/&quot; + segment);</span>
+                // takes care of array expression (unless the occurrence is specified)
+<span class="nc" id="L108">                actualPaths.add(&quot;0&quot;);</span>
+<span class="nc bnc" id="L109" title="All 2 branches missed.">            } else if (segment.startsWith(CONTENT)) {</span>
+<span class="nc" id="L110">                actualPaths.add(CONTENT + &quot;,/&quot; + segment);</span>
+<span class="nc" id="L111">                actualPaths.add(&quot;0&quot;); // as above</span>
+<span class="nc bnc" id="L112" title="All 2 branches missed.">            } else if (segment.matches(VALUE + &quot;|&quot; + NAME)</span>
+<span class="nc bnc" id="L113" title="All 2 branches missed.">                    &amp;&amp; !isTerminalValue(jqueryPaths, i)</span>
+<span class="nc bnc" id="L114" title="All 2 branches missed.">                    &amp;&amp; !jqueryPaths.get(0).equals(CONTEXT)) {</span>
+<span class="nc" id="L115">                actualPaths.add(&quot;/&quot; + segment);</span>
+<span class="nc bnc" id="L116" title="All 2 branches missed.">                if (segment.matches(NAME)) actualPaths.add(&quot;0&quot;);</span>
+<span class="nc bnc" id="L117" title="All 4 branches missed.">            } else if (segment.matches(ARCHETYPE_NODE_ID) &amp;&amp; jqueryPaths.get(0).equals(OTHER_DETAILS)) {</span>
+                // keep '/name' attribute db encoding format since other_details is not related to a template and kept
+                // as is...
+<span class="nc" id="L120">                actualPaths.add(&quot;/&quot; + segment);</span>
+<span class="nc" id="L121">            } else actualPaths.add(segment);</span>
+        }
+
+<span class="nc" id="L124">        return new JsonbSelect(actualPaths).field();</span>
+    }
+
+    public static boolean isTerminalValue(List&lt;String&gt; paths, int index) {
+<span class="pc bpc" id="L128" title="1 of 2 branches missed.">        return paths.size() == 1</span>
+<span class="pc bpc" id="L129" title="1 of 2 branches missed.">                || (paths.size() &gt; 1</span>
+<span class="pc bpc" id="L130" title="1 of 2 branches missed.">                        &amp;&amp; index == paths.size() - 1</span>
+<span class="fc" id="L131">                        &amp;&amp; paths.get(index)</span>
+<span class="pc bpc" id="L132" title="1 of 2 branches missed.">                                .matches(VALUE + &quot;|&quot; + NAME + &quot;|&quot; + TERMINOLOGY_ID + &quot;|&quot; + PURPOSE + &quot;|&quot; + TARGET)</span>
+                        // check if this 'terminal attribute' is actually a node attribute
+                        // match node predicate regexp starts with '/' which is not the case when splitting the path
+<span class="pc bpc" id="L135" title="1 of 2 branches missed.">                        &amp;&amp; !paths.get(index - 1).matches(I_DvTypeAdapter.matchNodePredicate.substring(1))</span>
+<span class="pc bpc" id="L136" title="1 of 2 branches missed.">                        &amp;&amp; !paths.get(index - 1).startsWith(OTHER_DETAILS));</span>
+    }
+
+    public boolean isIterative() {
+<span class="fc" id="L140">        return isIterative;</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.7.202105040129</span></div></body></html>

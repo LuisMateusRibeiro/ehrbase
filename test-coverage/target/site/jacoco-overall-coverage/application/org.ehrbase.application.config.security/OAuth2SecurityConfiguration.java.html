@@ -1,0 +1,161 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../../jacoco-resources/report.gif" type="image/gif"/><title>OAuth2SecurityConfiguration.java</title><link rel="stylesheet" href="../../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../../index.html" class="el_report">Overall Coverage</a> &gt; <a href="../index.html" class="el_bundle">application</a> &gt; <a href="index.source.html" class="el_package">org.ehrbase.application.config.security</a> &gt; <span class="el_source">OAuth2SecurityConfiguration.java</span></div><h1>OAuth2SecurityConfiguration.java</h1><pre class="source lang-java linenums">/*
+ * Copyright (c) 2021-2022 vitasystems GmbH and Hannover Medical School.
+ *
+ * This file is part of project EHRbase
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     https://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.ehrbase.application.config.security;
+
+import java.util.Arrays;
+import java.util.Collection;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
+import javax.annotation.PostConstruct;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.actuate.autoconfigure.endpoint.web.WebEndpointProperties;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.boot.autoconfigure.security.oauth2.resource.OAuth2ResourceServerProperties;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.core.convert.converter.Converter;
+import org.springframework.security.authentication.AbstractAuthenticationToken;
+import org.springframework.security.config.annotation.web.builders.HttpSecurity;
+import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
+import org.springframework.security.config.annotation.web.configuration.WebSecurityConfigurerAdapter;
+import org.springframework.security.core.GrantedAuthority;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationConverter;
+
+/**
+ * {@link Configuration} for OAuth2 authentication.
+ *
+ * @author Jake Smolka
+ * @since 1.0.0
+ */
+@Deprecated
+@Configuration
+@EnableWebSecurity
+@ConditionalOnProperty(prefix = &quot;security&quot;, name = &quot;auth-type&quot;, havingValue = &quot;oauth&quot;)
+public class OAuth2SecurityConfiguration extends WebSecurityConfigurerAdapter {
+
+    private static final String PUBLIC = &quot;PUBLIC&quot;;
+    private static final String PRIVATE = &quot;PRIVATE&quot;;
+    public static final String ADMIN_ONLY = &quot;ADMIN_ONLY&quot;;
+    public static final String PROFILE_SCOPE = &quot;PROFILE&quot;;
+
+<span class="nc" id="L61">    private final Logger logger = LoggerFactory.getLogger(getClass());</span>
+
+    @Value(&quot;${management.endpoints.web.access:ADMIN_ONLY}&quot;)
+    private String managementEndpointsAccessType;
+
+    private final SecurityProperties securityProperties;
+
+    private final OAuth2ResourceServerProperties oAuth2Properties;
+
+    private final WebEndpointProperties managementWebEndpointProperties;
+
+    public OAuth2SecurityConfiguration(
+            SecurityProperties securityProperties,
+            OAuth2ResourceServerProperties oAuth2Properties,
+<span class="nc" id="L75">            WebEndpointProperties managementWebEndpointProperties) {</span>
+<span class="nc" id="L76">        this.securityProperties = securityProperties;</span>
+<span class="nc" id="L77">        this.oAuth2Properties = oAuth2Properties;</span>
+<span class="nc" id="L78">        this.managementWebEndpointProperties = managementWebEndpointProperties;</span>
+<span class="nc" id="L79">    }</span>
+
+    @PostConstruct
+    public void initialize() {
+<span class="nc" id="L83">        logger.info(&quot;Using OAuth2 authentication&quot;);</span>
+<span class="nc" id="L84">        logger.debug(&quot;Using issuer URI: {}&quot;, oAuth2Properties.getJwt().getIssuerUri());</span>
+<span class="nc" id="L85">        logger.debug(&quot;Using user role: {}&quot;, securityProperties.getOauth2UserRole());</span>
+<span class="nc" id="L86">        logger.debug(&quot;Using admin role: {}&quot;, securityProperties.getOauth2AdminRole());</span>
+<span class="nc" id="L87">    }</span>
+
+    @Override
+    protected void configure(HttpSecurity http) throws Exception {
+<span class="nc" id="L91">        String userRole = securityProperties.getOauth2UserRole();</span>
+<span class="nc" id="L92">        String adminRole = securityProperties.getOauth2AdminRole();</span>
+
+        // @formatter:off
+<span class="nc" id="L95">        var registry = http.cors()</span>
+<span class="nc" id="L96">                .and()</span>
+<span class="nc" id="L97">                .authorizeRequests()</span>
+<span class="nc" id="L98">                .antMatchers(&quot;/rest/admin/**&quot;)</span>
+<span class="nc" id="L99">                .hasRole(adminRole)</span>
+<span class="nc" id="L100">                .antMatchers(&quot;/swagger-ui/**&quot;, &quot;/v3/api-docs/**&quot;)</span>
+<span class="nc" id="L101">                .permitAll();</span>
+
+<span class="nc" id="L103">        var managementAuthorizedUrl = registry.and()</span>
+<span class="nc" id="L104">                .authorizeRequests()</span>
+<span class="nc" id="L105">                .antMatchers(this.managementWebEndpointProperties.getBasePath() + &quot;/**&quot;);</span>
+
+<span class="nc bnc" id="L107" title="All 4 branches missed.">        switch (managementEndpointsAccessType) {</span>
+            case ADMIN_ONLY -&gt;
+            // management endpoints are locked behind an authorization
+            // and are only available for users with the admin role
+<span class="nc" id="L111">            managementAuthorizedUrl.hasRole(adminRole);</span>
+            case PRIVATE -&gt;
+            // management endpoints are locked behind an authorization, but are available to any role
+<span class="nc" id="L114">            managementAuthorizedUrl.hasAnyRole(adminRole, userRole, PROFILE_SCOPE);</span>
+            case PUBLIC -&gt;
+            // management endpoints can be accessed without an authorization
+<span class="nc" id="L117">            managementAuthorizedUrl.permitAll();</span>
+<span class="nc" id="L118">            default -&gt; throw new IllegalStateException(String.format(</span>
+                    &quot;Unexpected management endpoints access control type %s&quot;, managementEndpointsAccessType));
+        }
+
+<span class="nc" id="L122">        registry.anyRequest()</span>
+<span class="nc" id="L123">                .hasAnyRole(adminRole, userRole, PROFILE_SCOPE)</span>
+<span class="nc" id="L124">                .and()</span>
+<span class="nc" id="L125">                .oauth2ResourceServer()</span>
+<span class="nc" id="L126">                .jwt()</span>
+<span class="nc" id="L127">                .jwtAuthenticationConverter(getJwtAuthenticationConverter());</span>
+        // @formatter:on
+<span class="nc" id="L129">    }</span>
+
+    // Converter creates list of &quot;ROLE_*&quot; (upper case) authorities for each &quot;realm access&quot; role
+    // and &quot;roles&quot; role from JWT
+    @SuppressWarnings(&quot;unchecked&quot;)
+    private Converter&lt;Jwt, AbstractAuthenticationToken&gt; getJwtAuthenticationConverter() {
+<span class="nc" id="L135">        var converter = new JwtAuthenticationConverter();</span>
+<span class="nc" id="L136">        converter.setJwtGrantedAuthoritiesConverter(jwt -&gt; {</span>
+            Map&lt;String, Object&gt; realmAccess;
+<span class="nc" id="L138">            realmAccess = (Map&lt;String, Object&gt;) jwt.getClaims().get(&quot;realm_access&quot;);</span>
+
+<span class="nc" id="L140">            Collection&lt;GrantedAuthority&gt; authority = new HashSet&lt;&gt;();</span>
+<span class="nc bnc" id="L141" title="All 4 branches missed.">            if (realmAccess != null &amp;&amp; realmAccess.containsKey(&quot;roles&quot;)) {</span>
+<span class="nc" id="L142">                authority.addAll(((List&lt;String&gt;) realmAccess.get(&quot;roles&quot;))</span>
+<span class="nc" id="L143">                        .stream()</span>
+<span class="nc" id="L144">                                .map(roleName -&gt; &quot;ROLE_&quot; + roleName.toUpperCase())</span>
+<span class="nc" id="L145">                                .map(SimpleGrantedAuthority::new)</span>
+<span class="nc" id="L146">                                .collect(Collectors.toList()));</span>
+            }
+
+<span class="nc bnc" id="L149" title="All 2 branches missed.">            if (jwt.getClaims().containsKey(&quot;scope&quot;)) {</span>
+<span class="nc" id="L150">                authority.addAll(</span>
+<span class="nc" id="L151">                        Arrays.stream(jwt.getClaims().get(&quot;scope&quot;).toString().split(&quot; &quot;))</span>
+<span class="nc" id="L152">                                .map(roleName -&gt; &quot;ROLE_&quot; + roleName.toUpperCase())</span>
+<span class="nc" id="L153">                                .map(SimpleGrantedAuthority::new)</span>
+<span class="nc" id="L154">                                .collect(Collectors.toList()));</span>
+            }
+<span class="nc" id="L156">            return authority;</span>
+        });
+<span class="nc" id="L158">        return converter;</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.7.202105040129</span></div></body></html>

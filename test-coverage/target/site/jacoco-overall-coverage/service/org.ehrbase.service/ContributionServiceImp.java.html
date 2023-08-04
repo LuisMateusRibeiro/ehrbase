@@ -1,0 +1,628 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../../jacoco-resources/report.gif" type="image/gif"/><title>ContributionServiceImp.java</title><link rel="stylesheet" href="../../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../../index.html" class="el_report">Overall Coverage</a> &gt; <a href="../index.html" class="el_bundle">service</a> &gt; <a href="index.source.html" class="el_package">org.ehrbase.service</a> &gt; <span class="el_source">ContributionServiceImp.java</span></div><h1>ContributionServiceImp.java</h1><pre class="source lang-java linenums">/*
+ * Copyright (c) 2019 vitasystems GmbH and Hannover Medical School.
+ *
+ * This file is part of project EHRbase
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     https://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.ehrbase.service;
+
+import com.nedap.archie.rm.RMObject;
+import com.nedap.archie.rm.archetyped.TemplateId;
+import com.nedap.archie.rm.changecontrol.Version;
+import com.nedap.archie.rm.composition.Composition;
+import com.nedap.archie.rm.datatypes.CodePhrase;
+import com.nedap.archie.rm.datavalues.DvCodedText;
+import com.nedap.archie.rm.datavalues.DvText;
+import com.nedap.archie.rm.datavalues.quantity.datetime.DvDateTime;
+import com.nedap.archie.rm.directory.Folder;
+import com.nedap.archie.rm.ehr.EhrStatus;
+import com.nedap.archie.rm.generic.AuditDetails;
+import com.nedap.archie.rm.generic.PartyProxy;
+import com.nedap.archie.rm.support.identification.ObjectVersionId;
+import com.nedap.archie.rm.support.identification.TerminologyId;
+import java.time.LocalDateTime;
+import java.time.ZoneId;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.Set;
+import java.util.UUID;
+import org.ehrbase.api.definitions.ServerConfig;
+import org.ehrbase.api.exception.InternalServerException;
+import org.ehrbase.api.exception.InvalidApiParameterException;
+import org.ehrbase.api.exception.ObjectNotFoundException;
+import org.ehrbase.api.exception.PreconditionFailedException;
+import org.ehrbase.api.exception.UnexpectedSwitchCaseException;
+import org.ehrbase.api.exception.UnprocessableEntityException;
+import org.ehrbase.api.exception.ValidationException;
+import org.ehrbase.api.service.CompositionService;
+import org.ehrbase.api.service.ContributionService;
+import org.ehrbase.api.service.EhrService;
+import org.ehrbase.api.service.TenantService;
+import org.ehrbase.dao.access.interfaces.I_AuditDetailsAccess;
+import org.ehrbase.dao.access.interfaces.I_CompositionAccess;
+import org.ehrbase.dao.access.interfaces.I_ConceptAccess;
+import org.ehrbase.dao.access.interfaces.I_ContributionAccess;
+import org.ehrbase.dao.access.interfaces.I_StatusAccess;
+import org.ehrbase.dao.access.jooq.AuditDetailsAccess;
+import org.ehrbase.dao.access.jooq.party.PersistedPartyProxy;
+import org.ehrbase.openehr.sdk.response.dto.ehrscape.CompositionFormat;
+import org.ehrbase.openehr.sdk.response.dto.ehrscape.ContributionDto;
+import org.ehrbase.repository.ContributionRepository;
+import org.jooq.DSLContext;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+@Service
+@Transactional
+public class ContributionServiceImp extends BaseServiceImp implements ContributionService {
+    // the version list in a contribution adds an type tag to each item, so the specific object is distinguishable
+    public static final String TYPE_COMPOSITION = &quot;COMPOSITION&quot;;
+    public static final String TYPE_EHRSTATUS = &quot;EHR_STATUS&quot;;
+    public static final String TYPE_FOLDER = &quot;FOLDER&quot;;
+
+<span class="nc" id="L82">    private final Logger logger = LoggerFactory.getLogger(getClass());</span>
+
+    private final CompositionService compositionService;
+    private final EhrService ehrService;
+    private final InternalDirectoryService folderService;
+    private final TenantService tenantService;
+
+    private final ContributionRepository contributionRepository;
+
+<span class="fc" id="L91">    enum SupportedClasses {</span>
+<span class="fc" id="L92">        COMPOSITION,</span>
+<span class="fc" id="L93">        EHRSTATUS,</span>
+<span class="fc" id="L94">        FOLDER</span>
+    }
+
+    @Autowired
+    public ContributionServiceImp(
+            KnowledgeCacheService knowledgeCacheService,
+            CompositionService compositionService,
+            EhrService ehrService,
+            InternalDirectoryService folderService,
+            DSLContext context,
+            ServerConfig serverConfig,
+            TenantService tenantService,
+            ContributionRepository contributionRepository) {
+<span class="nc" id="L107">        super(knowledgeCacheService, context, serverConfig);</span>
+<span class="nc" id="L108">        this.compositionService = compositionService;</span>
+<span class="nc" id="L109">        this.ehrService = ehrService;</span>
+<span class="nc" id="L110">        this.folderService = folderService;</span>
+<span class="nc" id="L111">        this.tenantService = tenantService;</span>
+<span class="nc" id="L112">        this.contributionRepository = contributionRepository;</span>
+<span class="nc" id="L113">    }</span>
+
+    @Override
+    public boolean hasContribution(UUID ehrId, UUID contributionId) {
+        // pre-step: check for valid ehrId
+<span class="nc bnc" id="L118" title="All 2 branches missed.">        if (!ehrService.hasEhr(ehrId)) {</span>
+<span class="nc" id="L119">            throw new ObjectNotFoundException(&quot;ehr&quot;, &quot;No EHR found with given ID: &quot; + ehrId.toString());</span>
+        }
+
+        I_ContributionAccess contributionAccess;
+        // doesn't exist on error
+        try {
+<span class="nc" id="L125">            contributionAccess = I_ContributionAccess.retrieveInstance(this.getDataAccess(), contributionId);</span>
+<span class="nc" id="L126">        } catch (InternalServerException e) {</span>
+<span class="nc" id="L127">            return false;</span>
+        }
+
+        // doesn't exist on empty result, too
+<span class="nc bnc" id="L131" title="All 2 branches missed.">        if (contributionAccess == null) {</span>
+<span class="nc" id="L132">            return false;</span>
+        }
+
+        // with both pre-checks about only checking of contribution is part of EHR is left
+<span class="nc" id="L136">        return contributionAccess.getEhrId().equals(ehrId);</span>
+    }
+
+    @Override
+    public Optional&lt;ContributionDto&gt; getContribution(UUID ehrId, UUID contributionId) {
+        // pre-step: check for valid ehr and contribution ID
+<span class="nc bnc" id="L142" title="All 2 branches missed.">        if (!hasContribution(ehrId, contributionId)) {</span>
+<span class="nc" id="L143">            throw new ObjectNotFoundException(&quot;contribution&quot;, &quot;Contribution with given ID does not exist&quot;);</span>
+        }
+
+<span class="nc" id="L146">        ContributionDto contribution = new ContributionDto(</span>
+<span class="nc" id="L147">                contributionId,</span>
+<span class="nc" id="L148">                retrieveUuidsOfContributionObjects(ehrId, contributionId),</span>
+<span class="nc" id="L149">                retrieveAuditDetails(contributionId));</span>
+
+<span class="nc" id="L151">        return Optional.of(contribution);</span>
+    }
+
+    @Override
+    public UUID commitContribution(UUID ehrId, String content, CompositionFormat format) {
+        /*Note: we do not perform is_modifiable checks here since a contribution may contain a modification of the
+        is_modifiable flag. The is_modifiable checks are performed per version in the service responsible for handling the
+        versions content*/
+
+        // pre-step: check for valid ehrId
+<span class="nc bnc" id="L161" title="All 2 branches missed.">        if (!ehrService.hasEhr(ehrId)) {</span>
+<span class="nc" id="L162">            throw new ObjectNotFoundException(&quot;ehr&quot;, &quot;No EHR found with given ID: &quot; + ehrId.toString());</span>
+        }
+
+<span class="nc" id="L165">        Short sysTenant = tenantService.getCurrentSysTenant();</span>
+
+        // create new empty/standard-value contribution - will be updated later with full details
+<span class="nc" id="L168">        I_ContributionAccess contributionAccess =</span>
+<span class="nc" id="L169">                I_ContributionAccess.getInstance(this.getDataAccess(), ehrId, sysTenant);</span>
+        // parse and set audit information from input
+<span class="nc" id="L171">        AuditDetails audit = ContributionServiceHelper.parseAuditDetails(content, format);</span>
+<span class="nc" id="L172">        contributionAccess.setAuditDetailsValues(audit);</span>
+        // commits with all default values (but without audit handling as it is done above)
+<span class="nc" id="L174">        UUID contributionId = contributionAccess.commit(null, null, null);</span>
+<span class="nc" id="L175">        List&lt;Version&gt; versions = ContributionServiceHelper.parseVersions(content, format);</span>
+
+<span class="nc bnc" id="L177" title="All 2 branches missed.">        if (versions.isEmpty()) {</span>
+<span class="nc" id="L178">            throw new InvalidApiParameterException(&quot;Invalid Contribution, must have at least one Version object.&quot;);</span>
+        }
+
+        // go through those RM objects and execute the action of it (as listed in its audit) and connect it to new
+        // contribution
+<span class="nc bnc" id="L183" title="All 2 branches missed.">        for (Version version : versions) {</span>
+
+<span class="nc" id="L185">            Object versionData = version.getData();</span>
+
+<span class="nc bnc" id="L187" title="All 2 branches missed.">            if (versionData</span>
+                    != null) { // the version contains the optional &quot;data&quot; attribute (i.e. payload), therefore has
+                // specific object type
+                // (composition, folder,...)
+                RMObject versionRmObject;
+<span class="nc bnc" id="L192" title="All 2 branches missed.">                if (versionData instanceof LinkedHashMap) {</span>
+<span class="nc" id="L193">                    versionRmObject = ContributionServiceHelper.unmarshalMapContentToRmObject(</span>
+<span class="nc" id="L194">                            (LinkedHashMap) versionData, format);</span>
+<span class="nc" id="L195">                } else {</span>
+<span class="nc" id="L196">                    throw new IllegalArgumentException(&quot;Contribution input can't be processed&quot;);</span>
+                }
+
+                // switch to allow acting depending on exact type
+                SupportedClasses versionClass;
+                try {
+<span class="nc" id="L202">                    versionClass = SupportedClasses.valueOf(</span>
+<span class="nc" id="L203">                            versionRmObject.getClass().getSimpleName().toUpperCase());</span>
+<span class="nc" id="L204">                } catch (Exception e) {</span>
+<span class="nc" id="L205">                    throw new InvalidApiParameterException(&quot;Invalid version object in contribution. &quot;</span>
+<span class="nc" id="L206">                            + versionRmObject.getClass().getSimpleName().toUpperCase() + &quot; not supported.&quot;);</span>
+                }
+<span class="nc bnc" id="L208" title="All 4 branches missed.">                switch (versionClass) {</span>
+                    case COMPOSITION:
+                        try {
+<span class="nc" id="L211">                            processCompositionVersion(ehrId, contributionId, version, (Composition) versionRmObject);</span>
+<span class="nc" id="L212">                        } catch (UnprocessableEntityException e) {</span>
+<span class="nc" id="L213">                            throw new ValidationException(e.getMessage());</span>
+                        }
+                        break;
+                    case EHRSTATUS:
+<span class="nc" id="L217">                        processEhrStatusVersion(ehrId, contributionId, version, (EhrStatus) versionRmObject);</span>
+<span class="nc" id="L218">                        break;</span>
+                    case FOLDER:
+<span class="nc" id="L220">                        processFolderVersion(ehrId, contributionId, version, (Folder) versionRmObject);</span>
+<span class="nc" id="L221">                        break;</span>
+                    default:
+<span class="nc" id="L223">                        throw new UnexpectedSwitchCaseException(versionClass);</span>
+                }
+<span class="nc" id="L225">            } else { // version doesn't contain &quot;data&quot;, so it is only a metadata one to, for instance, delete a specific</span>
+                // object
+                // via ID regardless of type
+<span class="nc" id="L228">                processMetadataVersion(ehrId, contributionId, version);</span>
+            }
+        }
+
+<span class="nc" id="L232">        return contributionId;</span>
+    }
+
+    /**
+     * Helper function to process a version of composition type
+     *
+     * @param ehrId           ID of given EHR scope
+     * @param contributionId  Top level contribution this version is part of
+     * @param version         The version wrapper object
+     * @param versionRmObject The actual composition payload
+     * @throws IllegalArgumentException when input is missing precedingVersionUid in case of modification
+     */
+    private void processCompositionVersion(
+            UUID ehrId, UUID contributionId, Version version, Composition versionRmObject) {
+        // access audit and extract method, e.g. CREATION
+<span class="nc" id="L247">        I_ConceptAccess.ContributionChangeType changeType = I_ConceptAccess.ContributionChangeType.valueOf(</span>
+<span class="nc" id="L248">                version.getCommitAudit().getChangeType().getValue().toUpperCase());</span>
+
+<span class="nc" id="L250">        checkContributionRules(version, changeType); // evaluate and check contribution rules</span>
+
+<span class="nc" id="L252">        UUID audit = contributionRepository.createAudit(version.getCommitAudit());</span>
+
+<span class="nc bnc" id="L254" title="All 4 branches missed.">        switch (changeType) {</span>
+            case CREATION:
+                // call creation of a new composition with given input
+<span class="nc" id="L257">                compositionService.create(ehrId, versionRmObject, contributionId, audit);</span>
+<span class="nc" id="L258">                break;</span>
+            case AMENDMENT: // triggers the same processing as modification // TODO-396: so far so good, but should use
+                // the type
+                // &quot;AMENDMENT&quot; for audit in access layer
+            case MODIFICATION:
+<span class="nc" id="L263">                String actualPreceding = getAndCheckActualPreceding(version);</span>
+                // call modification of the given composition
+<span class="nc" id="L265">                compositionService.update(</span>
+<span class="nc" id="L266">                        ehrId, new ObjectVersionId(actualPreceding), versionRmObject, contributionId, audit);</span>
+<span class="nc" id="L267">                break;</span>
+            case DELETED: // case of deletion change type, but request also has payload (TODO: should that be even
+                // allowed?
+                // specification-wise it's not forbidden)
+<span class="nc" id="L271">                String actualPreceding2 = getAndCheckActualPreceding(version);</span>
+<span class="nc" id="L272">                compositionService.delete(ehrId, new ObjectVersionId(actualPreceding2), contributionId, audit);</span>
+<span class="nc" id="L273">                break;</span>
+            case SYNTHESIS: // TODO
+            case UNKNOWN: // TODO
+            default: // TODO keep as long as above has TODOs. Check of valid change type is done in
+                // checkContributionRules
+<span class="nc" id="L278">                throw new UnexpectedSwitchCaseException(changeType);</span>
+        }
+<span class="nc" id="L280">    }</span>
+
+    private String getAndCheckActualPreceding(Version version) {
+        // preceding_version_uid check
+<span class="nc" id="L284">        Integer latestVersion = compositionService.getLastVersionNumber(getVersionedUidFromVersion(version));</span>
+<span class="nc" id="L285">        var id = version.getPrecedingVersionUid().toString();</span>
+        // remove version number after &quot;::&quot; and add queried version number to compare with given one
+<span class="nc" id="L287">        String actualPreceding = id.substring(0, id.lastIndexOf(&quot;::&quot;) + 2).concat(latestVersion.toString());</span>
+<span class="nc bnc" id="L288" title="All 2 branches missed.">        if (!actualPreceding.equals(version.getPrecedingVersionUid().toString())) {</span>
+<span class="nc" id="L289">            throw new PreconditionFailedException(</span>
+<span class="nc" id="L290">                    &quot;Given preceding_version_uid for COMPOSITION object does not match latest existing version&quot;);</span>
+        }
+<span class="nc" id="L292">        return actualPreceding;</span>
+    }
+
+    /**
+     * Helper function to process a version of composition type
+     *
+     * @param ehrId           ID of given EHR scope
+     * @param contributionId  Top level contribution this version is part of
+     * @param version         The version wrapper object
+     * @param versionRmObject The actual EhrStatus payload
+     * @throws IllegalArgumentException when input is missing precedingVersionUid in case of modification
+     */
+    private void processEhrStatusVersion(UUID ehrId, UUID contributionId, Version version, EhrStatus versionRmObject) {
+        // access audit and extract method, e.g. CREATION
+<span class="nc" id="L306">        I_ConceptAccess.ContributionChangeType changeType = I_ConceptAccess.ContributionChangeType.valueOf(</span>
+<span class="nc" id="L307">                version.getCommitAudit().getChangeType().getValue().toUpperCase());</span>
+
+<span class="nc" id="L309">        checkContributionRules(version, changeType); // evaluate and check contribution rules</span>
+<span class="nc" id="L310">        UUID audit = contributionRepository.createAudit(version.getCommitAudit());</span>
+
+<span class="nc bnc" id="L312" title="All 4 branches missed.">        switch (changeType) {</span>
+            case CREATION:
+                // call creation of a new status with given input is not possible as it is linked to and created through
+                // an EHR object
+<span class="nc" id="L316">                throw new InvalidApiParameterException(&quot;Invalid change type. EHR_STATUS can't be manually created.&quot;);</span>
+            case AMENDMENT: // triggers the same processing as modification // TODO-396: so far so good, but should use
+                // the type
+                // &quot;AMENDMENT&quot; for audit in access layer
+            case MODIFICATION:
+                // preceding_version_uid check
+<span class="nc" id="L322">                String latestVersionUid = ehrService.getLatestVersionUidOfStatus(ehrId);</span>
+<span class="nc bnc" id="L323" title="All 2 branches missed.">                if (!latestVersionUid.equals(version.getPrecedingVersionUid().toString())) {</span>
+<span class="nc" id="L324">                    throw new PreconditionFailedException(</span>
+<span class="nc" id="L325">                            &quot;Given preceding_version_uid for EHR_STATUS object does not match latest existing version&quot;);</span>
+                }
+                // call modification of the given status
+<span class="nc" id="L328">                ehrService.updateStatus(ehrId, versionRmObject, contributionId, audit);</span>
+<span class="nc" id="L329">                break;</span>
+            case DELETED:
+                // deleting a STATUS versioned object is invalid
+<span class="nc" id="L332">                throw new InvalidApiParameterException(&quot;Invalid change type. EHR_STATUS can't be deleted.&quot;);</span>
+            case SYNTHESIS: // TODO
+            case UNKNOWN: // TODO
+            default: // TODO keep as long as above has TODOs. Check of valid change type is done in
+                // checkContributionRules
+<span class="nc" id="L337">                throw new UnexpectedSwitchCaseException(changeType);</span>
+        }
+<span class="nc" id="L339">    }</span>
+
+    private void processFolderVersion(UUID ehrId, UUID contributionId, Version version, Folder versionRmObject) {
+        // access audit and extract method, e.g. CREATION
+<span class="nc" id="L343">        I_ConceptAccess.ContributionChangeType changeType = I_ConceptAccess.ContributionChangeType.valueOf(</span>
+<span class="nc" id="L344">                version.getCommitAudit().getChangeType().getValue().toUpperCase());</span>
+
+<span class="nc" id="L346">        checkContributionRules(version, changeType); // evaluate and check contribution rules</span>
+
+<span class="nc" id="L348">        UUID audit = contributionRepository.createAudit(version.getCommitAudit());</span>
+
+<span class="nc bnc" id="L350" title="All 4 branches missed.">        switch (changeType) {</span>
+            case CREATION:
+                // call creation of a new folder version with given input
+<span class="nc" id="L353">                folderService.create(ehrId, versionRmObject, contributionId, audit);</span>
+<span class="nc" id="L354">                break;</span>
+            case AMENDMENT: // triggers the same processing as modification // TODO-396: so far so good, but should use
+                // the type
+                // &quot;AMENDMENT&quot; for audit in access layer
+            case MODIFICATION:
+                // preceding_version_uid check
+
+                // call modification of the given folder
+<span class="nc" id="L362">                folderService.update(ehrId, versionRmObject, version.getPrecedingVersionUid(), contributionId, audit);</span>
+<span class="nc" id="L363">                break;</span>
+            case DELETED: // case of deletion change type, but request also has payload (TODO: should that be even
+                // allowed?
+                // specification-wise it's not forbidden)
+<span class="nc" id="L367">                folderService.delete(ehrId, version.getPrecedingVersionUid(), contributionId, audit);</span>
+<span class="nc" id="L368">                break;</span>
+            case SYNTHESIS: // TODO
+            case UNKNOWN: // TODO
+            default: // TODO keep as long as above has TODOs. Check of valid change type is done in
+                // checkContributionRules
+<span class="nc" id="L373">                throw new UnexpectedSwitchCaseException(changeType);</span>
+        }
+<span class="nc" id="L375">    }</span>
+
+    /**
+     * Checks contribution rules, i.e. context-aware checks of the content. For instance, a committed version can't be
+     * of change type CREATION while containing a &quot;preceding_version_uid&quot;.
+     * &lt;p&gt;
+     * Note: Those rules are checked here, because context of the contribution might be important.
+     * Apart from that, most rules logically could be checked within the appropriate service as well.
+     *
+     * @param version    Input version object
+     * @param changeType Change type of this version
+     */
+    private void checkContributionRules(Version version, I_ConceptAccess.ContributionChangeType changeType) {
+
+<span class="nc bnc" id="L389" title="All 4 branches missed.">        switch (changeType) {</span>
+            case CREATION:
+                // can't have change type CREATION and a given &quot;preceding_version_uid&quot;
+<span class="nc bnc" id="L392" title="All 2 branches missed.">                if (version.getPrecedingVersionUid() != null) {</span>
+<span class="nc" id="L393">                    throw new InvalidApiParameterException(</span>
+<span class="nc" id="L394">                            &quot;Invalid version. Change type CREATION, but also set \&quot;preceding_version_uid\&quot; attribute&quot;);</span>
+                }
+                break;
+            case MODIFICATION:
+            case AMENDMENT:
+                // can't have change type MODIFICATION and without giving &quot;preceding_version_uid&quot;
+<span class="nc bnc" id="L400" title="All 2 branches missed.">                if (version.getPrecedingVersionUid() == null) {</span>
+<span class="nc" id="L401">                    throw new InvalidApiParameterException(</span>
+<span class="nc" id="L402">                            &quot;Invalid version. Change type MODIFICATION, but without \&quot;preceding_version_uid\&quot; attribute&quot;);</span>
+                }
+                break;
+                // block of valid change types, without any rules to apply (yet)
+            case DELETED:
+            case SYNTHESIS:
+            case UNKNOWN:
+<span class="nc" id="L409">                break;</span>
+                // invalid change type
+            default:
+<span class="nc" id="L412">                throw new InvalidApiParameterException(&quot;Change type \&quot;&quot; + changeType + &quot;\&quot; not valid&quot;);</span>
+        }
+<span class="nc" id="L414">    }</span>
+
+    /**
+     * Helper to process versions from a contribution, which do not have the optional &quot;data&quot; attribute and therefore are
+     * called metadata versions.
+     *
+     * @param ehrId          ID of given EHR scope
+     * @param contributionId Top level contribution this version is part of
+     * @param version        The version wrapper object
+     */
+    private void processMetadataVersion(UUID ehrId, UUID contributionId, Version version) {
+        // access audit and extract method, e.g. CREATION
+<span class="nc" id="L426">        I_ConceptAccess.ContributionChangeType changeType = I_ConceptAccess.ContributionChangeType.valueOf(</span>
+<span class="nc" id="L427">                version.getCommitAudit().getChangeType().getValue().toUpperCase());</span>
+
+<span class="nc" id="L429">        UUID audit = contributionRepository.createAudit(version.getCommitAudit());</span>
+
+<span class="nc bnc" id="L431" title="All 2 branches missed.">        switch (changeType) {</span>
+            case DELETED:
+                // deleting an object without knowing which type it is requires checking of type, here with nested
+                // try-catch blocks
+<span class="nc" id="L435">                UUID objectUid = getVersionedUidFromVersion(version);</span>
+                try {
+
+                    // throw exception to signal no matching composition was found
+<span class="nc bnc" id="L439" title="All 2 branches missed.">                    if (compositionService.retrieve(ehrId, objectUid, null).isEmpty()) {</span>
+<span class="nc" id="L440">                        throw new RuntimeException();</span>
+                    }
+<span class="nc" id="L442">                    String actualPreceding = getAndCheckActualPreceding(version);</span>
+<span class="nc" id="L443">                    compositionService.delete(ehrId, new ObjectVersionId(actualPreceding), contributionId, audit);</span>
+<span class="nc" id="L444">                } catch (Exception e) {</span>
+                    // given version ID is not of type composition - ignoring the exception because it is
+                    // expected possible outcome
+                    try {
+                        // TODO: is this nested try-catch approach really a good way to handle this?!
+                        // TODO-396: add folder handling
+                    } catch (Exception ee) {
+                        // given version ID is not of type folder - ignoring the exception because it is expected
+                        // possible outcome
+                        // current end of going through supported types - last step is checking for EHR_STATUS
+                        // and throwing specific error
+                        Optional.of(ehrService.getEhrStatus(ehrId)).ifPresent(st -&gt; {
+                            if (st.getUid().equals(version.getPrecedingVersionUid())) {
+                                throw new InvalidApiParameterException(
+                                        &quot;Invalid change type. EHR_STATUS can't be deleted.&quot;);
+                            }
+                        });
+
+                        // TODO add nested try-catchs for more supported types, for instance folder, when their
+                        // contribution support gets
+                        //  implemented
+                        // TODO last &quot;try catch&quot; in line needs to rethrow for real, as then no matching object would
+                        // have been found
+                        throw new ObjectNotFoundException(
+                                Composition.class.getName(),
+                                &quot;Couldn't find object matching id: &quot;
+                                        + objectUid); // TODO: type is technically wrong, if
+                        // more than one type gets tested
+                    }
+                }
+<span class="nc" id="L474">                break;</span>
+            case SYNTHESIS: // TODO
+            case UNKNOWN: // TODO
+            case CREATION: // not expected in a metadata version (i.e. without payload)
+            case MODIFICATION: // not expected in a metadata version (i.e. without payload)
+            case AMENDMENT: // not expected in a metadata version (i.e. without payload)
+            default:
+<span class="nc" id="L481">                throw new UnexpectedSwitchCaseException(changeType);</span>
+        }
+<span class="nc" id="L483">    }</span>
+
+    /**
+     * Create versionUid UUID from retrieved precedingVersionUid from payload (and do sanity checks before continuing), or
+     * throw errors if ID is not present nor valid.
+     * Note: The precedingVersionUid parameter technically is optional for contributions but necessary when invoking other
+     * change types than creation.
+     *
+     * @param version RM object of Version type
+     * @return versionedUid
+     * @throws IllegalArgumentException Given {@link Version} has no or no valid precedingVersionUid
+     */
+    private UUID getVersionedUidFromVersion(Version version) {
+<span class="nc" id="L496">        ObjectVersionId precedingVersionUid = version.getPrecedingVersionUid();</span>
+<span class="nc bnc" id="L497" title="All 2 branches missed.">        if (precedingVersionUid == null) {</span>
+<span class="nc" id="L498">            throw new IllegalArgumentException(</span>
+<span class="nc" id="L499">                    &quot;Input invalid. Composition can't be modified without pointer to precedingVersionUid in Version container.&quot;);</span>
+        }
+<span class="nc bnc" id="L501" title="All 2 branches missed.">        if (precedingVersionUid.toString().split(&quot;::&quot;).length != 3) {</span>
+<span class="nc" id="L502">            throw new IllegalArgumentException(&quot;Input invalid. Given precedingVersionUid is not a versionUid.&quot;);</span>
+        }
+
+<span class="nc" id="L505">        String versionedUid = precedingVersionUid.toString().split(&quot;::&quot;)[0];</span>
+<span class="nc" id="L506">        return UUID.fromString(versionedUid);</span>
+    }
+
+    /**
+     * retrieval of IDs of all objects that are saved as part of the given contribution
+     *
+     * @param ehrId
+     * @param contribution ID of source contribution
+     * @return Map with ID of the object as key and type (&quot;composition&quot;, &quot;folder&quot;,...) as value
+     * @throws IllegalArgumentException on error when retrieving compositions
+     */
+    private Map&lt;String, String&gt; retrieveUuidsOfContributionObjects(UUID ehrId, UUID contribution) {
+<span class="nc" id="L518">        Map&lt;String, String&gt; objRefs = new HashMap&lt;&gt;();</span>
+
+        // query for compositions   // TODO: refactor to use service layer only!?
+<span class="nc" id="L521">        Map&lt;ObjectVersionId, I_CompositionAccess&gt; compositions = I_CompositionAccess.retrieveInstancesInContribution(</span>
+<span class="nc" id="L522">                this.getDataAccess(), contribution, getServerConfig().getNodename());</span>
+        // for each fetched composition: add it to the return map and add the composition type tag - ignoring the access
+        // obj
+<span class="nc" id="L525">        compositions.forEach((k, v) -&gt; objRefs.put(k.getValue(), TYPE_COMPOSITION));</span>
+
+        // query for statuses       // TODO: refactor to use service layer only!?
+<span class="nc" id="L528">        Map&lt;ObjectVersionId, I_StatusAccess&gt; statuses = I_StatusAccess.retrieveInstanceByContribution(</span>
+<span class="nc" id="L529">                this.getDataAccess(), contribution, getServerConfig().getNodename());</span>
+<span class="nc" id="L530">        statuses.forEach((k, v) -&gt; objRefs.put(k.getValue(), TYPE_EHRSTATUS));</span>
+
+        // query for folders
+<span class="nc" id="L533">        Set&lt;ObjectVersionId&gt; folders = new HashSet&lt;&gt;(folderService.findForContribution(ehrId, contribution));</span>
+<span class="nc" id="L534">        folders.forEach(f -&gt; objRefs.put(f.toString(), TYPE_FOLDER));</span>
+
+<span class="nc" id="L536">        return objRefs;</span>
+    }
+
+    /**
+     * retrieval and building of AuditDetails object attached to the given contribution context
+     *
+     * @param contributionId ID of contribution
+     * @return {@link AuditDetails} object from contribution
+     */
+    private AuditDetails retrieveAuditDetails(UUID contributionId) {
+<span class="nc" id="L546">        UUID auditId = I_ContributionAccess.retrieveInstance(this.getDataAccess(), contributionId)</span>
+<span class="nc" id="L547">                .getHasAuditDetails();</span>
+
+<span class="nc" id="L549">        Short sysTenant = tenantService.getCurrentSysTenant();</span>
+
+<span class="nc" id="L551">        I_AuditDetailsAccess auditDetailsAccess =</span>
+<span class="nc" id="L552">                new AuditDetailsAccess(this.getDataAccess(), sysTenant).retrieveInstance(this.getDataAccess(), auditId);</span>
+
+<span class="nc" id="L554">        String systemId = auditDetailsAccess.getSystemId().toString();</span>
+<span class="nc" id="L555">        PartyProxy committer =</span>
+<span class="nc" id="L556">                new PersistedPartyProxy(this.getDataAccess()).retrieve(auditDetailsAccess.getCommitter());</span>
+<span class="nc" id="L557">        DvDateTime timeCommitted = new DvDateTime(LocalDateTime.ofInstant(</span>
+<span class="nc" id="L558">                auditDetailsAccess.getTimeCommitted().toInstant(),</span>
+<span class="nc" id="L559">                ZoneId.of(auditDetailsAccess.getTimeCommittedTzId())));</span>
+<span class="nc" id="L560">        int changeTypeCode = I_ConceptAccess.ContributionChangeType.valueOf(</span>
+<span class="nc" id="L561">                        auditDetailsAccess.getChangeType().getLiteral().toUpperCase())</span>
+<span class="nc" id="L562">                .getCode();</span>
+        // FIXME: what's the terminology ID of the official change type terminology?
+<span class="nc" id="L564">        DvCodedText changeType = new DvCodedText(</span>
+<span class="nc" id="L565">                auditDetailsAccess.getChangeType().getLiteral(),</span>
+<span class="nc" id="L566">                new CodePhrase(new TerminologyId(&quot;audit change type&quot;), String.valueOf(changeTypeCode)));</span>
+<span class="nc" id="L567">        DvText description = new DvText(auditDetailsAccess.getDescription());</span>
+
+<span class="nc" id="L569">        return new AuditDetails(systemId, committer, timeCommitted, changeType, description);</span>
+    }
+
+    @PreAuthorize(&quot;hasRole('ADMIN')&quot;)
+    @Override
+    public void adminDelete(UUID contributionId) {
+<span class="nc" id="L575">        I_ContributionAccess contributionAccess =</span>
+<span class="nc" id="L576">                I_ContributionAccess.retrieveInstance(getDataAccess(), contributionId);</span>
+<span class="nc" id="L577">        contributionAccess.adminDelete();</span>
+<span class="nc" id="L578">    }</span>
+
+    @Override
+    public Set&lt;String&gt; getListOfTemplates(String contribution, CompositionFormat format) {
+<span class="nc" id="L582">        List&lt;Version&gt; versions = ContributionServiceHelper.parseVersions(contribution, format);</span>
+<span class="nc" id="L583">        Set&lt;String&gt; templates = new HashSet&lt;&gt;();</span>
+<span class="nc bnc" id="L584" title="All 2 branches missed.">        for (Version version : versions) {</span>
+
+<span class="nc" id="L586">            Object versionData = version.getData();</span>
+
+            // the version contains the optional &quot;data&quot; attribute (i.e. payload), therefore has specific object type
+            // (composition,
+            // folder,...)
+<span class="nc bnc" id="L591" title="All 2 branches missed.">            if (versionData != null) {</span>
+                RMObject versionRmObject;
+<span class="nc bnc" id="L593" title="All 2 branches missed.">                if (versionData instanceof LinkedHashMap) {</span>
+<span class="nc" id="L594">                    versionRmObject = ContributionServiceHelper.unmarshalMapContentToRmObject(</span>
+<span class="nc" id="L595">                            (LinkedHashMap) versionData, format);</span>
+<span class="nc" id="L596">                } else {</span>
+<span class="nc" id="L597">                    throw new IllegalArgumentException(&quot;Contribution input can't be processed&quot;);</span>
+                }
+
+                // switch to allow acting depending on exact type
+                SupportedClasses versionClass;
+                try {
+<span class="nc" id="L603">                    versionClass = SupportedClasses.valueOf(</span>
+<span class="nc" id="L604">                            versionRmObject.getClass().getSimpleName().toUpperCase());</span>
+<span class="nc" id="L605">                } catch (Exception e) {</span>
+<span class="nc" id="L606">                    throw new InvalidApiParameterException(&quot;Invalid version object in contribution. &quot;</span>
+<span class="nc" id="L607">                            + versionRmObject.getClass().getSimpleName().toUpperCase() + &quot; not supported.&quot;);</span>
+                }
+<span class="nc bnc" id="L609" title="All 2 branches missed.">                switch (versionClass) {</span>
+                    case COMPOSITION:
+<span class="nc" id="L611">                        TemplateId templateId = ((Composition) versionRmObject)</span>
+<span class="nc" id="L612">                                .getArchetypeDetails()</span>
+<span class="nc" id="L613">                                .getTemplateId();</span>
+<span class="nc bnc" id="L614" title="All 2 branches missed.">                        if (templateId != null) {</span>
+<span class="nc" id="L615">                            templates.add(templateId.getValue());</span>
+                        }
+<span class="nc" id="L617">                        break;</span>
+                    case EHRSTATUS: // TODO: might add later, if other_details support templated content
+                    case FOLDER:
+                    default:
+<span class="nc" id="L621">                        throw new IllegalArgumentException(&quot;Contribution input contains invalid version class&quot;);</span>
+                }
+            }
+        }
+<span class="nc" id="L625">        return templates;</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.7.202105040129</span></div></body></html>

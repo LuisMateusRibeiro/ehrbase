@@ -1,0 +1,104 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../../jacoco-resources/report.gif" type="image/gif"/><title>SerialTree.java</title><link rel="stylesheet" href="../../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../../index.html" class="el_report">Coverage with Unit Tests</a> &gt; <a href="../index.html" class="el_bundle">jooq-pg</a> &gt; <a href="index.source.html" class="el_package">org.ehrbase.jooq.dbencoding</a> &gt; <span class="el_source">SerialTree.java</span></div><h1>SerialTree.java</h1><pre class="source lang-java linenums">/*
+ * Copyright (c) 2022 vitasystems GmbH and Hannover Medical School.
+ *
+ * This file is part of project EHRbase
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     https://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.ehrbase.jooq.dbencoding;
+
+import static org.ehrbase.jooq.dbencoding.CompositionSerializer.TAG_CLASS;
+import static org.ehrbase.jooq.dbencoding.CompositionSerializer.TAG_NAME;
+import static org.ehrbase.jooq.dbencoding.CompositionSerializer.TAG_PATH;
+
+import com.nedap.archie.rm.RMObject;
+import com.nedap.archie.rm.archetyped.Locatable;
+import java.util.Map;
+import org.apache.commons.collections4.map.PredicatedMap;
+import org.ehrbase.openehr.sdk.util.rmconstants.RmConstants;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+/**
+ * insert the attributes of a structural object into the DB encoded structure
+ */
+public class SerialTree {
+
+    Map&lt;String, Object&gt; map;
+
+<span class="fc" id="L39">    Logger log = LoggerFactory.getLogger(this.getClass().getSimpleName());</span>
+
+<span class="fc" id="L41">    public SerialTree(Map&lt;String, Object&gt; map) {</span>
+<span class="fc" id="L42">        this.map = map;</span>
+<span class="fc" id="L43">    }</span>
+
+    /**
+     * put a key=value pair in a map and detects duplicates.
+     *
+     * @param key
+     * @param addStructure
+     * @return
+     * @throws Exception
+     */
+    public Map&lt;String, Object&gt; insert(String clazz, Object node, String key, Object addStructure) {
+<span class="fc bfc" id="L54" title="All 2 branches covered.">        if (addStructure == null) {</span>
+<span class="fc" id="L55">            return map;</span>
+        }
+
+<span class="fc bfc" id="L58" title="All 2 branches covered.">        if (addStructure instanceof Map</span>
+<span class="pc bpc" id="L59" title="1 of 2 branches missed.">                &amp;&amp; ((Map) addStructure).size() == 0</span>
+<span class="nc bnc" id="L60" title="All 2 branches missed.">                &amp;&amp; !clazz.equalsIgnoreCase(RmConstants.COMPOSITION)) {</span>
+<span class="nc" id="L61">            return map;</span>
+        }
+
+<span class="fc bfc" id="L64" title="All 2 branches covered.">        if (key.equals(TAG_NAME)) {</span>
+<span class="pc bpc" id="L65" title="1 of 2 branches missed.">            if (addStructure instanceof Map) {</span>
+<span class="fc" id="L66">                return new NameInMap(map, (Map) addStructure).toMap();</span>
+            } else {
+<span class="nc" id="L68">                throw new IllegalStateException(</span>
+<span class="nc" id="L69">                        &quot;INTERNAL: addStructure is not a map, found:&quot; + addStructure.getClass());</span>
+            }
+        }
+
+        try {
+<span class="fc bfc" id="L74" title="All 2 branches covered.">            if (addStructure instanceof RMObject) {</span>
+<span class="fc" id="L75">                map.put(key, new RmObjectEncoding((RMObject) addStructure).toMap());</span>
+            } else {
+<span class="fc" id="L77">                map.put(key, addStructure);</span>
+            }
+            // add explicit name
+<span class="fc bfc" id="L80" title="All 6 branches covered.">            if (node instanceof Locatable &amp;&amp; map instanceof PredicatedMap &amp;&amp; !map.containsKey(TAG_NAME)) {</span>
+<span class="fc" id="L81">                new NameInMap(map, new NameAsDvText(((Locatable) node).getName()).toMap()).toMap();</span>
+            }
+
+<span class="nc" id="L84">        } catch (IllegalArgumentException e) {</span>
+<span class="nc" id="L85">            log.error(&quot;Ignoring duplicate key in path detected: {}&quot;, key, e);</span>
+<span class="fc" id="L86">        }</span>
+
+<span class="pc bpc" id="L88" title="1 of 6 branches missed.">        if (clazz != null &amp;&amp; !key.equals(TAG_PATH) &amp;&amp; !map.containsKey(TAG_CLASS)) {</span>
+<span class="fc" id="L89">            map.put(CompositionSerializer.TAG_CLASS, clazz);</span>
+        } else {
+<span class="fc bfc" id="L91" title="All 2 branches covered.">            log.debug(map.containsKey(TAG_CLASS) ? &quot;duplicate TAG_CLASS&quot; : &quot;null clazz&quot;);</span>
+        }
+
+<span class="fc" id="L94">        return map;</span>
+    }
+
+    public Map&lt;String, Object&gt; insert(Object node, String key, Object addStructure) {
+
+<span class="fc" id="L99">        String clazz = new SimpleClassName(node).toString();</span>
+
+<span class="fc" id="L101">        return insert(clazz, node, key, addStructure);</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.7.202105040129</span></div></body></html>

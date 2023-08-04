@@ -1,0 +1,328 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../../jacoco-resources/report.gif" type="image/gif"/><title>BaseController.java</title><link rel="stylesheet" href="../../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../../index.html" class="el_report">Overall Coverage</a> &gt; <a href="../index.html" class="el_bundle">rest-openehr</a> &gt; <a href="index.source.html" class="el_package">org.ehrbase.rest</a> &gt; <span class="el_source">BaseController.java</span></div><h1>BaseController.java</h1><pre class="source lang-java linenums">/*
+ * Copyright (c) 2019-2022 vitasystems GmbH and Hannover Medical School.
+ *
+ * This file is part of project EHRbase
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     https://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.ehrbase.rest;
+
+import java.net.URI;
+import java.time.OffsetDateTime;
+import java.time.format.DateTimeParseException;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.UUID;
+import org.apache.commons.lang3.StringUtils;
+import org.ehrbase.api.exception.InternalServerException;
+import org.ehrbase.api.exception.InvalidApiParameterException;
+import org.ehrbase.api.exception.NotAcceptableException;
+import org.ehrbase.api.exception.ObjectNotFoundException;
+import org.ehrbase.openehr.sdk.response.dto.ehrscape.CompositionFormat;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
+import org.springframework.web.context.request.RequestAttributes;
+import org.springframework.web.context.request.RequestContextHolder;
+import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
+import org.springframework.web.util.UriComponentsBuilder;
+import org.springframework.web.util.UriUtils;
+
+/**
+ * This base controller implements the basic functionality for all specific controllers. This
+ * includes error handling and utils.
+ *
+ * @author Stefan Spiska
+ * @author Jake Smolka
+ * @since 1.0.0
+ */
+<span class="nc" id="L51">public abstract class BaseController {</span>
+
+    // HTTP Headers
+
+    public static final String OPENEHR_AUDIT_DETAILS = &quot;openEHR-AUDIT_DETAILS&quot;;
+
+    public static final String OPENEHR_VERSION = &quot;openEHR-VERSION&quot;;
+
+    public static final String PREFER = &quot;Prefer&quot;;
+
+    public static final String RETURN_MINIMAL = &quot;return=minimal&quot;;
+
+    public static final String RETURN_REPRESENTATION = &quot;return=representation&quot;;
+
+    // Fixed header identifiers
+    public static final String CONTENT_TYPE = HttpHeaders.CONTENT_TYPE;
+    public static final String ACCEPT = HttpHeaders.ACCEPT;
+    public static final String REQ_CONTENT_TYPE = &quot;Client may request content format&quot;;
+    public static final String REQ_CONTENT_TYPE_BODY = &quot;Format of transferred body&quot;;
+    public static final String REQ_ACCEPT = &quot;Client should specify expected format&quot;;
+    // response headers
+    public static final String RESP_CONTENT_TYPE_DESC = &quot;Format of response&quot;;
+    // Audit
+    public static final String REST_OPERATION = &quot;RestOperation&quot;;
+
+    public static final String LOCATION = HttpHeaders.LOCATION;
+    public static final String ETAG = HttpHeaders.ETAG;
+    public static final String LAST_MODIFIED = HttpHeaders.LAST_MODIFIED;
+
+    public static final String IF_MATCH = HttpHeaders.IF_MATCH;
+    public static final String IF_NONE_MATCH = HttpHeaders.IF_NONE_MATCH;
+    // Configuration of swagger-ui description fields
+    // request headers
+    public static final String REQ_OPENEHR_VERSION = &quot;Optional custom request header for versioning&quot;;
+    public static final String REQ_OPENEHR_AUDIT = &quot;Optional custom request header for auditing&quot;;
+    public static final String REQ_PREFER = &quot;May be used by clients for resource representation negotiation&quot;;
+    public static final String RESP_LOCATION_DESC = &quot;Location of resource&quot;;
+    public static final String RESP_ETAG_DESC = &quot;Entity tag for resource&quot;;
+    public static final String RESP_LAST_MODIFIED_DESC = &quot;Time of last modification of resource&quot;;
+    // common response description fields
+    public static final String RESP_NOT_ACCEPTABLE_DESC =
+            &quot;Not Acceptable - Service can not fulfill requested format via accept header.&quot;;
+    public static final String RESP_UNSUPPORTED_MEDIA_DESC =
+            &quot;Unsupported Media Type - request's content-type not supported.&quot;;
+
+    // constants of all API resources
+    public static final String EHR = &quot;ehr&quot;;
+    public static final String EHR_STATUS = &quot;ehr_status&quot;;
+    public static final String VERSIONED_EHR_STATUS = &quot;versioned_ehr_status&quot;;
+    public static final String VERSIONED_COMPOSITION = &quot;versioned_composition&quot;;
+    public static final String COMPOSITION = &quot;composition&quot;;
+    public static final String DIRECTORY = &quot;directory&quot;;
+    public static final String CONTRIBUTION = &quot;contribution&quot;;
+    public static final String QUERY = &quot;query&quot;;
+    public static final String DEFINITION = &quot;definition&quot;;
+    public static final String TEMPLATE = &quot;template&quot;;
+    public static final String API_CONTEXT_PATH = &quot;${openehr-api.context-path:/rest/openehr}&quot;;
+    public static final String API_CONTEXT_PATH_WITH_VERSION = API_CONTEXT_PATH + &quot;/v1&quot;;
+    public static final String ADMIN_API_CONTEXT_PATH = &quot;${admin-api.context-path:/rest/admin}&quot;;
+
+    public Map&lt;String, Map&lt;String, String&gt;&gt; add2MetaMap(
+            Map&lt;String, Map&lt;String, String&gt;&gt; metaMap, String key, String value) {
+        Map&lt;String, String&gt; contentMap;
+
+<span class="nc bnc" id="L115" title="All 2 branches missed.">        if (metaMap == null) {</span>
+<span class="nc" id="L116">            metaMap = new HashMap&lt;&gt;();</span>
+<span class="nc" id="L117">            contentMap = new HashMap&lt;&gt;();</span>
+<span class="nc" id="L118">            metaMap.put(&quot;meta&quot;, contentMap);</span>
+        } else {
+<span class="nc" id="L120">            contentMap = metaMap.get(&quot;meta&quot;);</span>
+        }
+
+<span class="nc" id="L123">        contentMap.put(key, value);</span>
+<span class="nc" id="L124">        return metaMap;</span>
+    }
+
+    protected String getContextPath() {
+<span class="nc" id="L128">        return ServletUriComponentsBuilder.fromCurrentContextPath().build().toUriString();</span>
+    }
+
+    @Value(API_CONTEXT_PATH_WITH_VERSION)
+    protected String apiContextPathWithVersion;
+
+    /**
+     * Returns a URI for list of segments.
+     * The segments are appended to the base path and encoded to ensure safe usage in a URI.
+     *
+     * @param pathSegments List of segments to append to the base URL
+     * @return URI for the given base URL and segments
+     */
+    protected URI createLocationUri(String... pathSegments) {
+<span class="nc" id="L142">        return UriComponentsBuilder.fromHttpUrl(getContextPath())</span>
+<span class="nc" id="L143">                .path(this.encodePath(apiContextPathWithVersion))</span>
+<span class="nc" id="L144">                .pathSegment(pathSegments)</span>
+<span class="nc" id="L145">                .build()</span>
+<span class="nc" id="L146">                .toUri();</span>
+    }
+
+    /**
+     * Helper to allow string UUID input from controllers, which throws an ObjectNotFound exception
+     * when no UUID representation can be created. This case is equal to no matching object.
+     *
+     * @param ehrIdString Input String representation of the ehrId
+     * @return UUID representation of the ehrId
+     * @throws ObjectNotFoundException when no UUID can't be created from input
+     */
+    protected UUID getEhrUuid(String ehrIdString) {
+<span class="nc" id="L158">        return extractUUIDFromStringWithError(</span>
+                ehrIdString, &quot;ehr&quot;, &quot;EHR not found, in fact, only UUID-type IDs are supported&quot;);
+    }
+
+    /**
+     * Helper to allow string UUID input from controllers, which throws an ObjectNotFound exception
+     * when no UUID representation can be created. This case is equal to no matching object.
+     *
+     * @param compositionVersionedObjectUidString Input String representation
+     * @return UUID representation
+     * @throws ObjectNotFoundException when no UUID can't be created from input
+     */
+    protected UUID getCompositionVersionedObjectUidString(String compositionVersionedObjectUidString) {
+<span class="nc" id="L171">        return extractUUIDFromStringWithError(</span>
+                compositionVersionedObjectUidString,
+                COMPOSITION,
+                &quot;Composition not found, in fact, only UUID-type versionedObjectUids are supported&quot;);
+    }
+
+    /**
+     * Helper to allow string UUID input from controllers, which throws an ObjectNotFound exception
+     * when no UUID representation can be created. This case is equal to no matching object.
+     *
+     * @param compositionVersionedObjectUidString Input String representation
+     * @return UUID representation
+     * @throws ObjectNotFoundException when no UUID can't be created from input
+     */
+    protected UUID getContributionVersionedObjectUidString(String compositionVersionedObjectUidString) {
+<span class="nc" id="L186">        return extractUUIDFromStringWithError(</span>
+                compositionVersionedObjectUidString,
+                CONTRIBUTION,
+                &quot;Contribution not found, in fact, only UUID-type versionedObjectUids are supported&quot;);
+    }
+
+    // Internal abstraction layer helper, so calling methods above can invoke with meaningful error
+    // messages depending on context.
+    private UUID extractUUIDFromStringWithError(String uuidString, String type, String error) {
+        UUID uuid;
+        try {
+<span class="nc" id="L197">            uuid = UUID.fromString(uuidString);</span>
+<span class="nc" id="L198">        } catch (IllegalArgumentException e) {</span>
+<span class="nc" id="L199">            throw new ObjectNotFoundException(type, error);</span>
+<span class="nc" id="L200">        }</span>
+<span class="nc" id="L201">        return uuid;</span>
+    }
+
+    /**
+     * Extracts the {@link CompositionFormat} from the REST request's input {@link MediaType} style
+     * content type header string.
+     *
+     * @param contentType String representation of REST request's input {@link MediaType} style
+     *                    content type header
+     * @return {@link CompositionFormat} expressing the content type
+     * @throws NotAcceptableException when content type is not supported or input is invalid
+     */
+    protected CompositionFormat extractCompositionFormat(String contentType) {
+        final CompositionFormat compositionFormat;
+
+<span class="nc" id="L216">        MediaType mediaType = resolveContentType(contentType);</span>
+<span class="nc bnc" id="L217" title="All 2 branches missed.">        if (mediaType.isCompatibleWith(MediaType.APPLICATION_XML)) {</span>
+<span class="nc" id="L218">            compositionFormat = CompositionFormat.XML;</span>
+<span class="nc bnc" id="L219" title="All 2 branches missed.">        } else if (mediaType.isCompatibleWith(MediaType.APPLICATION_JSON)) {</span>
+<span class="nc" id="L220">            compositionFormat = CompositionFormat.JSON;</span>
+        } else {
+<span class="nc" id="L222">            throw new NotAcceptableException(&quot;Only compositions in XML or JSON are supported at the moment&quot;);</span>
+        }
+<span class="nc" id="L224">        return compositionFormat;</span>
+    }
+
+    /**
+     * Convenience helper to encode path strings to URI-safe strings
+     *
+     * @param path input
+     * @return URI-safe escaped string
+     * @throws InternalServerException when encoding failed
+     */
+    public String encodePath(String path) {
+
+<span class="nc" id="L236">        path = UriUtils.encodePath(path, &quot;UTF-8&quot;);</span>
+
+<span class="nc" id="L238">        return path;</span>
+    }
+
+    /**
+     * Extracts the UUID base from a versioned UID. Or, if
+     *
+     * @param versionUid
+     * @return
+     */
+    protected UUID extractVersionedObjectUidFromVersionUid(String versionUid) {
+<span class="nc bnc" id="L248" title="All 2 branches missed.">        if (!versionUid.contains(&quot;::&quot;)) {</span>
+<span class="nc" id="L249">            return UUID.fromString(versionUid);</span>
+        }
+<span class="nc" id="L251">        return UUID.fromString(versionUid.substring(0, versionUid.indexOf(&quot;::&quot;)));</span>
+    }
+
+    protected int extractVersionFromVersionUid(String versionUid) {
+<span class="nc bnc" id="L255" title="All 2 branches missed.">        if (!versionUid.contains(&quot;::&quot;)) {</span>
+<span class="nc" id="L256">            return 0; // current version</span>
+        }
+        // extract the version from string of format &quot;$UUID::$SYSTEM::$VERSION&quot;
+        // via making a substring starting at last occurrence of &quot;::&quot; + 2
+<span class="nc" id="L260">        return Integer.parseInt(versionUid.substring(versionUid.lastIndexOf(&quot;::&quot;) + 2));</span>
+    }
+
+    /**
+     * Add attribute to the current request.
+     *
+     * @param attributeName
+     * @param value
+     */
+    protected void enrichRequestAttribute(String attributeName, Object value) {
+<span class="nc" id="L270">        RequestContextHolder.currentRequestAttributes()</span>
+<span class="nc" id="L271">                .setAttribute(attributeName, value, RequestAttributes.SCOPE_REQUEST);</span>
+<span class="nc" id="L272">    }</span>
+
+    /**
+     * Resolves the Content-Type based on Accept header.
+     *
+     * @param acceptHeader Accept header value
+     * @return Content-Type of the response
+     */
+    protected MediaType resolveContentType(String acceptHeader) {
+<span class="nc" id="L281">        return resolveContentType(acceptHeader, MediaType.APPLICATION_JSON);</span>
+    }
+
+    /**
+     * Resolves the Content-Type based on Accept header.
+     *
+     * @param acceptHeader     Accept header value
+     * @param defaultMediaType Default Content-Type
+     * @return Content-Type of the response
+     */
+    protected MediaType resolveContentType(String acceptHeader, MediaType defaultMediaType) {
+<span class="nc" id="L292">        List&lt;MediaType&gt; mediaTypes = MediaType.parseMediaTypes(acceptHeader);</span>
+<span class="nc bnc" id="L293" title="All 2 branches missed.">        if (mediaTypes.isEmpty()) {</span>
+<span class="nc" id="L294">            return defaultMediaType;</span>
+        }
+
+<span class="nc" id="L297">        MediaType.sortBySpecificityAndQuality(mediaTypes);</span>
+<span class="nc" id="L298">        MediaType contentType = mediaTypes.stream()</span>
+<span class="nc bnc" id="L299" title="All 2 branches missed.">                .filter(mediaType -&gt; mediaType.isCompatibleWith(MediaType.APPLICATION_JSON)</span>
+<span class="nc bnc" id="L300" title="All 2 branches missed.">                        || mediaType.isCompatibleWith(MediaType.APPLICATION_XML))</span>
+<span class="nc" id="L301">                .findFirst()</span>
+<span class="nc" id="L302">                .orElseThrow(() -&gt; new InvalidApiParameterException(&quot;Wrong Content-Type header in request&quot;));</span>
+
+<span class="nc bnc" id="L304" title="All 2 branches missed.">        if (contentType.equals(MediaType.ALL)) {</span>
+<span class="nc" id="L305">            return defaultMediaType;</span>
+        }
+
+<span class="nc" id="L308">        return contentType;</span>
+    }
+
+    protected static Optional&lt;OffsetDateTime&gt; decodeVersionAtTime(String versionAtTimeParam) {
+<span class="nc" id="L312">        return Optional.ofNullable(versionAtTimeParam)</span>
+<span class="nc" id="L313">                .filter(StringUtils::isNotBlank)</span>
+                // revert application/x-www-form-urlencoded
+<span class="nc" id="L315">                .map(s -&gt; s.replace(' ', '+'))</span>
+<span class="nc" id="L316">                .map(s -&gt; {</span>
+                    try {
+<span class="nc" id="L318">                        return OffsetDateTime.parse(s);</span>
+<span class="nc" id="L319">                    } catch (DateTimeParseException e) {</span>
+<span class="nc" id="L320">                        throw new IllegalArgumentException(</span>
+                                &quot;Value '%s' is not valid for version_at_time parameter. Value must be in the extended ISO 8601 format.&quot;
+<span class="nc" id="L322">                                        .formatted(versionAtTimeParam),</span>
+                                e);
+                    }
+                });
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.7.202105040129</span></div></body></html>

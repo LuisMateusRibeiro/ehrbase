@@ -1,0 +1,102 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../../jacoco-resources/report.gif" type="image/gif"/><title>FullCompositionJson.java</title><link rel="stylesheet" href="../../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../../index.html" class="el_report">Coverage with Unit Tests</a> &gt; <a href="../index.html" class="el_bundle">service</a> &gt; <a href="index.source.html" class="el_package">org.ehrbase.aql.sql.queryimpl.attribute.composition</a> &gt; <span class="el_source">FullCompositionJson.java</span></div><h1>FullCompositionJson.java</h1><pre class="source lang-java linenums">/*
+ * Copyright (c) 2019 vitasystems GmbH and Hannover Medical School.
+ *
+ * This file is part of project EHRbase
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     https://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.ehrbase.aql.sql.queryimpl.attribute.composition;
+
+import static org.ehrbase.aql.sql.queryimpl.AqlRoutines.jsonpathItemAsText;
+import static org.ehrbase.aql.sql.queryimpl.AqlRoutines.jsonpathParameters;
+import static org.ehrbase.jooq.pg.Routines.jsComposition2;
+import static org.ehrbase.jooq.pg.Tables.COMPOSITION;
+
+import java.util.Arrays;
+import java.util.Optional;
+import java.util.UUID;
+import org.ehrbase.aql.sql.binding.JoinBinder;
+import org.ehrbase.aql.sql.queryimpl.attribute.*;
+import org.jooq.Configuration;
+import org.jooq.Field;
+import org.jooq.JSONB;
+import org.jooq.TableField;
+import org.jooq.impl.DSL;
+
+@SuppressWarnings({&quot;java:S3776&quot;, &quot;java:S3740&quot;})
+public class FullCompositionJson extends CompositionAttribute {
+
+<span class="fc" id="L39">    protected TableField tableField = COMPOSITION.ID;</span>
+<span class="fc" id="L40">    protected Optional&lt;String&gt; jsonPath = Optional.empty();</span>
+<span class="fc" id="L41">    private boolean isJsonDataBlock = true; // by default, can be overriden</span>
+
+    public FullCompositionJson(FieldResolutionContext fieldContext, JoinSetup joinSetup) {
+<span class="fc" id="L44">        super(fieldContext, joinSetup);</span>
+<span class="fc" id="L45">    }</span>
+
+    @Override
+    public Field&lt;?&gt; sqlField() {
+<span class="fc" id="L49">        fieldContext.setJsonDatablock(true);</span>
+<span class="fc" id="L50">        fieldContext.setRmType(&quot;COMPOSITION&quot;);</span>
+        // to retrieve DB dialect
+<span class="fc" id="L52">        Configuration configuration = fieldContext.getContext().configuration();</span>
+
+        // query the json representation of EVENT_CONTEXT and cast the result as TEXT
+        Field jsonFullComposition;
+
+<span class="fc bfc" id="L57" title="All 2 branches covered.">        if (jsonPath.isPresent()) {</span>
+<span class="fc" id="L58">            jsonFullComposition = DSL.field(jsonpathItemAsText(</span>
+                    configuration,
+<span class="fc" id="L60">                    jsComposition2(</span>
+<span class="fc" id="L61">                                    DSL.field(JoinBinder.compositionRecordTable.getName() + &quot;.&quot; + tableField.getName())</span>
+<span class="fc" id="L62">                                            .cast(UUID.class),</span>
+<span class="fc" id="L63">                                    DSL.val(fieldContext.getServerNodeId()))</span>
+<span class="fc" id="L64">                            .cast(JSONB.class),</span>
+<span class="fc" id="L65">                    jsonpathParameters(jsonPath.get())));</span>
+        } else
+<span class="fc" id="L67">            jsonFullComposition = DSL.field(jsComposition2(</span>
+<span class="fc" id="L68">                            DSL.field(JoinBinder.compositionRecordTable.getName() + &quot;.&quot; + tableField.getName())</span>
+<span class="fc" id="L69">                                    .cast(UUID.class),</span>
+<span class="fc" id="L70">                            DSL.val(fieldContext.getServerNodeId()))</span>
+<span class="fc" id="L71">                    .cast(String.class));</span>
+
+<span class="fc bfc" id="L73" title="All 2 branches covered.">        if (fieldContext.isWithAlias()) return aliased(DSL.field(jsonFullComposition));</span>
+<span class="fc" id="L74">        else return defaultAliased(jsonFullComposition);</span>
+    }
+
+    @Override
+    public IRMObjectAttribute forTableField(TableField tableField) {
+<span class="nc" id="L79">        this.tableField = tableField;</span>
+<span class="nc" id="L80">        return this;</span>
+    }
+
+    public FullCompositionJson forJsonPath(String jsonPath) {
+<span class="nc bnc" id="L84" title="All 4 branches missed.">        if (jsonPath == null || jsonPath.isEmpty()) {</span>
+<span class="nc" id="L85">            this.jsonPath = Optional.empty();</span>
+<span class="nc" id="L86">            return this;</span>
+        }
+<span class="nc" id="L88">        this.jsonPath = Optional.of(new GenericJsonPath(jsonPath).jqueryPath());</span>
+<span class="nc" id="L89">        return this;</span>
+    }
+
+    public FullCompositionJson forJsonPath(String[] path) {
+<span class="pc bpc" id="L93" title="1 of 2 branches missed.">        if (GenericJsonPath.isTerminalValue(Arrays.asList(path), path.length - 1)) isJsonDataBlock = false;</span>
+<span class="fc" id="L94">        this.jsonPath = Optional.of(new JsonbSelect(Arrays.asList(path)).field());</span>
+<span class="fc" id="L95">        return this;</span>
+    }
+
+    public boolean isJsonDataBlock() {
+<span class="nc" id="L99">        return isJsonDataBlock;</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.7.202105040129</span></div></body></html>

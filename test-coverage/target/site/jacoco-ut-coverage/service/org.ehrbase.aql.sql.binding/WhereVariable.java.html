@@ -1,0 +1,150 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../../jacoco-resources/report.gif" type="image/gif"/><title>WhereVariable.java</title><link rel="stylesheet" href="../../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../../index.html" class="el_report">Coverage with Unit Tests</a> &gt; <a href="../index.html" class="el_bundle">service</a> &gt; <a href="index.source.html" class="el_package">org.ehrbase.aql.sql.binding</a> &gt; <span class="el_source">WhereVariable.java</span></div><h1>WhereVariable.java</h1><pre class="source lang-java linenums">/*
+ * Copyright (c) 2022 vitasystems GmbH and Hannover Medical School.
+ *
+ * This file is part of project EHRbase
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     https://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.ehrbase.aql.sql.binding;
+
+import org.ehrbase.aql.definition.I_VariableDefinition;
+import org.ehrbase.aql.sql.PathResolver;
+import org.ehrbase.aql.sql.queryimpl.*;
+import org.jooq.Field;
+import org.jooq.impl.DSL;
+
+public class WhereVariable {
+
+    public static final String COMPOSITION = &quot;COMPOSITION&quot;;
+    public static final String CONTENT = &quot;content&quot;;
+    public static final String EHR = &quot;EHR&quot;;
+<span class="fc" id="L31">    private boolean isFollowedBySQLConditionalOperator = false;</span>
+    private WhereBinder.ExistsMode inExists;
+<span class="fc" id="L33">    private String rightMostJsonbExpression = null;</span>
+
+    private final PathResolver pathResolver;
+
+<span class="fc" id="L37">    public WhereVariable(PathResolver pathResolver) {</span>
+<span class="fc" id="L38">        this.pathResolver = pathResolver;</span>
+<span class="fc" id="L39">    }</span>
+
+    public TaggedStringBuilder encodeWhereVariable(
+            WhereBinder.ExistsMode inExists,
+            boolean isFollowedBySQLConditionalOperator,
+            int whereCursor,
+            MultiFieldsMap multiWhereFieldsMap,
+            int selectCursor,
+            MultiFieldsMap multiSelectFieldsMap,
+            I_VariableDefinition variableDefinition,
+            String compositionName)
+            throws UnknownVariableException {
+
+<span class="fc" id="L52">        this.inExists = inExists;</span>
+<span class="fc" id="L53">        this.isFollowedBySQLConditionalOperator = isFollowedBySQLConditionalOperator;</span>
+
+        TaggedStringBuilder variableSQL;
+
+        try {
+<span class="fc" id="L58">            variableSQL = _encodeWhereVariable(</span>
+                    whereCursor,
+                    multiWhereFieldsMap,
+                    selectCursor,
+                    multiSelectFieldsMap,
+                    variableDefinition,
+                    compositionName);
+<span class="fc" id="L65">        } catch (UnknownVariableException e) {</span>
+<span class="pc bpc" id="L66" title="1 of 2 branches missed.">            if (!inExists.equals(WhereBinder.ExistsMode.UNSET)) {</span>
+<span class="fc" id="L67">                variableSQL = new TaggedStringBuilder(</span>
+<span class="fc" id="L68">                        &quot; &quot; + DSL.val((Byte) null) + &quot; &quot;, I_TaggedStringBuilder.TagField.SQLQUERY);</span>
+<span class="fc" id="L69">                this.inExists = WhereBinder.ExistsMode.UNSET;</span>
+<span class="nc" id="L70">            } else throw new UnknownVariableException(e.toString());</span>
+<span class="fc" id="L71">        }</span>
+
+<span class="fc" id="L73">        return variableSQL;</span>
+    }
+
+    private TaggedStringBuilder _encodeWhereVariable(
+            int whereCursor,
+            MultiFieldsMap multiFieldsMap,
+            int selectCursor,
+            MultiFieldsMap multiSelectFieldsMap,
+            I_VariableDefinition variableDefinition,
+            String compositionName)
+            throws UnknownVariableException {
+<span class="fc" id="L84">        String identifier = variableDefinition.getIdentifier();</span>
+
+        // check if we have already resolved this variable in the select clause
+<span class="fc" id="L87">        String alreadyResolvedSQL = lookUpFromSelect(variableDefinition, selectCursor, multiSelectFieldsMap);</span>
+<span class="fc bfc" id="L88" title="All 2 branches covered.">        if (alreadyResolvedSQL != null) {</span>
+<span class="fc" id="L89">            rightMostJsonbExpression = null; // reinit</span>
+<span class="fc" id="L90">            return new TaggedStringBuilder(alreadyResolvedSQL, I_TaggedStringBuilder.TagField.SQLQUERY);</span>
+        }
+
+<span class="fc" id="L93">        String className = pathResolver.classNameOf(identifier);</span>
+<span class="pc bpc" id="L94" title="1 of 2 branches missed.">        if (className == null)</span>
+<span class="nc" id="L95">            throw new IllegalArgumentException(&quot;Could not bind identifier in WHERE clause:'&quot; + identifier + &quot;'&quot;);</span>
+
+<span class="fc" id="L97">        MultiFields multiFields = multiFieldsMap.get(variableDefinition.getIdentifier(), variableDefinition.getPath());</span>
+
+<span class="fc bfc" id="L99" title="All 2 branches covered.">        if (multiFields == null) throw new UnknownVariableException(variableDefinition.toString());</span>
+
+<span class="fc" id="L101">        QualifiedAqlField qualifiedAqlField = multiFields.getQualifiedFieldOrLast(whereCursor);</span>
+
+<span class="fc" id="L103">        Field&lt;?&gt; field = qualifiedAqlField.getSQLField();</span>
+<span class="fc" id="L104">        rightMostJsonbExpression = qualifiedAqlField.getRightMostJsonbExpression();</span>
+
+<span class="pc bpc" id="L106" title="1 of 2 branches missed.">        if (field == null) return null;</span>
+
+<span class="fc" id="L108">        return new TaggedStringBuilder(field.toString(), I_TaggedStringBuilder.TagField.SQLQUERY);</span>
+    }
+
+    private String lookUpFromSelect(
+            I_VariableDefinition variableDefinition, int selectCursor, MultiFieldsMap multiSelectFieldsMap)
+            throws UnknownVariableException {
+
+        // TODO: remove when we support historical queries.
+<span class="fc bfc" id="L116" title="All 2 branches covered.">        if (pathResolver.classNameOf(variableDefinition.getIdentifier()).equals(&quot;COMPOSITION&quot;)</span>
+<span class="pc bpc" id="L117" title="1 of 2 branches missed.">                &amp;&amp; variableDefinition.getPath().equals(&quot;uid/value&quot;)) return null;</span>
+
+<span class="fc" id="L119">        MultiFields multiFields =</span>
+<span class="fc" id="L120">                multiSelectFieldsMap.get(variableDefinition.getIdentifier(), variableDefinition.getPath());</span>
+<span class="fc bfc" id="L121" title="All 2 branches covered.">        if (multiFields == null) return null;</span>
+<span class="fc" id="L122">        QualifiedAqlField aqlField = multiFields.getQualifiedFieldOrLast(selectCursor);</span>
+
+        // There is an issue with jOOQ regarding the formatting of interval. Hence, the actual varchar format is not
+        // preserved.
+<span class="pc bpc" id="L126" title="1 of 4 branches missed.">        if (aqlField.getItemType() != null &amp;&amp; aqlField.getItemType().equals(&quot;DV_DURATION&quot;)) return null;</span>
+
+<span class="fc" id="L128">        return DSL.select(aqlField.getSQLField())</span>
+<span class="fc" id="L129">                .getSQL()</span>
+<span class="fc" id="L130">                .replace(&quot;select &quot;, &quot;&quot;)</span>
+<span class="fc" id="L131">                .replace(&quot;\&quot;&quot; + aqlField.getSQLField().getName() + &quot;\&quot;&quot;, &quot;&quot;);</span>
+    }
+
+    public boolean isFollowedBySQLConditionalOperator() {
+<span class="fc" id="L135">        return isFollowedBySQLConditionalOperator;</span>
+    }
+
+    public WhereBinder.ExistsMode inExists() {
+<span class="fc" id="L139">        return inExists;</span>
+    }
+
+    public String getRightMostJsonbExpression() {
+<span class="fc" id="L143">        return rightMostJsonbExpression;</span>
+    }
+
+    public boolean hasRightMostJsonbExpression() {
+<span class="fc bfc" id="L147" title="All 2 branches covered.">        return rightMostJsonbExpression != null;</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.7.202105040129</span></div></body></html>

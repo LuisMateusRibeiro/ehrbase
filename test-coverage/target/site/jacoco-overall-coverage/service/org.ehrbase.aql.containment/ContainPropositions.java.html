@@ -1,0 +1,175 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../../jacoco-resources/report.gif" type="image/gif"/><title>ContainPropositions.java</title><link rel="stylesheet" href="../../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../../index.html" class="el_report">Overall Coverage</a> &gt; <a href="../index.html" class="el_bundle">service</a> &gt; <a href="index.source.html" class="el_package">org.ehrbase.aql.containment</a> &gt; <span class="el_source">ContainPropositions.java</span></div><h1>ContainPropositions.java</h1><pre class="source lang-java linenums">/*
+ * Copyright (c) 2020 vitasystems GmbH and Hannover Medical School.
+ *
+ * This file is part of project EHRbase
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     https://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.ehrbase.aql.containment;
+
+import java.util.HashSet;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import org.apache.commons.collections4.SetUtils;
+import org.ehrbase.openehr.sdk.webtemplate.parser.NodeId;
+import org.ehrbase.service.KnowledgeCacheService;
+
+/**
+ * Handles and evaluation contain proposition:
+ * Simple contain chain (e.g. CONTAINS [...] CONTAINS [...]...) are evaluated for existence of paths within defined templates
+ * Complex contain (expressed as logical expressions of Simple Contains) are evaluated as set operation (intersection, union. disjunction)
+ */
+public class ContainPropositions {
+
+<span class="fc" id="L36">    private Map&lt;String, ContainsCheck&gt; propositionsEvalMap = new LinkedHashMap&lt;&gt;(); // ordered contain evaluation map</span>
+    /**
+     * containers (containment definitions) with path values completed
+     */
+    private final IdentifierMapper identifierMapper;
+    /**
+     * set of templates for which the CONTAIN expression is true
+     */
+<span class="fc" id="L44">    private Set&lt;String&gt; templates = new HashSet&lt;&gt;();</span>
+
+<span class="fc" id="L46">    public ContainPropositions(IdentifierMapper identifierMapper) {</span>
+<span class="fc" id="L47">        this.identifierMapper = identifierMapper;</span>
+<span class="fc" id="L48">    }</span>
+
+    public void put(String key, ContainsCheck containsCheck) {
+<span class="fc" id="L51">        propositionsEvalMap.put(key, containsCheck);</span>
+<span class="fc" id="L52">    }</span>
+
+    public ContainsCheck get(String key) {
+<span class="fc" id="L55">        return propositionsEvalMap.get(key);</span>
+    }
+
+    /**
+     * evaluate the set of proposition IN-ORDER.
+     * The results are given as:
+     * - a list of templates for which the propositions are satisfied
+     * - paths in containers for each identified template
+     * @param knowledgeCache
+     */
+    public void evaluate(KnowledgeCacheService knowledgeCache) {
+<span class="fc" id="L66">        ContainsCheck lastCheck = null;</span>
+        // iterate in-order on the map of contains proposition and keep the last one (since it will contain the result)
+<span class="fc bfc" id="L68" title="All 2 branches covered.">        for (Map.Entry&lt;String, ContainsCheck&gt; entry : propositionsEvalMap.entrySet()) {</span>
+<span class="fc bfc" id="L69" title="All 2 branches covered.">            if (entry.getValue() instanceof SimpleChainedCheck) {</span>
+<span class="fc" id="L70">                List&lt;NodeId&gt; jsonQuery = ((SimpleChainedCheck) entry.getValue()).jsonPathNodeFilterExpression();</span>
+<span class="pc bpc" id="L71" title="1 of 2 branches missed.">                if (jsonQuery != null) { // case CONTAINS COMPOSITION c without any specified further containments</span>
+                    try {
+                        // perform the json path query on all available templates
+<span class="fc" id="L74">                        List&lt;JsonPathQueryResult&gt; results = new Templates(knowledgeCache).resolve(jsonQuery);</span>
+                        // reconciliate the containment with the identifier mapper entry
+<span class="pc bpc" id="L76" title="1 of 4 branches missed.">                        if (results != null &amp;&amp; !results.isEmpty()) {</span>
+<span class="fc" id="L77">                            Containment containment = (Containment) identifierMapper.getContainer(</span>
+<span class="fc" id="L78">                                    entry.getValue().getSymbol());</span>
+
+<span class="fc bfc" id="L80" title="All 2 branches covered.">                            for (JsonPathQueryResult jsonPathQueryResult : results) {</span>
+<span class="fc bfc" id="L81" title="All 2 branches covered.">                                if (containment != null) { // it is null if the symbol is not specified</span>
+<span class="fc" id="L82">                                    containment.setPath(</span>
+<span class="fc" id="L83">                                            jsonPathQueryResult.getTemplateId(), jsonPathQueryResult.getAqlPath());</span>
+                                }
+<span class="fc" id="L85">                                entry.getValue().addTemplateId(jsonPathQueryResult.getTemplateId());</span>
+<span class="fc" id="L86">                                if (new Containments(</span>
+                                                knowledgeCache,
+<span class="fc" id="L88">                                                ((SimpleChainedCheck) entry.getValue()).getContainmentSet())</span>
+<span class="fc bfc" id="L89" title="All 2 branches covered.">                                        .hasUnresolvedContainment(jsonPathQueryResult.getTemplateId())) {</span>
+                                    // resolve it
+<span class="fc" id="L91">                                    new Containments(</span>
+                                                    knowledgeCache,
+<span class="fc" id="L93">                                                    ((SimpleChainedCheck) entry.getValue()).getContainmentSet())</span>
+<span class="fc" id="L94">                                            .resolveContainers(jsonPathQueryResult.getTemplateId());</span>
+                                }
+<span class="fc" id="L96">                            }</span>
+                        }
+<span class="nc" id="L98">                    } catch (Exception e) {</span>
+<span class="nc" id="L99">                        throw new IllegalArgumentException(&quot;Could not traverse cached templates:&quot; + e);</span>
+<span class="fc" id="L100">                    }</span>
+                }
+<span class="fc" id="L102">            } else {</span>
+<span class="fc" id="L103">                Set&lt;String&gt; resultSet = new HashSet&lt;&gt;();</span>
+<span class="fc" id="L104">                boolean expectOperator = false;</span>
+<span class="fc" id="L105">                String operator = null;</span>
+
+<span class="fc bfc" id="L107" title="All 2 branches covered.">                for (Object token : ((ComplexContainsCheck) entry.getValue()).getTokens()) {</span>
+<span class="fc bfc" id="L108" title="All 2 branches covered.">                    if (token instanceof ContainsCheck) {</span>
+<span class="pc bpc" id="L109" title="1 of 2 branches missed.">                        if (expectOperator) throw new IllegalStateException(&quot;Invalid expression&quot;);</span>
+<span class="fc bfc" id="L110" title="All 2 branches covered.">                        if (operator != null) {</span>
+<span class="pc bpc" id="L111" title="1 of 2 branches missed.">                            if (resultSet.isEmpty()) resultSet = SetUtils.emptySet();</span>
+
+<span class="fc" id="L113">                            Set&lt;String&gt; combinedSet = ((ContainsCheck) token).getTemplateIds();</span>
+                            // apply operator
+<span class="pc bpc" id="L115" title="2 of 4 branches missed.">                            switch (operator) {</span>
+                                case &quot;AND&quot;:
+<span class="fc" id="L117">                                    resultSet = SetUtils.intersection(resultSet, combinedSet);</span>
+<span class="fc" id="L118">                                    break;</span>
+                                case &quot;OR&quot;:
+<span class="fc" id="L120">                                    resultSet = SetUtils.union(resultSet, combinedSet);</span>
+<span class="fc" id="L121">                                    break;</span>
+                                case &quot;XOR&quot;:
+<span class="nc" id="L123">                                    resultSet = SetUtils.disjunction(resultSet, combinedSet);</span>
+<span class="nc" id="L124">                                    break;</span>
+                                default:
+<span class="nc" id="L126">                                    throw new IllegalArgumentException(</span>
+                                            &quot;Unsupported contains combination operator:&quot; + operator);
+                            }
+<span class="fc" id="L129">                        } else resultSet.addAll(((ContainsCheck) token).getTemplateIds());</span>
+<span class="fc" id="L130">                        expectOperator = true;</span>
+<span class="fc bfc" id="L131" title="All 2 branches covered.">                    } else if (token instanceof ContainOperator) {</span>
+<span class="fc" id="L132">                        expectOperator = false;</span>
+<span class="pc bpc" id="L133" title="1 of 2 branches missed.">                        switch (((ContainOperator) token).operator()) {</span>
+                            case AND:
+                            case OR:
+                            case XOR:
+<span class="fc" id="L137">                                operator = ((ContainOperator) token).getOperator();</span>
+<span class="fc" id="L138">                                break;</span>
+                            default:
+<span class="nc" id="L140">                                break;</span>
+                        }
+<span class="pc bpc" id="L142" title="1 of 4 branches missed.">                    } else if (token instanceof String &amp;&amp; ((String) token).matches(&quot;\\(|\\)&quot;)) {</span>
+<span class="fc" id="L143">                        expectOperator = false;</span>
+                    }
+<span class="fc" id="L145">                }</span>
+                // assign resultSet to proposition
+<span class="fc" id="L147">                entry.getValue().addAllTemplateIds(resultSet);</span>
+            }
+<span class="fc" id="L149">            lastCheck = entry.getValue();</span>
+<span class="fc" id="L150">        }</span>
+        // wrap up iteration
+<span class="fc bfc" id="L152" title="All 2 branches covered.">        if (lastCheck != null) templates.addAll(lastCheck.getTemplateIds());</span>
+<span class="fc" id="L153">    }</span>
+
+    /**
+     * returns the list of templates for the expression
+     * @return
+     */
+    public Set&lt;String&gt; resolvedTemplates() {
+<span class="fc" id="L160">        return templates;</span>
+    }
+
+    /**
+     * true if this expression is for a simple COMPOSITION containment (e.g. no embedded CONTAINs)
+     * @return
+     */
+    public boolean requiresTemplateWhereClause() {
+<span class="fc" id="L168">        return identifierMapper.requiresTemplateWhereClause();</span>
+    }
+
+    public boolean hasContains() {
+<span class="fc bfc" id="L172" title="All 2 branches covered.">        return propositionsEvalMap.size() &gt; 0;</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.7.202105040129</span></div></body></html>

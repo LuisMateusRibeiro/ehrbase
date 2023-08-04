@@ -1,0 +1,125 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../../jacoco-resources/report.gif" type="image/gif"/><title>MultiFields.java</title><link rel="stylesheet" href="../../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../../index.html" class="el_report">Overall Coverage</a> &gt; <a href="../index.html" class="el_bundle">service</a> &gt; <a href="index.source.html" class="el_package">org.ehrbase.aql.sql.queryimpl</a> &gt; <span class="el_source">MultiFields.java</span></div><h1>MultiFields.java</h1><pre class="source lang-java linenums">/*
+ * Copyright (c) 2020 vitasystems GmbH and Hannover Medical School.
+ *
+ * This file is part of project EHRbase
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     https://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.ehrbase.aql.sql.queryimpl;
+
+import java.util.ArrayList;
+import java.util.Iterator;
+import java.util.List;
+import org.ehrbase.aql.definition.I_VariableDefinition;
+import org.jooq.Field;
+
+public class MultiFields {
+
+<span class="fc" id="L28">    private final List&lt;QualifiedAqlField&gt; fields = new ArrayList&lt;&gt;();</span>
+<span class="fc" id="L29">    private boolean useEntryTable = false;</span>
+    private String rootJsonKey;
+    private final String templateId;
+    private I_VariableDefinition variableDefinition; // the variable def for this list of qualified fields
+
+<span class="fc" id="L34">    public MultiFields(I_VariableDefinition variableDefinition, List&lt;QualifiedAqlField&gt; fields, String templateId) {</span>
+<span class="fc" id="L35">        this.fields.addAll(fields);</span>
+<span class="fc" id="L36">        this.variableDefinition = variableDefinition;</span>
+<span class="fc" id="L37">        this.templateId = templateId;</span>
+<span class="fc" id="L38">    }</span>
+
+    public MultiFields(I_VariableDefinition variableDefinition, Field&lt;?&gt; field, String templateId) {
+<span class="fc" id="L41">        this(variableDefinition, new QualifiedAqlField(field), templateId);</span>
+<span class="fc" id="L42">    }</span>
+
+    public static MultiFields asNull(
+            I_VariableDefinition variableDefinition, String templateId, IQueryImpl.Clause clause) {
+<span class="nc" id="L46">        String alias = variableDefinition.getAlias();</span>
+
+<span class="nc bnc" id="L48" title="All 2 branches missed.">        if (clause.equals(IQueryImpl.Clause.WHERE)) alias = null;</span>
+        else {
+<span class="nc bnc" id="L50" title="All 2 branches missed.">            if (alias == null) alias = DefaultColumnId.value(variableDefinition);</span>
+        }
+
+<span class="nc" id="L53">        Field&lt;?&gt; nullField = new NullField(variableDefinition, alias).instance();</span>
+<span class="nc" id="L54">        return new MultiFields(variableDefinition, nullField, templateId);</span>
+    }
+
+<span class="fc" id="L57">    public MultiFields(I_VariableDefinition variableDefinition, QualifiedAqlField field, String templateId) {</span>
+<span class="fc" id="L58">        fields.add(field);</span>
+<span class="fc" id="L59">        this.variableDefinition = variableDefinition;</span>
+<span class="fc" id="L60">        this.templateId = templateId;</span>
+<span class="fc" id="L61">    }</span>
+
+    public void setUseEntryTable(boolean useEntryTable) {
+<span class="fc" id="L64">        this.useEntryTable = useEntryTable;</span>
+<span class="fc" id="L65">    }</span>
+
+    public boolean isUseEntryTable() {
+<span class="nc" id="L68">        return useEntryTable;</span>
+    }
+
+    public int fieldsSize() {
+<span class="fc" id="L72">        return fields.size();</span>
+    }
+
+    public QualifiedAqlField getQualifiedField(int index) {
+<span class="fc" id="L76">        return fields.get(index);</span>
+    }
+
+    public Iterator&lt;QualifiedAqlField&gt; iterator() {
+<span class="fc" id="L80">        return fields.iterator();</span>
+    }
+
+    public QualifiedAqlField getLastQualifiedField() throws UnknownVariableException {
+<span class="pc bpc" id="L84" title="1 of 2 branches missed.">        if (fieldsSize() &gt; 0) return fields.get(fieldsSize() - 1);</span>
+<span class="nc" id="L85">        else throw new UnknownVariableException(variableDefinition.getPath());</span>
+    }
+
+    public QualifiedAqlField getQualifiedFieldOrLast(int index) throws UnknownVariableException {
+<span class="pc bpc" id="L89" title="1 of 2 branches missed.">        if (index &gt;= fieldsSize()) return getLastQualifiedField();</span>
+<span class="fc" id="L90">        else return getQualifiedField(index);</span>
+    }
+
+    public int size() {
+<span class="fc" id="L94">        return fields.size();</span>
+    }
+
+    public boolean isEmpty() {
+<span class="fc" id="L98">        return fields.isEmpty();</span>
+    }
+
+    public String getRootJsonKey() {
+<span class="nc" id="L102">        return rootJsonKey;</span>
+    }
+
+    public void setRootJsonKey(String rootJsonKey) {
+<span class="nc" id="L106">        this.rootJsonKey = rootJsonKey;</span>
+<span class="nc" id="L107">    }</span>
+
+    public I_VariableDefinition getVariableDefinition() {
+<span class="fc" id="L110">        return variableDefinition;</span>
+    }
+
+    public String getTemplateId() {
+<span class="nc" id="L114">        return templateId;</span>
+    }
+
+    public void replaceField(QualifiedAqlField originalField, Field newField) {
+<span class="fc" id="L118">        int index = fields.indexOf(originalField);</span>
+<span class="fc" id="L119">        QualifiedAqlField originalAqlField = fields.get(index);</span>
+<span class="fc" id="L120">        QualifiedAqlField clonedQualifiedField = originalAqlField.duplicate();</span>
+<span class="fc" id="L121">        clonedQualifiedField.setField(newField);</span>
+<span class="fc" id="L122">        fields.set(fields.indexOf(originalField), clonedQualifiedField);</span>
+<span class="fc" id="L123">    }</span>
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.7.202105040129</span></div></body></html>

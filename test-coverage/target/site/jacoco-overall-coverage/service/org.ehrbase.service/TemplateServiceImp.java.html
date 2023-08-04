@@ -1,0 +1,213 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../../jacoco-resources/report.gif" type="image/gif"/><title>TemplateServiceImp.java</title><link rel="stylesheet" href="../../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../../index.html" class="el_report">Overall Coverage</a> &gt; <a href="../index.html" class="el_bundle">service</a> &gt; <a href="index.source.html" class="el_package">org.ehrbase.service</a> &gt; <span class="el_source">TemplateServiceImp.java</span></div><h1>TemplateServiceImp.java</h1><pre class="source lang-java linenums">/*
+ * Copyright (c) 2019-2022 vitasystems GmbH and Hannover Medical School.
+ *
+ * This file is part of project EHRbase
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     https://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.ehrbase.service;
+
+import com.nedap.archie.rm.composition.Composition;
+import java.io.IOException;
+import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
+import java.time.OffsetDateTime;
+import java.util.List;
+import java.util.Objects;
+import java.util.Optional;
+import java.util.stream.Collectors;
+import javax.xml.namespace.QName;
+import org.apache.commons.io.IOUtils;
+import org.apache.xmlbeans.XmlOptions;
+import org.ehrbase.api.definitions.OperationalTemplateFormat;
+import org.ehrbase.api.definitions.ServerConfig;
+import org.ehrbase.api.exception.InternalServerException;
+import org.ehrbase.api.exception.InvalidApiParameterException;
+import org.ehrbase.api.exception.ObjectNotFoundException;
+import org.ehrbase.api.service.CompositionService;
+import org.ehrbase.api.service.TemplateService;
+import org.ehrbase.api.service.TenantService;
+import org.ehrbase.ehr.knowledge.TemplateMetaData;
+import org.ehrbase.openehr.sdk.examplegenerator.ExampleGeneratorConfig;
+import org.ehrbase.openehr.sdk.examplegenerator.ExampleGeneratorToCompositionWalker;
+import org.ehrbase.openehr.sdk.generator.commons.shareddefinition.Language;
+import org.ehrbase.openehr.sdk.generator.commons.shareddefinition.Setting;
+import org.ehrbase.openehr.sdk.generator.commons.shareddefinition.Territory;
+import org.ehrbase.openehr.sdk.response.dto.ehrscape.TemplateMetaDataDto;
+import org.ehrbase.openehr.sdk.serialisation.walker.FlatHelper;
+import org.ehrbase.openehr.sdk.serialisation.walker.defaultvalues.DefaultValuePath;
+import org.ehrbase.openehr.sdk.serialisation.walker.defaultvalues.DefaultValues;
+import org.ehrbase.openehr.sdk.webtemplate.model.WebTemplate;
+import org.ehrbase.openehr.sdk.webtemplate.webtemplateskeletonbuilder.WebTemplateSkeletonBuilder;
+import org.jooq.DSLContext;
+import org.openehr.schemas.v1.CARCHETYPEROOT;
+import org.openehr.schemas.v1.OBJECTID;
+import org.openehr.schemas.v1.OPERATIONALTEMPLATE;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+/**
+ * @author Stefan Spiska
+ * @author Jake Smolka
+ * @since 1.0
+ */
+@Service
+@Transactional
+public class TemplateServiceImp extends BaseServiceImp implements TemplateService {
+
+    private final KnowledgeCacheService knowledgeCacheService;
+    private final CompositionService compositionService;
+    private final TenantService tenantService;
+
+    public TemplateServiceImp(
+            KnowledgeCacheService knowledgeCacheService,
+            DSLContext context,
+            ServerConfig serverConfig,
+            CompositionService compositionService,
+            TenantService tenantService) {
+<span class="nc" id="L78">        super(knowledgeCacheService, context, serverConfig);</span>
+<span class="nc" id="L79">        this.knowledgeCacheService = Objects.requireNonNull(knowledgeCacheService);</span>
+<span class="nc" id="L80">        this.compositionService = compositionService;</span>
+<span class="nc" id="L81">        this.tenantService = tenantService;</span>
+<span class="nc" id="L82">    }</span>
+
+    @Override
+    public List&lt;TemplateMetaDataDto&gt; getAllTemplates() {
+<span class="nc" id="L86">        return knowledgeCacheService.listAllOperationalTemplates().stream()</span>
+<span class="nc" id="L87">                .map(this::mapToDto)</span>
+<span class="nc" id="L88">                .collect(Collectors.toList());</span>
+    }
+
+    private TemplateMetaDataDto mapToDto(TemplateMetaData data) {
+<span class="nc" id="L92">        TemplateMetaDataDto dto = new TemplateMetaDataDto();</span>
+<span class="nc" id="L93">        dto.setCreatedOn(data.getCreatedOn());</span>
+
+<span class="nc" id="L95">        Optional&lt;OPERATIONALTEMPLATE&gt; operationalTemplate = Optional.ofNullable(data.getOperationaltemplate());</span>
+<span class="nc" id="L96">        dto.setTemplateId(operationalTemplate</span>
+<span class="nc" id="L97">                .map(OPERATIONALTEMPLATE::getTemplateId)</span>
+<span class="nc" id="L98">                .map(OBJECTID::getValue)</span>
+<span class="nc" id="L99">                .orElse(null));</span>
+<span class="nc" id="L100">        dto.setArchetypeId(operationalTemplate</span>
+<span class="nc" id="L101">                .map(OPERATIONALTEMPLATE::getDefinition)</span>
+<span class="nc" id="L102">                .map(CARCHETYPEROOT::getArchetypeId)</span>
+<span class="nc" id="L103">                .map(OBJECTID::getValue)</span>
+<span class="nc" id="L104">                .orElse(null));</span>
+
+<span class="nc" id="L106">        dto.setConcept(operationalTemplate.map(OPERATIONALTEMPLATE::getConcept).orElse(null));</span>
+<span class="nc" id="L107">        return dto;</span>
+    }
+
+    @Override
+    public Composition buildExample(String templateId) {
+<span class="nc" id="L112">        WebTemplate webTemplate = findTemplate(templateId);</span>
+<span class="nc" id="L113">        Composition composition = WebTemplateSkeletonBuilder.build(webTemplate, false);</span>
+
+<span class="nc" id="L115">        ExampleGeneratorConfig object = new ExampleGeneratorConfig();</span>
+
+<span class="nc" id="L117">        DefaultValues defaultValues = new DefaultValues();</span>
+<span class="nc" id="L118">        defaultValues.addDefaultValue(DefaultValuePath.TIME, OffsetDateTime.now());</span>
+<span class="nc" id="L119">        defaultValues.addDefaultValue(</span>
+<span class="nc" id="L120">                DefaultValuePath.LANGUAGE,</span>
+<span class="nc" id="L121">                FlatHelper.findEnumValueOrThrow(webTemplate.getDefaultLanguage(), Language.class));</span>
+<span class="nc" id="L122">        defaultValues.addDefaultValue(DefaultValuePath.TERRITORY, Territory.DE);</span>
+<span class="nc" id="L123">        defaultValues.addDefaultValue(DefaultValuePath.SETTING, Setting.OTHER_CARE);</span>
+<span class="nc" id="L124">        defaultValues.addDefaultValue(DefaultValuePath.COMPOSER_NAME, &quot;Max Mustermann&quot;);</span>
+
+<span class="nc" id="L126">        ExampleGeneratorToCompositionWalker walker = new ExampleGeneratorToCompositionWalker();</span>
+<span class="nc" id="L127">        walker.walk(composition, object, webTemplate, defaultValues, templateId);</span>
+
+<span class="nc" id="L129">        composition.setTerritory(Territory.DE.toCodePhrase());</span>
+<span class="nc" id="L130">        return composition;</span>
+    }
+
+    @Override
+    public WebTemplate findTemplate(String templateId) {
+        try {
+<span class="nc" id="L136">            return knowledgeCacheService.getQueryOptMetaData(templateId);</span>
+<span class="nc" id="L137">        } catch (NullPointerException e) {</span>
+<span class="nc" id="L138">            throw new ObjectNotFoundException(&quot;template&quot;, &quot;Template with the specified id does not exist&quot;, e);</span>
+<span class="nc" id="L139">        } catch (Exception e) {</span>
+<span class="nc" id="L140">            throw new InternalServerException(&quot;Could not generate web template&quot;, e);</span>
+        }
+    }
+
+    @Override
+    public String findOperationalTemplate(String templateId, OperationalTemplateFormat format)
+            throws ObjectNotFoundException, InvalidApiParameterException, InternalServerException {
+<span class="nc bnc" id="L147" title="All 2 branches missed.">        if (format != OperationalTemplateFormat.XML) {</span>
+<span class="nc" id="L148">            throw new InvalidApiParameterException(&quot;Requested operational template type not supported&quot;);</span>
+        }
+
+<span class="nc" id="L151">        Optional&lt;OPERATIONALTEMPLATE&gt; existingTemplate =</span>
+<span class="nc" id="L152">                this.knowledgeCacheService.retrieveOperationalTemplate(templateId);</span>
+
+<span class="nc" id="L154">        return existingTemplate</span>
+<span class="nc" id="L155">                .map(template -&gt; {</span>
+<span class="nc" id="L156">                    XmlOptions opts = new XmlOptions();</span>
+<span class="nc" id="L157">                    opts.setSaveSyntheticDocumentElement(new QName(&quot;http://schemas.openehr.org/v1&quot;, &quot;template&quot;));</span>
+<span class="nc" id="L158">                    return template.xmlText(opts);</span>
+                })
+<span class="nc" id="L160">                .orElseThrow(</span>
+<span class="nc" id="L161">                        () -&gt; new ObjectNotFoundException(&quot;template&quot;, &quot;Template with the specified id does not exist&quot;));</span>
+    }
+
+    @Override
+    public String create(OPERATIONALTEMPLATE content) {
+<span class="nc" id="L166">        return this.knowledgeCacheService.addOperationalTemplate(content);</span>
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    @Override
+    public boolean adminDeleteTemplate(String templateId) {
+<span class="nc" id="L174">        Optional&lt;OPERATIONALTEMPLATE&gt; existingTemplate = knowledgeCacheService.retrieveOperationalTemplate(templateId);</span>
+<span class="nc bnc" id="L175" title="All 2 branches missed.">        if (existingTemplate.isEmpty()) {</span>
+<span class="nc" id="L176">            throw new ObjectNotFoundException(</span>
+<span class="nc" id="L177">                    &quot;ADMIN TEMPLATE&quot;, String.format(&quot;Operational template with id %s not found.&quot;, templateId));</span>
+        }
+
+        // Delete template if not used
+<span class="nc" id="L181">        return knowledgeCacheService.deleteOperationalTemplate(existingTemplate.get());</span>
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    @Override
+    public String adminUpdateTemplate(String templateId, String content) {
+<span class="nc" id="L189">        Optional&lt;OPERATIONALTEMPLATE&gt; existingTemplate = knowledgeCacheService.retrieveOperationalTemplate(templateId);</span>
+
+        // Check if template exists
+<span class="nc bnc" id="L192" title="All 2 branches missed.">        if (existingTemplate.isEmpty()) {</span>
+<span class="nc" id="L193">            throw new ObjectNotFoundException(</span>
+<span class="nc" id="L194">                    &quot;ADMIN TEMPLATE UPDATE&quot;, String.format(&quot;Template with id %s does not exist&quot;, templateId));</span>
+        }
+
+<span class="nc" id="L197">        try (InputStream in = IOUtils.toInputStream(content, StandardCharsets.UTF_8)) {</span>
+            // Replace content
+<span class="nc" id="L199">            return knowledgeCacheService.adminUpdateOperationalTemplate(in);</span>
+<span class="nc" id="L200">        } catch (IOException e) {</span>
+<span class="nc" id="L201">            throw new InternalServerException(e.getMessage(), e);</span>
+        }
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    @Override
+    public int adminDeleteAllTemplates() {
+<span class="nc" id="L210">        return this.knowledgeCacheService.deleteAllOperationalTemplates();</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.7.202105040129</span></div></body></html>

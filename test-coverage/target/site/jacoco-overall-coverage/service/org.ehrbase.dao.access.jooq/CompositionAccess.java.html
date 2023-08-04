@@ -1,0 +1,1159 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../../jacoco-resources/report.gif" type="image/gif"/><title>CompositionAccess.java</title><link rel="stylesheet" href="../../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../../index.html" class="el_report">Overall Coverage</a> &gt; <a href="../index.html" class="el_bundle">service</a> &gt; <a href="index.source.html" class="el_package">org.ehrbase.dao.access.jooq</a> &gt; <span class="el_source">CompositionAccess.java</span></div><h1>CompositionAccess.java</h1><pre class="source lang-java linenums">/*
+ * Copyright (c) 2019-2022 vitasystems GmbH and Hannover Medical School.
+ *
+ * This file is part of project EHRbase
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     https://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.ehrbase.dao.access.jooq;
+
+import static org.ehrbase.jooq.pg.Tables.AUDIT_DETAILS;
+import static org.ehrbase.jooq.pg.Tables.COMPOSITION;
+import static org.ehrbase.jooq.pg.Tables.COMPOSITION_HISTORY;
+import static org.ehrbase.jooq.pg.Tables.EVENT_CONTEXT;
+import static org.jooq.impl.DSL.count;
+import static org.jooq.impl.DSL.max;
+
+import com.nedap.archie.rm.archetyped.FeederAudit;
+import com.nedap.archie.rm.archetyped.Link;
+import com.nedap.archie.rm.composition.Composition;
+import com.nedap.archie.rm.composition.EventContext;
+import com.nedap.archie.rm.generic.PartyProxy;
+import com.nedap.archie.rm.support.identification.ObjectVersionId;
+import java.math.BigDecimal;
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.sql.Timestamp;
+import java.time.LocalDateTime;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.Set;
+import java.util.UUID;
+import org.ehrbase.api.definitions.ServerConfig;
+import org.ehrbase.api.exception.InternalServerException;
+import org.ehrbase.api.exception.ObjectNotFoundException;
+import org.ehrbase.dao.access.interfaces.I_AuditDetailsAccess;
+import org.ehrbase.dao.access.interfaces.I_CompositionAccess;
+import org.ehrbase.dao.access.interfaces.I_ConceptAccess;
+import org.ehrbase.dao.access.interfaces.I_ContextAccess;
+import org.ehrbase.dao.access.interfaces.I_ContributionAccess;
+import org.ehrbase.dao.access.interfaces.I_DomainAccess;
+import org.ehrbase.dao.access.interfaces.I_EntryAccess;
+import org.ehrbase.dao.access.jooq.party.PersistedPartyProxy;
+import org.ehrbase.dao.access.support.DataAccess;
+import org.ehrbase.dao.access.support.TenantSupport;
+import org.ehrbase.dao.access.util.ContributionDef;
+import org.ehrbase.dao.access.util.TransactionTime;
+import org.ehrbase.ehr.knowledge.I_KnowledgeCache;
+import org.ehrbase.jooq.dbencoding.rmobject.FeederAuditEncoding;
+import org.ehrbase.jooq.dbencoding.rmobject.LinksEncoding;
+import org.ehrbase.jooq.pg.enums.ContributionChangeType;
+import org.ehrbase.jooq.pg.enums.ContributionDataType;
+import org.ehrbase.jooq.pg.tables.records.AuditDetailsRecord;
+import org.ehrbase.jooq.pg.tables.records.CompositionHistoryRecord;
+import org.ehrbase.jooq.pg.tables.records.CompositionRecord;
+import org.ehrbase.jooq.pg.tables.records.EventContextRecord;
+import org.ehrbase.service.IntrospectService;
+import org.ehrbase.util.PartyUtils;
+import org.ehrbase.util.UuidGenerator;
+import org.jooq.AggregateFunction;
+import org.jooq.DSLContext;
+import org.jooq.JSONB;
+import org.jooq.Param;
+import org.jooq.Record;
+import org.jooq.Record1;
+import org.jooq.Result;
+import org.jooq.Table;
+import org.jooq.impl.DSL;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+/**
+ * Operations on the static part of Compositions (eg. non archetyped
+ * attributes).
+ *
+ * @author Christian Chevalley
+ * @author Jake Smolka
+ * @author Luis Marco-Ruiz
+ * @since 1.0
+ */
+public class CompositionAccess extends DataAccess implements I_CompositionAccess {
+
+    public static final String COMPOSITION_LITERAL = &quot;composition&quot;;
+
+<span class="pc" id="L99">    private final Logger logger = LoggerFactory.getLogger(getClass());</span>
+
+    private Composition composition;
+    private CompositionRecord compositionRecord;
+
+    private I_EntryAccess entryAccess; // Entry linked to this composition
+<span class="pc" id="L105">    private I_ContributionAccess contributionAccess = null; // locally referenced contribution associated to this</span>
+    // composition
+    private I_AuditDetailsAccess auditDetailsAccess; // audit associated with this composition
+
+    /**
+     * Basic constructor for composition.
+     *
+     * @param context          DB context object of current server context
+     * @param knowledgeManager Knowledge cache object of current server context
+     * @param introspectCache  Introspect cache object of current server context
+     * @param serverConfig     Server config object of current server context
+     * @param composition      Object representation of given new composition
+     * @param ehrId            Given ID of EHR this composition will be created for
+     * @throws IllegalArgumentException when seeking language code, territory code
+     *                                  or composer ID failed
+     */
+    public CompositionAccess(
+            DSLContext context,
+            I_KnowledgeCache knowledgeManager,
+            IntrospectService introspectCache,
+            ServerConfig serverConfig,
+            Composition composition,
+            UUID ehrId,
+            Short sysTenant) {
+<span class="nc" id="L129">        super(context, knowledgeManager, introspectCache, serverConfig);</span>
+
+<span class="nc" id="L131">        initRecord(</span>
+                composition,
+<span class="nc" id="L133">                context.newRecord(COMPOSITION),</span>
+<span class="nc" id="L134">                composition.getTerritory().getCodeString(),</span>
+<span class="nc" id="L135">                composition.getLanguage().getCodeString(),</span>
+                ehrId,
+                sysTenant);
+<span class="nc" id="L138">    }</span>
+
+    /**
+     * Constructor with convenient {@link I_DomainAccess} parameter, for better
+     * readability.
+     *
+     * @param domainAccess Current domain access object
+     * @param composition  Object representation of given new composition
+     * @param ehrId        Given ID of EHR this composition will be created for
+     * @throws IllegalArgumentException when seeking language code, territory code
+     *                                  or composer ID failed
+     */
+    public CompositionAccess(I_DomainAccess domainAccess, Composition composition, UUID ehrId, Short sysTenant) {
+<span class="nc" id="L151">        super(domainAccess);</span>
+
+<span class="nc" id="L153">        initRecord(</span>
+                composition,
+<span class="nc" id="L155">                domainAccess.getContext().newRecord(COMPOSITION),</span>
+<span class="nc" id="L156">                composition.getTerritory().getCodeString(),</span>
+<span class="nc" id="L157">                composition.getLanguage().getCodeString(),</span>
+                ehrId,
+                sysTenant);
+<span class="nc" id="L160">    }</span>
+
+    private void initRecord(
+            Composition composition,
+            CompositionRecord compositionRecord,
+            String territoryCode,
+            String languageCode,
+            UUID ehrId,
+            Short sysTenant) {
+<span class="nc" id="L169">        this.compositionRecord = compositionRecord;</span>
+<span class="nc" id="L170">        this.composition = composition;</span>
+
+<span class="nc bnc" id="L172" title="All 2 branches missed.">        if (composition.getUid() != null) {</span>
+
+<span class="nc" id="L174">            compositionRecord.setId(</span>
+<span class="nc" id="L175">                    UUID.fromString(composition.getUid().getRoot().getValue()));</span>
+        } else {
+<span class="nc" id="L177">            compositionRecord.setId(UuidGenerator.randomUUID());</span>
+        }
+<span class="nc" id="L179">        compositionRecord.setTerritory(seekTerritoryCode(territoryCode));</span>
+<span class="nc" id="L180">        compositionRecord.setLanguage(seekLanguageCode(languageCode));</span>
+<span class="nc" id="L181">        compositionRecord.setActive(true);</span>
+<span class="nc" id="L182">        compositionRecord.setEhrId(ehrId);</span>
+<span class="nc" id="L183">        compositionRecord.setComposer(seekComposerId(composition.getComposer(), sysTenant));</span>
+<span class="nc" id="L184">        compositionRecord.setSysTenant(sysTenant);</span>
+
+<span class="nc" id="L186">        setFeederAudit(composition.getFeederAudit());</span>
+<span class="nc" id="L187">        setLinks(composition.getLinks());</span>
+
+        // associate a contribution with this composition
+<span class="nc" id="L190">        contributionAccess = I_ContributionAccess.getInstance(this, compositionRecord.getEhrId(), sysTenant);</span>
+<span class="nc" id="L191">        contributionAccess.setState(ContributionDef.ContributionState.COMPLETE);</span>
+
+        // associate composition's own audit with this composition access instance
+<span class="nc" id="L194">        auditDetailsAccess = I_AuditDetailsAccess.getInstance(getDataAccess(), sysTenant);</span>
+<span class="nc" id="L195">    }</span>
+
+    /**
+     * constructor used to perform non static operation on instance creates new
+     * instance with values from record and new empty contribution and audit
+     *
+     * @param domainAccess      SQL context
+     * @param compositionRecord record representation of composition
+     */
+    private CompositionAccess(I_DomainAccess domainAccess, CompositionRecord compositionRecord) {
+<span class="nc" id="L205">        super(domainAccess);</span>
+
+<span class="nc" id="L207">        this.compositionRecord = compositionRecord;</span>
+<span class="nc" id="L208">        contributionAccess =</span>
+<span class="nc" id="L209">                I_ContributionAccess.getInstance(this, compositionRecord.getEhrId(), compositionRecord.getSysTenant());</span>
+<span class="nc" id="L210">        contributionAccess.setState(ContributionDef.ContributionState.COMPLETE);</span>
+
+        // associate composition's own audit with this composition access instance
+<span class="nc" id="L213">        auditDetailsAccess =</span>
+<span class="nc" id="L214">                I_AuditDetailsAccess.getInstance(this.getDataAccess(), this.compositionRecord.getSysTenant());</span>
+<span class="nc" id="L215">    }</span>
+
+    CompositionAccess(I_DomainAccess domainAccess) {
+<span class="fc" id="L218">        super(domainAccess);</span>
+<span class="fc" id="L219">    }</span>
+
+    /**
+     * {@inheritDoc}
+     */
+    @Override
+    public UUID commit(LocalDateTime timestamp, UUID committerId, UUID systemId, String description) {
+<span class="nc" id="L226">        return internalCreate(timestamp, committerId, systemId, description, null, null);</span>
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    @Override
+    public UUID commit(LocalDateTime timestamp, UUID contribution, UUID audit) {
+<span class="nc" id="L234">        return internalCreate(timestamp, null, null, null, contribution, audit);</span>
+    }
+
+    private UUID internalCreate(
+            LocalDateTime timestamp,
+            UUID committerId,
+            UUID systemId,
+            String description,
+            UUID contribution,
+            UUID audit) {
+
+        // check if custom contribution is already set, because changing it would yield
+        // updating in DB which is not
+        // desired (creates wrong new &quot;version&quot;)
+<span class="nc bnc" id="L248" title="All 2 branches missed.">        if (contribution != null) {</span>
+            // Retrieve audit metadata from given contribution
+<span class="nc" id="L250">            var newContributionAccess = I_ContributionAccess.retrieveInstance(this.getDataAccess(), contribution);</span>
+<span class="nc" id="L251">            systemId = newContributionAccess.getAuditsSystemId();</span>
+<span class="nc" id="L252">            committerId = newContributionAccess.getAuditsCommitter();</span>
+<span class="nc" id="L253">            description = newContributionAccess.getAuditsDescription();</span>
+<span class="nc" id="L254">        } else {</span>
+            // if not set, create DB entry of contribution so it can get referenced in this
+            // composition
+            // prepare contribution with given values
+<span class="nc" id="L258">            contributionAccess.setDataType(ContributionDataType.composition);</span>
+<span class="nc" id="L259">            contributionAccess.setState(ContributionDef.ContributionState.COMPLETE);</span>
+<span class="nc" id="L260">            contributionAccess.setAuditDetailsValues(</span>
+                    committerId, systemId, description, I_ConceptAccess.ContributionChangeType.CREATION);
+
+<span class="nc" id="L263">            UUID contributionId = this.contributionAccess.commit();</span>
+<span class="nc" id="L264">            setContributionId(contributionId);</span>
+        }
+
+<span class="nc bnc" id="L267" title="All 2 branches missed.">        if (audit == null) {</span>
+            // create DB entry of prepared auditDetails so it can get referenced in this
+            // composition
+<span class="nc" id="L270">            auditDetailsAccess.setChangeType(</span>
+<span class="nc" id="L271">                    I_ConceptAccess.fetchContributionChangeType(this, I_ConceptAccess.ContributionChangeType.CREATION));</span>
+            // prepare composition audit with given values
+<span class="nc" id="L273">            auditDetailsAccess.setSystemId(systemId);</span>
+<span class="nc" id="L274">            auditDetailsAccess.setCommitter(committerId);</span>
+<span class="nc" id="L275">            auditDetailsAccess.setDescription(description);</span>
+<span class="nc" id="L276">            UUID auditId = this.auditDetailsAccess.commit();</span>
+<span class="nc" id="L277">            compositionRecord.setHasAudit(auditId);</span>
+<span class="nc" id="L278">        } else {</span>
+<span class="nc" id="L279">            compositionRecord.setHasAudit(audit);</span>
+        }
+
+<span class="nc" id="L282">        compositionRecord.setSysTransaction(Timestamp.valueOf(timestamp));</span>
+<span class="nc" id="L283">        compositionRecord.store();</span>
+
+<span class="nc bnc" id="L285" title="All 2 branches missed.">        if (entryAccess != null) {</span>
+            try {
+<span class="nc" id="L287">                entryAccess.commit(Timestamp.valueOf(timestamp));</span>
+<span class="nc" id="L288">            } catch (Exception exception) {</span>
+<span class="nc" id="L289">                throw new IllegalArgumentException(&quot;Could not commit content:&quot; + exception);</span>
+<span class="nc" id="L290">            }</span>
+        } else {
+<span class="nc" id="L292">            logger.warn(&quot;Composition has no entry&quot;);</span>
+        }
+
+<span class="nc bnc" id="L295" title="All 2 branches missed.">        if (!composition.getCategory().getDefiningCode().getCodeString().equals(&quot;431&quot;)) {</span>
+<span class="nc" id="L296">            EventContext eventContext = composition.getContext();</span>
+<span class="nc" id="L297">            I_ContextAccess contextAccess =</span>
+<span class="nc" id="L298">                    I_ContextAccess.getInstance(this, eventContext, compositionRecord.getSysTenant());</span>
+<span class="nc bnc" id="L299" title="All 2 branches missed.">            if (!contextAccess.isVoid()) {</span>
+<span class="nc" id="L300">                contextAccess.setCompositionId(compositionRecord.getId());</span>
+<span class="nc" id="L301">                contextAccess.commit(Timestamp.valueOf(timestamp));</span>
+            }
+        }
+<span class="nc" id="L304">        return compositionRecord.getId();</span>
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    @Override
+    public boolean update(
+            LocalDateTime timestamp,
+            UUID committerId,
+            UUID systemId,
+            String description,
+            I_ConceptAccess.ContributionChangeType changeType) {
+        // create new contribution (and its audit) for this operation
+<span class="nc" id="L318">        contributionAccess = new ContributionAccess(this, getEhrid(), compositionRecord.getSysTenant());</span>
+<span class="nc" id="L319">        contributionAccess.setDataType(ContributionDataType.composition);</span>
+<span class="nc" id="L320">        contributionAccess.setAuditDetailsValues(committerId, systemId, description, changeType);</span>
+<span class="nc" id="L321">        contributionAccess.setAuditDetailsChangeType(I_ConceptAccess.fetchContributionChangeType(this, changeType));</span>
+<span class="nc" id="L322">        UUID contributionId = this.contributionAccess.commit();</span>
+<span class="nc" id="L323">        setContributionId(contributionId);</span>
+        // create new composition audit with given values
+<span class="nc" id="L325">        auditDetailsAccess = new AuditDetailsAccess(this, this.compositionRecord.getSysTenant());</span>
+<span class="nc" id="L326">        auditDetailsAccess.setSystemId(systemId);</span>
+<span class="nc" id="L327">        auditDetailsAccess.setCommitter(committerId);</span>
+<span class="nc" id="L328">        auditDetailsAccess.setDescription(description);</span>
+<span class="nc" id="L329">        auditDetailsAccess.setChangeType(I_ConceptAccess.fetchContributionChangeType(this, changeType));</span>
+<span class="nc" id="L330">        UUID auditID = this.auditDetailsAccess.commit();</span>
+<span class="nc" id="L331">        setAuditDetailsId(auditID);</span>
+
+<span class="nc" id="L333">        return internalUpdate(Timestamp.valueOf(timestamp));</span>
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    @Override
+    public boolean update(LocalDateTime timestamp, UUID contribution, UUID audit) {
+
+<span class="nc bnc" id="L342" title="All 2 branches missed.">        if (audit == null) {</span>
+            // Retrieve audit metadata from given contribution
+<span class="nc" id="L344">            var newContributionAccess = I_ContributionAccess.retrieveInstance(this.getDataAccess(), contribution);</span>
+<span class="nc" id="L345">            UUID systemId = newContributionAccess.getAuditsSystemId();</span>
+<span class="nc" id="L346">            UUID committerId = newContributionAccess.getAuditsCommitter();</span>
+<span class="nc" id="L347">            String description = newContributionAccess.getAuditsDescription();</span>
+<span class="nc" id="L348">            I_ConceptAccess.ContributionChangeType changeType = newContributionAccess.getAuditsChangeType();</span>
+
+            // update only the audit (i.e. commit new one), so it shows the modification
+            // change type. a new custom
+            // contribution is set beforehand.
+<span class="nc" id="L353">            auditDetailsAccess.update(systemId, committerId, changeType, description);</span>
+<span class="nc" id="L354">        } else {</span>
+<span class="nc" id="L355">            compositionRecord.setHasAudit(audit);</span>
+        }
+<span class="nc" id="L357">        return internalUpdate(Timestamp.valueOf(timestamp));</span>
+    }
+
+    // root update
+    boolean internalUpdate(Timestamp transactionTime) {
+<span class="nc" id="L362">        var result = false;</span>
+
+        // we assume the composition has been amended locally
+
+<span class="nc bnc" id="L366" title="All 2 branches missed.">        if (!compositionRecord.changed()) {</span>
+<span class="nc" id="L367">            compositionRecord.changed(true);</span>
+            // jOOQ limited support of TSTZRANGE, exclude sys_period from updateComposition!
+<span class="nc" id="L369">            compositionRecord.changed(COMPOSITION.SYS_PERIOD, false);</span>
+        }
+
+<span class="nc" id="L372">        compositionRecord.setSysTransaction(transactionTime);</span>
+
+        // update attributes
+<span class="nc" id="L375">        updateCompositionData(composition);</span>
+
+<span class="nc bnc" id="L377" title="All 2 branches missed.">        result = compositionRecord.update() &gt; 0;</span>
+
+        // Update entry
+<span class="nc bnc" id="L380" title="All 2 branches missed.">        if (entryAccess != null) {</span>
+<span class="nc" id="L381">            entryAccess.setCompositionData(composition);</span>
+<span class="nc" id="L382">            entryAccess.update(transactionTime, true);</span>
+        }
+
+        // update context
+        // context
+<span class="nc" id="L387">        Optional&lt;UUID&gt; contextId = getContextId();</span>
+        I_ContextAccess contextAccess;
+
+<span class="nc bnc" id="L390" title="All 2 branches missed.">        if (contextId.isEmpty()) {</span>
+<span class="nc" id="L391">            EventContext context = new EventContextFactory().makeNull();</span>
+<span class="nc" id="L392">            contextAccess = I_ContextAccess.getInstance(this, context, compositionRecord.getSysTenant());</span>
+<span class="nc" id="L393">            contextAccess.commit(transactionTime);</span>
+<span class="nc" id="L394">        } else {</span>
+<span class="nc" id="L395">            contextAccess = I_ContextAccess.retrieveInstance(this, contextId.get());</span>
+        }
+
+<span class="nc" id="L398">        var newEventContext = composition.getContext();</span>
+
+<span class="nc bnc" id="L400" title="All 2 branches missed.">        if (contextId.isPresent()) {</span>
+<span class="nc" id="L401">            contextAccess.setRecordFields(contextId.get(), newEventContext, compositionRecord.getSysTenant());</span>
+<span class="nc" id="L402">            contextAccess.update(transactionTime, true);</span>
+        }
+
+<span class="nc" id="L405">        return result;</span>
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    @Override
+    public int delete(LocalDateTime timestamp, UUID committerId, UUID systemId, String description) {
+        // .delete() moves the old version to _history table.
+<span class="nc" id="L414">        int delRows = compositionRecord.delete();</span>
+
+        // create new deletion audit
+<span class="nc" id="L417">        var delAudit = I_AuditDetailsAccess.getInstance(</span>
+                this,
+                systemId,
+                committerId,
+                I_ConceptAccess.ContributionChangeType.DELETED,
+                description,
+<span class="nc" id="L423">                compositionRecord.getSysTenant());</span>
+<span class="nc" id="L424">        UUID delAuditId = delAudit.commit();</span>
+
+        // create new contribution for this deletion action (with embedded
+        // contribution.audit handling),  overwrite old contribution with new one
+<span class="nc" id="L428">        contributionAccess = I_ContributionAccess.getInstance(</span>
+<span class="nc" id="L429">                getDataAccess(), contributionAccess.getEhrId(), compositionRecord.getSysTenant());</span>
+<span class="nc" id="L430">        UUID contrib = contributionAccess.commit(</span>
+<span class="nc" id="L431">                TransactionTime.millis(),</span>
+                committerId,
+                systemId,
+                null,
+                ContributionDef.ContributionState.COMPLETE,
+                I_ConceptAccess.ContributionChangeType.DELETED,
+                description);
+
+        // create new, BUT already moved to _history, version documenting the deletion
+<span class="nc" id="L440">        createAndCommitNewDeletedVersionAsHistory(delAuditId, contrib);</span>
+
+<span class="nc" id="L442">        return delRows;</span>
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    @Override
+    public int delete(LocalDateTime timestamp, UUID contribution, UUID audit) {
+        // Retrieve audit metadata from given contribution
+<span class="nc" id="L451">        var newContributionAccess = I_ContributionAccess.retrieveInstance(this.getDataAccess(), contribution);</span>
+<span class="nc" id="L452">        UUID systemId = newContributionAccess.getAuditsSystemId();</span>
+<span class="nc" id="L453">        UUID committerId = newContributionAccess.getAuditsCommitter();</span>
+<span class="nc" id="L454">        String description = newContributionAccess.getAuditsDescription();</span>
+
+        // .delete() moves the old version to _history table.
+<span class="nc" id="L457">        int delRows = compositionRecord.delete();</span>
+
+<span class="nc bnc" id="L459" title="All 2 branches missed.">        if (audit == null) {</span>
+            // create new deletion audit
+<span class="nc" id="L461">            var delAudit = I_AuditDetailsAccess.getInstance(</span>
+                    this,
+                    systemId,
+                    committerId,
+                    I_ConceptAccess.ContributionChangeType.DELETED,
+                    description,
+<span class="nc" id="L467">                    this.compositionRecord.getSysTenant());</span>
+<span class="nc" id="L468">            audit = delAudit.commit();</span>
+        }
+
+        // create new, BUT already moved to _history, version documenting the deletion
+<span class="nc" id="L472">        createAndCommitNewDeletedVersionAsHistory(audit, compositionRecord.getInContribution());</span>
+
+<span class="nc" id="L474">        return delRows;</span>
+    }
+
+    private void createAndCommitNewDeletedVersionAsHistory(UUID delAuditId, UUID contrib) {
+<span class="nc" id="L478">        CompositionHistoryRecord newRecord = getDataAccess().getContext().newRecord(COMPOSITION_HISTORY);</span>
+<span class="nc" id="L479">        newRecord.setId(compositionRecord.getId());</span>
+<span class="nc" id="L480">        newRecord.setEhrId(compositionRecord.getEhrId());</span>
+<span class="nc" id="L481">        newRecord.setInContribution(contrib);</span>
+<span class="nc" id="L482">        newRecord.setActive(compositionRecord.getActive());</span>
+<span class="nc" id="L483">        newRecord.setIsPersistent(compositionRecord.getIsPersistent());</span>
+<span class="nc" id="L484">        newRecord.setLanguage(compositionRecord.getLanguage());</span>
+<span class="nc" id="L485">        newRecord.setTerritory(compositionRecord.getTerritory());</span>
+<span class="nc" id="L486">        newRecord.setComposer(compositionRecord.getComposer());</span>
+<span class="nc" id="L487">        newRecord.setHasAudit(delAuditId);</span>
+<span class="nc" id="L488">        newRecord.setSysTenant(compositionRecord.getSysTenant());</span>
+
+        // a bit hacky: create new, BUT already moved to _history, version documenting
+        // the deletion
+        // (Normal approach of first .update() then .delete() won't work, because
+        // postgres' transaction optimizer will
+        // just skip the update if it will get deleted anyway.)
+        // so copy values, but add deletion meta data
+<span class="nc" id="L496">        var newDeletedVersionAsHistoryAccess =</span>
+<span class="nc" id="L497">                new CompositionHistoryAccess(getDataAccess(), compositionRecord.getSysTenant());</span>
+<span class="nc" id="L498">        newDeletedVersionAsHistoryAccess.setRecord(newRecord);</span>
+<span class="nc bnc" id="L499" title="All 2 branches missed.">        if (newDeletedVersionAsHistoryAccess.commit() == null) // commit and throw error if nothing was inserted into DB</span>
+        {
+<span class="nc" id="L501">            throw new InternalServerException(&quot;DB inconsistency&quot;);</span>
+        }
+<span class="nc" id="L503">    }</span>
+
+    private static final String VERSION_QUERY =
+            &quot;SELECT row_id, in_contribution, ehr_id, language, territory, composer, sys_transaction, has_audit, attestation_ref, feeder_audit, links, sys_tenant from \n&quot;
+                    + &quot;(SELECT ROW_NUMBER() OVER (ORDER BY sys_transaction ASC ) AS row_id, * FROM ehr.composition_history  WHERE id = ?) AS Version WHERE row_id = ?;&quot;;
+
+    /**
+     * @throws IllegalArgumentException when version number is not greater 0
+     * @throws ObjectNotFoundException  when no composition could be found with
+     *                                  given input
+     */
+    public static I_CompositionAccess retrieveCompositionVersion(I_DomainAccess domainAccess, UUID id, int version) {
+
+<span class="nc bnc" id="L516" title="All 2 branches missed.">        if (version &lt; 1) {</span>
+<span class="nc" id="L517">            throw new IllegalArgumentException(&quot;Version number must be &gt; 0  please check your code&quot;);</span>
+        }
+
+        // check if this version number matches the current version
+<span class="nc bnc" id="L521" title="All 2 branches missed.">        if (getLastVersionNumber(domainAccess, id) == version) { // current version</span>
+<span class="nc" id="L522">            return retrieveInstance(domainAccess, id);</span>
+        }
+
+<span class="nc" id="L525">        Connection connection = domainAccess.getConnection();</span>
+
+<span class="nc" id="L527">        I_CompositionAccess compositionHistoryAccess = null;</span>
+<span class="nc" id="L528">        try (PreparedStatement preparedStatement = connection.prepareStatement(VERSION_QUERY)) {</span>
+<span class="nc" id="L529">            preparedStatement.setObject(1, id);</span>
+<span class="nc" id="L530">            preparedStatement.setInt(2, version);</span>
+
+<span class="nc" id="L532">            try (ResultSet resultSet = preparedStatement.executeQuery()) {</span>
+
+<span class="nc bnc" id="L534" title="All 2 branches missed.">                while (resultSet.next()) {</span>
+<span class="nc" id="L535">                    CompositionRecord compositionRecord1 =</span>
+<span class="nc" id="L536">                            domainAccess.getContext().newRecord(COMPOSITION);</span>
+<span class="nc" id="L537">                    compositionRecord1.setId(id);</span>
+<span class="nc" id="L538">                    compositionRecord1.setInContribution(UUID.fromString(resultSet.getString(&quot;in_contribution&quot;)));</span>
+<span class="nc" id="L539">                    compositionRecord1.setEhrId(UUID.fromString(resultSet.getString(&quot;ehr_id&quot;)));</span>
+<span class="nc" id="L540">                    compositionRecord1.setLanguage(resultSet.getString(&quot;language&quot;));</span>
+<span class="nc" id="L541">                    compositionRecord1.setTerritory(resultSet.getInt(&quot;territory&quot;));</span>
+<span class="nc" id="L542">                    compositionRecord1.setComposer(UUID.fromString(resultSet.getString(&quot;composer&quot;)));</span>
+<span class="nc" id="L543">                    compositionRecord1.setSysTenant(resultSet.getShort(&quot;sys_tenant&quot;));</span>
+<span class="nc" id="L544">                    compositionRecord1.setSysTransaction(resultSet.getTimestamp(&quot;sys_transaction&quot;));</span>
+<span class="nc" id="L545">                    compositionRecord1.setHasAudit(UUID.fromString(resultSet.getString(&quot;has_audit&quot;)));</span>
+<span class="nc" id="L546">                    compositionRecord1.setFeederAudit(JSONB.valueOf(resultSet.getString(&quot;feeder_audit&quot;)));</span>
+
+                    /*
+                     * TODO: uncomment when links encode/decode is fully implemented
+                     * compositionRecord1.setLinks(JSONB.valueOf(resultSet.getString(&quot;links&quot;)));
+                     */
+<span class="nc" id="L552">                    compositionHistoryAccess = new CompositionAccess(domainAccess, compositionRecord1);</span>
+<span class="nc" id="L553">                }</span>
+            }
+<span class="nc" id="L555">        } catch (SQLException e) {</span>
+<span class="nc" id="L556">            throw new ObjectNotFoundException(COMPOSITION_LITERAL, &quot;Composition not found or or invalid DB content&quot;, e);</span>
+<span class="nc" id="L557">        }</span>
+
+<span class="nc bnc" id="L559" title="All 2 branches missed.">        if (compositionHistoryAccess != null) {</span>
+<span class="nc" id="L560">            compositionHistoryAccess.setContent(I_EntryAccess.retrieveInstanceInCompositionVersion(</span>
+                    domainAccess, compositionHistoryAccess, version));
+
+            // retrieve the corresponding contribution
+<span class="nc" id="L564">            I_ContributionAccess contributionAccess =</span>
+<span class="nc" id="L565">                    I_ContributionAccess.retrieveInstance(domainAccess, compositionHistoryAccess.getContributionId());</span>
+<span class="nc" id="L566">            compositionHistoryAccess.setContributionAccess(contributionAccess);</span>
+
+<span class="nc" id="L568">            I_AuditDetailsAccess auditDetailsAccess = new AuditDetailsAccess(</span>
+<span class="nc" id="L569">                            domainAccess.getDataAccess(), TenantSupport.currentSysTenant())</span>
+<span class="nc" id="L570">                    .retrieveInstance(domainAccess.getDataAccess(), compositionHistoryAccess.getAuditDetailsId());</span>
+<span class="nc" id="L571">            compositionHistoryAccess.setAuditDetailsAccess(auditDetailsAccess);</span>
+
+            // retrieve versioned context
+<span class="nc" id="L574">            EventContext historicalEventContext = I_ContextAccess.retrieveHistoricalEventContext(</span>
+<span class="nc" id="L575">                    domainAccess, id, compositionHistoryAccess.getSysTransaction());</span>
+            // adjust context for entries
+<span class="nc bnc" id="L577" title="All 2 branches missed.">            if (historicalEventContext != null) {</span>
+<span class="nc" id="L578">                I_EntryAccess entryAccess = compositionHistoryAccess.getContent();</span>
+<span class="nc" id="L579">                entryAccess.getComposition().setContext(historicalEventContext);</span>
+            }
+        }
+
+<span class="nc" id="L583">        domainAccess.releaseConnection(connection);</span>
+
+<span class="nc" id="L585">        return compositionHistoryAccess;</span>
+    }
+
+    public static Integer getLastVersionNumber(I_DomainAccess domainAccess, UUID compositionId) {
+        // check if compositionId is valid (version count = 1) and add number of existing older versions
+
+<span class="fc" id="L591">        DSLContext ctx = domainAccess.getContext();</span>
+<span class="fc" id="L592">        Param&lt;UUID&gt; uuidParam = DSL.param(&quot;id&quot;, compositionId);</span>
+<span class="fc" id="L593">        Table&lt;Record1&lt;Integer&gt;&gt; unionAll = ctx.select(count(COMPOSITION.ID))</span>
+<span class="fc" id="L594">                .from(COMPOSITION)</span>
+<span class="fc" id="L595">                .where(COMPOSITION.ID.eq(uuidParam))</span>
+<span class="fc" id="L596">                .unionAll(ctx.select(count(COMPOSITION_HISTORY.ID))</span>
+<span class="fc" id="L597">                        .from(COMPOSITION_HISTORY)</span>
+<span class="fc" id="L598">                        .where(COMPOSITION_HISTORY.ID.eq(uuidParam)))</span>
+<span class="fc" id="L599">                .asTable(&quot;version_counts&quot;);</span>
+
+<span class="fc" id="L601">        AggregateFunction&lt;BigDecimal&gt; sum = DSL.sum(unionAll.field(0, Integer.class));</span>
+
+<span class="fc" id="L603">        int version = ctx.select(sum).from(unionAll).fetchOne(sum).intValue();</span>
+
+<span class="fc" id="L605">        return version;</span>
+    }
+
+    public static boolean hasPreviousVersion(I_DomainAccess domainAccess, UUID compositionId) {
+<span class="nc" id="L609">        return domainAccess.getContext().fetchExists(COMPOSITION_HISTORY, COMPOSITION_HISTORY.ID.eq(compositionId));</span>
+    }
+
+    public static I_CompositionAccess retrieveInstance(I_DomainAccess domainAccess, UUID id) {
+<span class="nc" id="L613">        I_CompositionAccess compositionAccess = new CompositionAccess(domainAccess);</span>
+
+<span class="nc" id="L615">        CompositionRecord compositionRecord = domainAccess</span>
+<span class="nc" id="L616">                .getContext()</span>
+<span class="nc" id="L617">                .selectFrom(COMPOSITION)</span>
+<span class="nc" id="L618">                .where(COMPOSITION.ID.eq(id))</span>
+<span class="nc" id="L619">                .fetchOne();</span>
+
+<span class="nc bnc" id="L621" title="All 2 branches missed.">        if (compositionRecord == null) {</span>
+<span class="nc" id="L622">            return null;</span>
+        }
+
+<span class="nc" id="L625">        compositionAccess.setCompositionRecord(compositionRecord);</span>
+<span class="nc" id="L626">        compositionAccess.setContent(I_EntryAccess.retrieveInstanceInComposition(domainAccess, compositionAccess));</span>
+        // retrieve the corresponding contribution
+<span class="nc" id="L628">        I_ContributionAccess contributionAccess =</span>
+<span class="nc" id="L629">                I_ContributionAccess.retrieveInstance(domainAccess, compositionAccess.getContributionId());</span>
+<span class="nc" id="L630">        compositionAccess.setContributionAccess(contributionAccess);</span>
+        // retrieve corresponding audit
+<span class="nc" id="L632">        I_AuditDetailsAccess auditAccess = new AuditDetailsAccess(</span>
+<span class="nc" id="L633">                        domainAccess.getDataAccess(), TenantSupport.currentSysTenant())</span>
+<span class="nc" id="L634">                .retrieveInstance(domainAccess.getDataAccess(), compositionAccess.getAuditDetailsId());</span>
+<span class="nc" id="L635">        compositionAccess.setAuditDetailsAccess(auditAccess);</span>
+
+<span class="nc" id="L637">        return compositionAccess;</span>
+    }
+
+    /**
+     * @throws ObjectNotFoundException when no version in compliance with timestamp
+     *                                 is available
+     * @throws InternalServerException on problem with SQL statement or input
+     */
+    public static int getVersionFromTimeStamp(
+            I_DomainAccess domainAccess, UUID vCompositionUid, Timestamp timeCommitted) {
+
+<span class="fc bfc" id="L648" title="All 2 branches covered.">        if (timeCommitted == null) {</span>
+<span class="fc" id="L649">            return getLastVersionNumber(domainAccess, vCompositionUid);</span>
+        }
+        // get the latest composition time (available in ehr.composition) table
+        Record result;
+        try {
+<span class="fc" id="L654">            result = domainAccess</span>
+<span class="fc" id="L655">                    .getContext()</span>
+<span class="fc" id="L656">                    .select(max(COMPOSITION.SYS_TRANSACTION).as(&quot;mostRecentInTable&quot;))</span>
+<span class="fc" id="L657">                    .from(COMPOSITION)</span>
+<span class="fc" id="L658">                    .where(COMPOSITION.ID.eq(vCompositionUid))</span>
+<span class="fc" id="L659">                    .fetchOne();</span>
+<span class="nc" id="L660">        } catch (RuntimeException e) { // generalize SQL exceptions</span>
+<span class="nc" id="L661">            throw new InternalServerException(&quot;Problem with SQL statement or input&quot;, e);</span>
+<span class="fc" id="L662">        }</span>
+<span class="fc" id="L663">        Timestamp latestCompoTime = (Timestamp) result.get(&quot;mostRecentInTable&quot;);</span>
+
+        // get the latest version (if more than one) time (available in
+        // ehr.composition_history) table
+        Record result2;
+        try {
+<span class="fc" id="L669">            result2 = domainAccess</span>
+<span class="fc" id="L670">                    .getContext()</span>
+<span class="fc" id="L671">                    .select(count().as(&quot;countVersionInTable&quot;))</span>
+<span class="fc" id="L672">                    .from(COMPOSITION_HISTORY)</span>
+<span class="fc" id="L673">                    .where(COMPOSITION_HISTORY</span>
+                            .SYS_TRANSACTION
+<span class="fc" id="L675">                            .lessOrEqual(timeCommitted)</span>
+<span class="fc" id="L676">                            .and(COMPOSITION_HISTORY.ID.eq(vCompositionUid)))</span>
+<span class="fc" id="L677">                    .fetchOne();</span>
+<span class="nc" id="L678">        } catch (RuntimeException e) { // generalize SQL exceptions</span>
+<span class="nc" id="L679">            throw new InternalServerException(&quot;Problem with SQL statement or input&quot;, e);</span>
+<span class="fc" id="L680">        }</span>
+<span class="fc" id="L681">        int versionComHist = (int) result2.get(&quot;countVersionInTable&quot;);</span>
+<span class="fc bfc" id="L682" title="All 2 branches covered.">        if (timeCommitted.compareTo(latestCompoTime)</span>
+                &gt;= 0) { // if the timestamp is after or equal to the sys_transaction of
+            // the latest composition
+            // available, add one since its version has not been counted for being the one
+            // stored in the
+            // ehr.composition table
+<span class="fc" id="L688">            versionComHist++;</span>
+        }
+<span class="fc bfc" id="L690" title="All 2 branches covered.">        if (versionComHist == 0) {</span>
+<span class="fc" id="L691">            throw new ObjectNotFoundException(</span>
+                    &quot;composition&quot;,
+                    &quot;There are no versions available prior to date &quot; + timeCommitted
+                            + &quot; for the the composition with id: &quot; + vCompositionUid);
+        }
+<span class="fc" id="L696">        return versionComHist;</span>
+    }
+
+    /**
+     * @throws IllegalArgumentException when no version in compliance with timestamp
+     *                                  is available or when calculated version
+     *                                  number is not greater 0
+     * @throws InternalServerException  on problem with SQL statement or input
+     * @throws ObjectNotFoundException  when no composition could be found with
+     *                                  given input
+     */
+    public static I_CompositionAccess retrieveInstanceByTimestamp(
+            I_DomainAccess domainAccess, UUID compositionUid, Timestamp timeCommitted) {
+
+<span class="nc" id="L710">        int version = getVersionFromTimeStamp(domainAccess, compositionUid, timeCommitted);</span>
+
+<span class="nc bnc" id="L712" title="All 2 branches missed.">        if (getLastVersionNumber(domainAccess, compositionUid) == version) { // current version</span>
+<span class="nc" id="L713">            return retrieveInstance(domainAccess, compositionUid);</span>
+        }
+
+<span class="nc" id="L716">        return retrieveCompositionVersion(domainAccess, compositionUid, version);</span>
+    }
+
+    public static Map&lt;ObjectVersionId, I_CompositionAccess&gt; retrieveCompositionsInContribution(
+            I_DomainAccess domainAccess, UUID contribution, String node) {
+<span class="nc" id="L721">        Set&lt;UUID&gt; compositions = new HashSet&lt;&gt;(); // Set, because of unique values</span>
+        // add all compositions having a link to given contribution
+<span class="nc" id="L723">        domainAccess</span>
+<span class="nc" id="L724">                .getContext()</span>
+<span class="nc" id="L725">                .select(COMPOSITION.ID)</span>
+<span class="nc" id="L726">                .from(COMPOSITION)</span>
+<span class="nc" id="L727">                .where(COMPOSITION.IN_CONTRIBUTION.eq(contribution))</span>
+<span class="nc" id="L728">                .fetch()</span>
+<span class="nc" id="L729">                .forEach(rec -&gt; compositions.add(rec.value1()));</span>
+        // and older versions or deleted ones, too
+<span class="nc" id="L731">        domainAccess</span>
+<span class="nc" id="L732">                .getContext()</span>
+<span class="nc" id="L733">                .select(COMPOSITION_HISTORY.ID)</span>
+<span class="nc" id="L734">                .from(COMPOSITION_HISTORY)</span>
+<span class="nc" id="L735">                .where(COMPOSITION_HISTORY.IN_CONTRIBUTION.eq(contribution))</span>
+<span class="nc" id="L736">                .fetch()</span>
+<span class="nc" id="L737">                .forEach(rec -&gt; compositions.add(rec.value1()));</span>
+
+        // get whole &quot;version map&quot; of each matching composition and do fine-grain check
+        // for matching contribution
+        // precondition: each UUID in `compositions` set is unique, so for each the
+        // &quot;version map&quot; is only created once
+        // below
+        // (meta: can't do that as jooq query, because the specific version number isn't
+        // stored in DB)
+<span class="nc" id="L746">        Map&lt;ObjectVersionId, I_CompositionAccess&gt; resultMap = new HashMap&lt;&gt;();</span>
+<span class="nc bnc" id="L747" title="All 2 branches missed.">        for (UUID compositionId : compositions) {</span>
+<span class="nc" id="L748">            Map&lt;Integer, I_CompositionAccess&gt; map = getVersionMapOfComposition(domainAccess, compositionId);</span>
+            // fine-grained contribution ID check
+<span class="nc" id="L750">            map.forEach((k, v) -&gt; {</span>
+<span class="nc bnc" id="L751" title="All 2 branches missed.">                if (v.getContributionId().equals(contribution)) {</span>
+<span class="nc" id="L752">                    resultMap.put(new ObjectVersionId(compositionId.toString(), node, k.toString()), v);</span>
+                }
+<span class="nc" id="L754">            });</span>
+<span class="nc" id="L755">        }</span>
+
+<span class="nc" id="L757">        return resultMap;</span>
+    }
+
+    public static Map&lt;Integer, I_CompositionAccess&gt; getVersionMapOfComposition(
+            I_DomainAccess domainAccess, UUID compositionId) {
+<span class="nc" id="L762">        Map&lt;Integer, I_CompositionAccess&gt; versionMap = new HashMap&lt;&gt;();</span>
+
+        // create counter with highest version, to keep track of version number and
+        // allow check in the end
+<span class="nc" id="L766">        Integer versionCounter = getLastVersionNumber(domainAccess, compositionId);</span>
+
+        // fetch matching entry
+<span class="nc" id="L769">        CompositionRecord compositionRecord =</span>
+<span class="nc" id="L770">                domainAccess.getContext().fetchOne(COMPOSITION, COMPOSITION.ID.eq(compositionId));</span>
+<span class="nc bnc" id="L771" title="All 2 branches missed.">        if (compositionRecord != null) {</span>
+<span class="nc" id="L772">            I_CompositionAccess compositionAccess = new CompositionAccess(domainAccess);</span>
+<span class="nc" id="L773">            compositionAccess.setCompositionRecord(compositionRecord);</span>
+<span class="nc" id="L774">            compositionAccess.setContent(I_EntryAccess.retrieveInstanceInComposition(domainAccess, compositionAccess));</span>
+<span class="nc" id="L775">            versionMap.put(versionCounter, compositionAccess);</span>
+
+<span class="nc" id="L777">            versionCounter--;</span>
+        }
+
+        // if composition was removed (i.e. from &quot;COMPOSITION&quot; table) *or* other
+        // versions are existing
+<span class="nc" id="L782">        Result&lt;CompositionHistoryRecord&gt; historyRecords = domainAccess</span>
+<span class="nc" id="L783">                .getContext()</span>
+<span class="nc" id="L784">                .selectFrom(COMPOSITION_HISTORY)</span>
+<span class="nc" id="L785">                .where(COMPOSITION_HISTORY.ID.eq(compositionId))</span>
+<span class="nc" id="L786">                .orderBy(COMPOSITION_HISTORY.SYS_TRANSACTION.desc())</span>
+<span class="nc" id="L787">                .fetch();</span>
+
+<span class="nc bnc" id="L789" title="All 2 branches missed.">        for (CompositionHistoryRecord historyRecord : historyRecords) {</span>
+<span class="nc" id="L790">            I_CompositionAccess historyAccess = new CompositionAccess(domainAccess);</span>
+<span class="nc" id="L791">            historyAccess.setCompositionRecord(historyRecord);</span>
+<span class="nc" id="L792">            historyAccess.setContent(I_EntryAccess.retrieveInstanceInComposition(domainAccess, historyAccess));</span>
+<span class="nc" id="L793">            versionMap.put(versionCounter, historyAccess);</span>
+<span class="nc" id="L794">            versionCounter--;</span>
+<span class="nc" id="L795">        }</span>
+
+<span class="nc bnc" id="L797" title="All 2 branches missed.">        if (versionCounter != 0) {</span>
+<span class="nc" id="L798">            throw new InternalServerException(&quot;Version Map generation failed&quot;);</span>
+        }
+
+<span class="nc" id="L801">        return versionMap;</span>
+    }
+
+    /**
+     * Decode composer ID
+     *
+     * @param composer         given {@link PartyProxy}
+     * @param sysTenant
+     * @return ID of composer as {@link UUID}
+     * @throws IllegalArgumentException when composer in composition is not
+     *                                  supported
+     */
+    private UUID seekComposerId(PartyProxy composer, Short sysTenant) {
+<span class="nc bnc" id="L814" title="All 2 branches missed.">        if (PartyUtils.isEmpty(composer)) {</span>
+<span class="nc" id="L815">            return new PersistedPartyProxy(this).create(composer, sysTenant);</span>
+        } else {
+<span class="nc" id="L817">            return new PersistedPartyProxy(this).getOrCreate(composer, sysTenant);</span>
+        }
+    }
+
+    /**
+     * Decode territory code
+     *
+     * @param territoryCode String representation of territory code
+     * @return territory code as Integer
+     * @throws IllegalArgumentException when Invalid two letter territory code
+     */
+    private Integer seekTerritoryCode(String territoryCode) {
+<span class="nc" id="L829">        Integer foundTerritoryCode = I_CompositionAccess.fetchTerritoryCode(this, territoryCode);</span>
+
+<span class="nc bnc" id="L831" title="All 2 branches missed.">        if (foundTerritoryCode &lt; 0) {</span>
+<span class="nc" id="L832">            throw new IllegalArgumentException(&quot;Invalid two letter territory code&quot;);</span>
+        }
+
+<span class="nc" id="L835">        return foundTerritoryCode;</span>
+    }
+
+    /**
+     * Decode language code
+     *
+     * @param languageCode String representation of language code
+     * @return language code as String
+     * @throws IllegalArgumentException when Invalid language code
+     */
+    private String seekLanguageCode(String languageCode) {
+<span class="nc bnc" id="L846" title="All 2 branches missed.">        if (languageCode == null) // defaulted to english</span>
+        {
+<span class="nc" id="L848">            return &quot;en&quot;;</span>
+<span class="nc bnc" id="L849" title="All 2 branches missed.">        } else if (!(I_CompositionAccess.isValidLanguageCode(this, languageCode))) {</span>
+<span class="nc" id="L850">            throw new IllegalArgumentException(&quot;Invalid language code&quot;);</span>
+        }
+
+<span class="nc" id="L853">        return languageCode;</span>
+    }
+
+    @Override
+    public UUID getEhrid() {
+<span class="nc" id="L858">        return compositionRecord.getEhrId();</span>
+    }
+
+    @Override
+    public void setEhrid(UUID ehrId) {
+<span class="nc" id="L863">        compositionRecord.setEhrId(ehrId);</span>
+<span class="nc" id="L864">    }</span>
+
+    @Override
+    public UUID getComposerId() {
+<span class="nc" id="L868">        return compositionRecord.getComposer();</span>
+    }
+
+    @Override
+    public void setComposerId(UUID composerId) {
+<span class="nc" id="L873">        compositionRecord.setComposer(composerId);</span>
+<span class="nc" id="L874">    }</span>
+
+    @Override
+    public Optional&lt;UUID&gt; getContextId() {
+<span class="nc bnc" id="L878" title="All 2 branches missed.">        if (compositionRecord == null) {</span>
+<span class="nc" id="L879">            return Optional.empty();</span>
+        }
+<span class="nc bnc" id="L881" title="All 2 branches missed.">        if (compositionRecord.getId() == null) {</span>
+<span class="nc" id="L882">            return Optional.empty();</span>
+        }
+        // conditional handling for persistent composition that do not have a event
+        // context
+<span class="nc" id="L886">        EventContextRecord eventContext =</span>
+<span class="nc" id="L887">                getContext().fetchOne(EVENT_CONTEXT, EVENT_CONTEXT.COMPOSITION_ID.eq(compositionRecord.getId()));</span>
+<span class="nc bnc" id="L888" title="All 2 branches missed.">        if (eventContext == null) {</span>
+<span class="nc" id="L889">            return Optional.empty();</span>
+        }
+<span class="nc" id="L891">        return Optional.of(eventContext.getId());</span>
+    }
+
+    @Override
+    public UUID getContributionId() {
+<span class="nc" id="L896">        return compositionRecord.getInContribution();</span>
+    }
+
+    @Override
+    public String getLanguageCode() {
+<span class="nc" id="L901">        return compositionRecord.getLanguage();</span>
+    }
+
+    @Override
+    public void setLanguageCode(String code) {
+<span class="nc" id="L906">        compositionRecord.setLanguage(code);</span>
+<span class="nc" id="L907">    }</span>
+
+    @Override
+    public Integer getTerritoryCode() {
+<span class="nc" id="L911">        return compositionRecord.getTerritory();</span>
+    }
+
+    @Override
+    public void setTerritoryCode(Integer code) {
+<span class="nc" id="L916">        compositionRecord.setTerritory(code);</span>
+<span class="nc" id="L917">    }</span>
+
+    @Override
+    public I_EntryAccess getContent() {
+<span class="nc" id="L921">        return this.entryAccess;</span>
+    }
+
+    @Override
+    public void setContent(I_EntryAccess content) {
+<span class="nc" id="L926">        this.entryAccess = content;</span>
+
+<span class="nc bnc" id="L928" title="All 2 branches missed.">        if (content != null) {</span>
+<span class="nc" id="L929">            content.setCompositionId(compositionRecord.getId());</span>
+<span class="nc" id="L930">            composition = content.getComposition();</span>
+        }
+<span class="nc" id="L932">    }</span>
+
+    @Override
+    public UUID getId() {
+<span class="nc" id="L936">        return compositionRecord.getId();</span>
+    }
+
+    @Override
+    public String getFeederAudit() {
+<span class="nc bnc" id="L941" title="All 2 branches missed.">        return compositionRecord.getFeederAudit() == null</span>
+<span class="nc" id="L942">                ? null</span>
+<span class="nc" id="L943">                : compositionRecord.getFeederAudit().toString();</span>
+    }
+
+    @Override
+    public String getLinks() {
+<span class="nc bnc" id="L948" title="All 2 branches missed.">        return compositionRecord.getLinks() == null</span>
+<span class="nc" id="L949">                ? null</span>
+<span class="nc" id="L950">                : compositionRecord.getLinks().toString();</span>
+    }
+
+    @Override
+    public void setFeederAudit(FeederAudit feederAudit) {
+<span class="nc bnc" id="L955" title="All 2 branches missed.">        if (feederAudit == null) {</span>
+<span class="nc" id="L956">            compositionRecord.setFeederAudit(null);</span>
+        } else {
+<span class="nc" id="L958">            compositionRecord.setFeederAudit(JSONB.valueOf(new FeederAuditEncoding().toDB(feederAudit)));</span>
+        }
+<span class="nc" id="L960">    }</span>
+
+    @Override
+    public void setLinks(List&lt;Link&gt; links) {
+<span class="nc bnc" id="L964" title="All 2 branches missed.">        if (links == null) {</span>
+<span class="nc" id="L965">            compositionRecord.setLinks(null);</span>
+        } else {
+<span class="nc" id="L967">            compositionRecord.setLinks(JSONB.valueOf(new LinksEncoding().toDB(links)));</span>
+        }
+<span class="nc" id="L969">    }</span>
+
+    /**
+     * @throws InternalServerException on problem updating context
+     */
+    @Override
+    public void setContextCompositionId(UUID contextId) {
+<span class="nc" id="L976">        I_ContextAccess contextAccess = I_ContextAccess.retrieveInstance(this, contextId);</span>
+<span class="nc" id="L977">        contextAccess.setCompositionId(compositionRecord.getId());</span>
+<span class="nc" id="L978">        contextAccess.update(TransactionTime.millis());</span>
+<span class="nc" id="L979">    }</span>
+
+    @Override
+    public void setContributionId(UUID contributionId) {
+<span class="nc" id="L983">        compositionRecord.setInContribution(contributionId);</span>
+<span class="nc" id="L984">    }</span>
+
+    @Override
+    public void setCompositionRecord(CompositionRecord record) {
+<span class="nc" id="L988">        this.compositionRecord = record;</span>
+<span class="nc" id="L989">    }</span>
+
+    @Override
+    public void setCompositionRecord(CompositionHistoryRecord historyRecord) {
+<span class="nc" id="L993">        this.compositionRecord = new CompositionRecord(</span>
+<span class="nc" id="L994">                historyRecord.getId(),</span>
+<span class="nc" id="L995">                historyRecord.getEhrId(),</span>
+<span class="nc" id="L996">                historyRecord.getInContribution(),</span>
+<span class="nc" id="L997">                historyRecord.getActive(),</span>
+<span class="nc" id="L998">                historyRecord.getIsPersistent(),</span>
+<span class="nc" id="L999">                historyRecord.getLanguage(),</span>
+<span class="nc" id="L1000">                historyRecord.getTerritory(),</span>
+<span class="nc" id="L1001">                historyRecord.getComposer(),</span>
+<span class="nc" id="L1002">                historyRecord.getSysTransaction(),</span>
+<span class="nc" id="L1003">                historyRecord.getSysPeriod(),</span>
+<span class="nc" id="L1004">                historyRecord.getHasAudit(),</span>
+<span class="nc" id="L1005">                historyRecord.getAttestationRef(),</span>
+<span class="nc" id="L1006">                historyRecord.getFeederAudit(),</span>
+<span class="nc" id="L1007">                historyRecord.getLinks(),</span>
+<span class="nc" id="L1008">                historyRecord.getSysTenant());</span>
+<span class="nc" id="L1009">    }</span>
+
+    /**
+     * @throws IllegalArgumentException when handling of record failed
+     */
+    @Override
+    public void setCompositionRecord(Result&lt;?&gt; records) {
+<span class="nc" id="L1016">        compositionRecord = getContext().newRecord(compositionRef);</span>
+        try {
+<span class="nc" id="L1018">            compositionRecord.setId((UUID) records.getValue(0, F_COMPOSITION_ID));</span>
+<span class="nc" id="L1019">            compositionRecord.setLanguage((String) records.getValue(0, F_LANGUAGE));</span>
+<span class="nc" id="L1020">        } catch (IndexOutOfBoundsException e) { // generalize DB exceptions</span>
+<span class="nc" id="L1021">            throw new IllegalArgumentException(&quot;Handling of records failed&quot;, e);</span>
+<span class="nc" id="L1022">        }</span>
+<span class="nc" id="L1023">    }</span>
+
+    @Override
+    public void setComposition(Composition composition) {
+<span class="nc" id="L1027">        this.composition = composition;</span>
+<span class="nc" id="L1028">    }</span>
+
+    @Override
+    public Timestamp getSysTransaction() {
+<span class="nc" id="L1032">        return compositionRecord.getSysTransaction();</span>
+    }
+
+    public Timestamp getTimeCommitted() {
+<span class="nc" id="L1036">        return auditDetailsAccess.getTimeCommitted();</span>
+    }
+
+    @Override
+    public void setContributionAccess(I_ContributionAccess contributionAccess) {
+<span class="nc" id="L1041">        this.contributionAccess = contributionAccess;</span>
+<span class="nc" id="L1042">    }</span>
+
+    @Override
+    public void setAuditDetailsAccess(I_AuditDetailsAccess auditDetailsAccess) {
+<span class="nc" id="L1046">        this.auditDetailsAccess = auditDetailsAccess;</span>
+<span class="nc" id="L1047">    }</span>
+
+    @Override
+    public Integer getVersion() {
+        // default current version, no history // FIXME
+<span class="nc" id="L1052">        return 1;</span>
+    }
+
+    /**
+     * @throws IllegalArgumentException when seeking language code, territory code
+     *                                  or composer ID failed
+     */
+    @Override
+    public void updateCompositionData(Composition newComposition) {
+        // update the mutable attributes
+<span class="nc" id="L1062">        setLanguageCode(seekLanguageCode(newComposition.getLanguage().getCodeString()));</span>
+<span class="nc" id="L1063">        setTerritoryCode(seekTerritoryCode(newComposition.getTerritory().getCodeString()));</span>
+<span class="nc" id="L1064">        setComposerId(seekComposerId(newComposition.getComposer(), compositionRecord.getSysTenant()));</span>
+
+<span class="nc" id="L1066">        setFeederAudit(newComposition.getFeederAudit());</span>
+<span class="nc" id="L1067">        setLinks(newComposition.getLinks());</span>
+<span class="nc" id="L1068">    }</span>
+
+    @Override
+    public void setContext(EventContext eventContext) {
+<span class="nc" id="L1072">        composition.setContext(eventContext);</span>
+<span class="nc" id="L1073">    }</span>
+
+    @Override
+    public DataAccess getDataAccess() {
+<span class="nc" id="L1077">        return this;</span>
+    }
+
+    @Override
+    public UUID getAuditDetailsId() {
+<span class="nc" id="L1082">        return compositionRecord.getHasAudit();</span>
+    }
+
+    @Override
+    public I_AuditDetailsAccess getAuditDetailsAccess() {
+<span class="nc" id="L1087">        return this.auditDetailsAccess;</span>
+    }
+
+    @Override
+    public void setAuditDetailsId(UUID auditId) {
+<span class="nc" id="L1092">        compositionRecord.setHasAudit(auditId);</span>
+<span class="nc" id="L1093">    }</span>
+
+    public static boolean exists(I_DomainAccess domainAccess, UUID versionedObjectId) {
+<span class="nc bnc" id="L1096" title="All 2 branches missed.">        if (domainAccess.getContext().fetchExists(COMPOSITION, COMPOSITION.ID.eq(versionedObjectId))</span>
+                || domainAccess
+<span class="nc" id="L1098">                        .getContext()</span>
+<span class="nc bnc" id="L1099" title="All 2 branches missed.">                        .fetchExists(COMPOSITION_HISTORY, COMPOSITION_HISTORY.ID.eq(versionedObjectId))) {</span>
+<span class="nc" id="L1100">            return true;</span>
+        } else {
+<span class="nc" id="L1102">            throw new ObjectNotFoundException(COMPOSITION_LITERAL, &quot;No composition with given ID found&quot;);</span>
+        }
+    }
+
+    public static boolean isDeleted(I_DomainAccess domainAccess, UUID versionedObjectId) {
+        // meta: logically deleted means that of this ID only entries in the history table are available
+        // XXX performance...
+        // if available in normal table -&gt; not deleted
+<span class="nc bnc" id="L1110" title="All 2 branches missed.">        if (domainAccess.getContext().fetchExists(COMPOSITION, COMPOSITION.ID.eq(versionedObjectId))) {</span>
+<span class="nc" id="L1111">            return false;</span>
+        }
+
+        // if only in history table
+<span class="nc bnc" id="L1115" title="All 2 branches missed.">        if (domainAccess.getContext().fetchExists(COMPOSITION_HISTORY, COMPOSITION_HISTORY.ID.eq(versionedObjectId))) {</span>
+            // retrieve the record
+<span class="nc" id="L1117">            Result&lt;CompositionHistoryRecord&gt; historyRecordsRes = domainAccess</span>
+<span class="nc" id="L1118">                    .getContext()</span>
+<span class="nc" id="L1119">                    .selectFrom(COMPOSITION_HISTORY)</span>
+<span class="nc" id="L1120">                    .where(COMPOSITION_HISTORY.ID.eq(versionedObjectId))</span>
+<span class="nc" id="L1121">                    .orderBy(COMPOSITION_HISTORY.SYS_TRANSACTION.desc()) // latest</span>
+                    // at
+                    // top,
+                    // i.e.
+                    // [0]
+<span class="nc" id="L1126">                    .fetch();</span>
+            // assumed not empty, because fetchExists was successful
+
+            // retrieve matching audit
+<span class="nc" id="L1130">            AuditDetailsRecord audit = domainAccess</span>
+<span class="nc" id="L1131">                    .getContext()</span>
+<span class="nc" id="L1132">                    .fetchOne(</span>
+                            AUDIT_DETAILS,
+<span class="nc" id="L1134">                            AUDIT_DETAILS.ID.eq(historyRecordsRes.get(0).getHasAudit()));</span>
+<span class="nc bnc" id="L1135" title="All 2 branches missed.">            if (audit == null) {</span>
+<span class="nc" id="L1136">                throw new InternalServerException(&quot;DB inconsistency: couldn't retrieve referenced audit&quot;);</span>
+            }
+            // and check for correct change type -&gt; is deleted
+<span class="nc bnc" id="L1139" title="All 2 branches missed.">            if (audit.getChangeType().equals(ContributionChangeType.deleted)) {</span>
+<span class="nc" id="L1140">                return true;</span>
+            }
+<span class="nc" id="L1142">        } else {</span>
+<span class="nc" id="L1143">            throw new ObjectNotFoundException(COMPOSITION_LITERAL, &quot;No composition with given ID found&quot;);</span>
+        }
+<span class="nc" id="L1145">        throw new InternalServerException(&quot;Problem processing CompositionAccess.isDeleted(..)&quot;);</span>
+    }
+
+    @Override
+    public void adminDelete() {
+<span class="nc" id="L1150">        AdminApiUtils adminApi = new AdminApiUtils(getContext());</span>
+<span class="nc" id="L1151">        adminApi.deleteComposition(this.getId());</span>
+<span class="nc" id="L1152">    }</span>
+
+    @Override
+    public UUID getAttestationRef() {
+<span class="nc" id="L1156">        return this.compositionRecord.getAttestationRef();</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.7.202105040129</span></div></body></html>

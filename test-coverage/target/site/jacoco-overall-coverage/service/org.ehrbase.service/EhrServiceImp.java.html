@@ -1,0 +1,543 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../../jacoco-resources/report.gif" type="image/gif"/><title>EhrServiceImp.java</title><link rel="stylesheet" href="../../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../../index.html" class="el_report">Overall Coverage</a> &gt; <a href="../index.html" class="el_bundle">service</a> &gt; <a href="index.source.html" class="el_package">org.ehrbase.service</a> &gt; <span class="el_source">EhrServiceImp.java</span></div><h1>EhrServiceImp.java</h1><pre class="source lang-java linenums">/*
+ * Copyright (c) 2019 vitasystems GmbH and Hannover Medical School.
+ *
+ * This file is part of project EHRbase
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     https://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.ehrbase.service;
+
+import static org.ehrbase.jooq.pg.Routines.partyUsage;
+import static org.ehrbase.jooq.pg.Tables.PARTY_IDENTIFIED;
+
+import com.nedap.archie.rm.changecontrol.OriginalVersion;
+import com.nedap.archie.rm.datatypes.CodePhrase;
+import com.nedap.archie.rm.datavalues.DvCodedText;
+import com.nedap.archie.rm.datavalues.quantity.datetime.DvDateTime;
+import com.nedap.archie.rm.ehr.EhrStatus;
+import com.nedap.archie.rm.ehr.VersionedEhrStatus;
+import com.nedap.archie.rm.generic.Attestation;
+import com.nedap.archie.rm.generic.AuditDetails;
+import com.nedap.archie.rm.generic.PartyProxy;
+import com.nedap.archie.rm.generic.PartySelf;
+import com.nedap.archie.rm.generic.RevisionHistory;
+import com.nedap.archie.rm.generic.RevisionHistoryItem;
+import com.nedap.archie.rm.support.identification.HierObjectId;
+import com.nedap.archie.rm.support.identification.ObjectRef;
+import com.nedap.archie.rm.support.identification.ObjectVersionId;
+import com.nedap.archie.rm.support.identification.PartyRef;
+import java.sql.Timestamp;
+import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
+import java.time.ZoneId;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.List;
+import java.util.Optional;
+import java.util.UUID;
+import java.util.stream.Collectors;
+import javax.annotation.PostConstruct;
+import org.apache.commons.lang3.tuple.Pair;
+import org.ehrbase.api.definitions.ServerConfig;
+import org.ehrbase.api.exception.InternalServerException;
+import org.ehrbase.api.exception.InvalidApiParameterException;
+import org.ehrbase.api.exception.ObjectNotFoundException;
+import org.ehrbase.api.exception.StateConflictException;
+import org.ehrbase.api.exception.UnprocessableEntityException;
+import org.ehrbase.api.exception.ValidationException;
+import org.ehrbase.api.service.EhrService;
+import org.ehrbase.api.service.TenantService;
+import org.ehrbase.api.service.ValidationService;
+import org.ehrbase.dao.access.interfaces.I_AttestationAccess;
+import org.ehrbase.dao.access.interfaces.I_ConceptAccess;
+import org.ehrbase.dao.access.interfaces.I_EhrAccess;
+import org.ehrbase.dao.access.interfaces.I_StatusAccess;
+import org.ehrbase.dao.access.jooq.AttestationAccess;
+import org.ehrbase.dao.access.jooq.party.PersistedPartyProxy;
+import org.ehrbase.dao.access.jooq.party.PersistedPartyRef;
+import org.ehrbase.jooq.pg.Routines;
+import org.ehrbase.openehr.sdk.response.dto.ehrscape.CompositionFormat;
+import org.ehrbase.openehr.sdk.response.dto.ehrscape.EhrStatusDto;
+import org.ehrbase.openehr.sdk.response.dto.ehrscape.StructuredString;
+import org.ehrbase.openehr.sdk.response.dto.ehrscape.StructuredStringFormat;
+import org.ehrbase.openehr.sdk.serialisation.jsonencoding.CanonicalJson;
+import org.ehrbase.openehr.sdk.serialisation.xmlencoding.CanonicalXML;
+import org.ehrbase.repository.EhrFolderRepository;
+import org.ehrbase.util.PartyUtils;
+import org.ehrbase.util.UuidGenerator;
+import org.jooq.DSLContext;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+@Service(value = &quot;ehrService&quot;)
+@Transactional()
+public class EhrServiceImp extends BaseServiceImp implements EhrService {
+    public static final String DESCRIPTION = &quot;description&quot;;
+    public static final String PARTY_ID_ALREADY_USED =
+            &quot;Supplied partyId[%s] is used by a different EHR in the same partyNamespace[%s].&quot;;
+<span class="nc" id="L93">    private Logger logger = LoggerFactory.getLogger(getClass());</span>
+    private final ValidationService validationService;
+    private final TenantService tenantService;
+
+    private final EhrFolderRepository ehrFolderRepository;
+
+    @Autowired
+    public EhrServiceImp(
+            KnowledgeCacheService knowledgeCacheService,
+            ValidationService validationService,
+            DSLContext context,
+            ServerConfig serverConfig,
+            TenantService tenantService,
+            EhrFolderRepository ehrFolderRepository) {
+<span class="nc" id="L107">        super(knowledgeCacheService, context, serverConfig);</span>
+<span class="nc" id="L108">        this.validationService = validationService;</span>
+<span class="nc" id="L109">        this.tenantService = tenantService;</span>
+<span class="nc" id="L110">        this.ehrFolderRepository = ehrFolderRepository;</span>
+<span class="nc" id="L111">    }</span>
+
+    @PostConstruct
+    public void init() {
+        // Create local system UUID
+<span class="nc" id="L116">        getSystemUuid();</span>
+<span class="nc" id="L117">    }</span>
+
+    private UUID getEmptyPartyByTenant() {
+<span class="nc" id="L120">        Short sysTenant = tenantService.getCurrentSysTenant();</span>
+<span class="nc" id="L121">        return new PersistedPartyProxy(getDataAccess()).getOrCreate(new PartySelf(), sysTenant);</span>
+    }
+
+    @Override
+    public UUID create(UUID ehrId, EhrStatus status) {
+
+<span class="nc" id="L127">        check(status);</span>
+
+<span class="nc bnc" id="L129" title="All 2 branches missed.">        if (status == null) { // in case of new status with default values</span>
+<span class="nc" id="L130">            status = new EhrStatus();</span>
+<span class="nc" id="L131">            status.setSubject(new PartySelf(null));</span>
+<span class="nc" id="L132">            status.setModifiable(true);</span>
+<span class="nc" id="L133">            status.setQueryable(true);</span>
+        }
+<span class="nc" id="L135">        status.setUid(new HierObjectId(</span>
+<span class="nc" id="L136">                UuidGenerator.randomUUID().toString())); // server sets own new UUID in both cases (new or given status)</span>
+
+        UUID subjectUuid;
+<span class="nc bnc" id="L139" title="All 2 branches missed.">        if (PartyUtils.isEmpty(status.getSubject())) {</span>
+<span class="nc" id="L140">            subjectUuid = getEmptyPartyByTenant();</span>
+<span class="nc" id="L141">        } else {</span>
+<span class="nc" id="L142">            subjectUuid = new PersistedPartyProxy(getDataAccess())</span>
+<span class="nc" id="L143">                    .getOrCreate(status.getSubject(), tenantService.getCurrentSysTenant());</span>
+
+<span class="nc bnc" id="L145" title="All 2 branches missed.">            if (I_EhrAccess.checkExist(getDataAccess(), subjectUuid)) {</span>
+<span class="nc" id="L146">                throw new StateConflictException(</span>
+<span class="nc" id="L147">                        &quot;Specified party has already an EHR set (partyId=&quot; + subjectUuid + &quot;)&quot;);</span>
+            }
+        }
+
+<span class="nc" id="L151">        UUID systemId = getSystemUuid();</span>
+<span class="nc" id="L152">        UUID committerId = getCurrentUserId();</span>
+
+        try { // this try block sums up a bunch of operations that can throw errors in the following
+<span class="nc" id="L155">            I_EhrAccess ehrAccess = I_EhrAccess.getInstance(</span>
+<span class="nc" id="L156">                    getDataAccess(), subjectUuid, systemId, null, ehrId, tenantService.getCurrentSysTenant());</span>
+<span class="nc" id="L157">            ehrAccess.setStatus(status);</span>
+<span class="nc" id="L158">            return ehrAccess.commit(committerId, systemId, DESCRIPTION);</span>
+<span class="nc" id="L159">        } catch (Exception e) {</span>
+<span class="nc" id="L160">            throw new InternalServerException(&quot;Could not create an EHR with given parameters.&quot;, e);</span>
+        }
+    }
+
+    @Override
+    public Optional&lt;EhrStatusDto&gt; getEhrStatusEhrScape(UUID ehrUuid, CompositionFormat format) {
+
+<span class="nc bnc" id="L167" title="All 2 branches missed.">        if (!hasEhr(ehrUuid)) {</span>
+<span class="nc" id="L168">            return Optional.empty();</span>
+        }
+<span class="nc" id="L170">        return Optional.of(getEhrStatus(ehrUuid)).map(s -&gt; from(s, format));</span>
+    }
+
+    private EhrStatusDto from(EhrStatus status, CompositionFormat format) {
+
+<span class="nc" id="L175">        EhrStatusDto statusDto = new EhrStatusDto();</span>
+<span class="nc bnc" id="L176" title="All 2 branches missed.">        if (status.getSubject().getExternalRef() != null) {</span>
+<span class="nc" id="L177">            statusDto.setSubjectId(status.getSubject().getExternalRef().getId().getValue());</span>
+<span class="nc" id="L178">            statusDto.setSubjectNamespace(status.getSubject().getExternalRef().getNamespace());</span>
+        }
+<span class="nc" id="L180">        statusDto.setModifiable(status.isModifiable());</span>
+<span class="nc" id="L181">        statusDto.setQueryable(status.isQueryable());</span>
+<span class="nc bnc" id="L182" title="All 2 branches missed.">        if (status.getOtherDetails() != null) {</span>
+<span class="nc bnc" id="L183" title="All 2 branches missed.">            if (format.equals(CompositionFormat.XML)) {</span>
+<span class="nc" id="L184">                statusDto.setOtherDetails(new StructuredString(</span>
+<span class="nc" id="L185">                        new CanonicalXML().marshal(status.getOtherDetails()), StructuredStringFormat.XML));</span>
+<span class="nc" id="L186">            } else {</span>
+<span class="nc" id="L187">                statusDto.setOtherDetails(new StructuredString(</span>
+<span class="nc" id="L188">                        new CanonicalJson().marshal(status.getOtherDetails()), StructuredStringFormat.JSON));</span>
+            }
+        }
+
+<span class="nc" id="L192">        return statusDto;</span>
+    }
+
+    @Override
+    public EhrStatus getEhrStatus(UUID ehrUuid) {
+        // pre-step: check for valid ehrId
+<span class="nc bnc" id="L198" title="All 2 branches missed.">        if (!hasEhr(ehrUuid)) {</span>
+<span class="nc" id="L199">            throw new ObjectNotFoundException(&quot;ehr&quot;, &quot;No EHR found with given ID: &quot; + ehrUuid.toString());</span>
+        }
+
+        try {
+
+<span class="nc" id="L204">            I_EhrAccess ehrAccess = I_EhrAccess.retrieveInstance(getDataAccess(), ehrUuid);</span>
+
+<span class="nc" id="L206">            return ehrAccess.getStatus();</span>
+
+<span class="nc" id="L208">        } catch (Exception e) {</span>
+<span class="nc" id="L209">            logger.error(e.getMessage());</span>
+<span class="nc" id="L210">            throw new InternalServerException(e);</span>
+        }
+    }
+
+    @Override
+    public Optional&lt;OriginalVersion&lt;EhrStatus&gt;&gt; getEhrStatusAtVersion(
+            UUID ehrUuid, UUID versionedObjectUid, int version) {
+        // pre-step: check for valid ehrId
+<span class="nc bnc" id="L218" title="All 2 branches missed.">        if (!hasEhr(ehrUuid)) {</span>
+<span class="nc" id="L219">            throw new ObjectNotFoundException(&quot;ehr&quot;, &quot;No EHR found with given ID: &quot; + ehrUuid.toString());</span>
+        }
+
+<span class="nc bnc" id="L222" title="All 4 branches missed.">        if ((version == 0) || (I_StatusAccess.getLatestVersionNumber(getDataAccess(), versionedObjectUid) &lt; version)) {</span>
+<span class="nc" id="L223">            throw new ObjectNotFoundException(</span>
+<span class="nc" id="L224">                    &quot;versioned_ehr_status&quot;, &quot;No VERSIONED_EHR_STATUS with given version: &quot; + version);</span>
+        }
+
+<span class="nc" id="L227">        I_StatusAccess statusAccess = I_StatusAccess.getVersionMapOfStatus(getDataAccess(), versionedObjectUid)</span>
+<span class="nc" id="L228">                .get(version);</span>
+
+<span class="nc" id="L230">        ObjectVersionId versionId = new ObjectVersionId(</span>
+<span class="nc" id="L231">                versionedObjectUid + &quot;::&quot; + getServerConfig().getNodename() + &quot;::&quot; + version);</span>
+<span class="nc" id="L232">        DvCodedText lifecycleState = new DvCodedText(</span>
+<span class="nc" id="L233">                &quot;complete&quot;, new CodePhrase(&quot;532&quot;)); // TODO: once lifecycle state is supported, get it here dynamically</span>
+<span class="nc" id="L234">        AuditDetails commitAudit = statusAccess.getAuditDetailsAccess().getAsAuditDetails();</span>
+<span class="nc" id="L235">        ObjectRef&lt;HierObjectId&gt; contribution = new ObjectRef&lt;&gt;(</span>
+<span class="nc" id="L236">                new HierObjectId(</span>
+<span class="nc" id="L237">                        statusAccess.getStatusRecord().getInContribution().toString()),</span>
+<span class="nc" id="L238">                &quot;openehr&quot;,</span>
+<span class="nc" id="L239">                &quot;contribution&quot;);</span>
+<span class="nc" id="L240">        List&lt;UUID&gt; attestationIdList = I_AttestationAccess.retrieveListOfAttestationsByRef(</span>
+<span class="nc" id="L241">                getDataAccess(), statusAccess.getStatusRecord().getAttestationRef());</span>
+<span class="nc" id="L242">        List&lt;Attestation&gt; attestations = null; // as default, gets content if available in the following lines</span>
+<span class="nc bnc" id="L243" title="All 2 branches missed.">        if (!attestationIdList.isEmpty()) {</span>
+<span class="nc" id="L244">            attestations = new ArrayList&lt;&gt;();</span>
+<span class="nc bnc" id="L245" title="All 2 branches missed.">            for (UUID id : attestationIdList) {</span>
+<span class="nc" id="L246">                I_AttestationAccess a = new AttestationAccess(getDataAccess()).retrieveInstance(id);</span>
+<span class="nc" id="L247">                attestations.add(a.getAsAttestation());</span>
+            }
+        }
+
+<span class="nc" id="L251">        ObjectVersionId precedingVersionId = null;</span>
+        // check if there is a preceding version and set it, if available
+<span class="nc bnc" id="L253" title="All 2 branches missed.">        if (version &gt; 1) {</span>
+            // in the current scope version is an int and therefore: preceding = current - 1
+<span class="nc" id="L255">            precedingVersionId = new ObjectVersionId(</span>
+<span class="nc" id="L256">                    versionedObjectUid + &quot;::&quot; + getServerConfig().getNodename() + &quot;::&quot; + (version - 1));</span>
+        }
+
+<span class="nc" id="L259">        OriginalVersion&lt;EhrStatus&gt; versionStatus = new OriginalVersion&lt;&gt;(</span>
+<span class="nc" id="L260">                versionId,</span>
+<span class="nc" id="L261">                precedingVersionId,</span>
+<span class="nc" id="L262">                statusAccess.getStatus(),</span>
+<span class="nc" id="L263">                lifecycleState,</span>
+<span class="nc" id="L264">                commitAudit,</span>
+<span class="nc" id="L265">                contribution,</span>
+<span class="nc" id="L266">                null,</span>
+<span class="nc" id="L267">                null,</span>
+<span class="nc" id="L268">                attestations);</span>
+
+<span class="nc" id="L270">        return Optional.of(versionStatus);</span>
+    }
+
+    @Override
+    public UUID updateStatus(UUID ehrId, EhrStatus status, UUID contributionId, UUID audit) {
+
+<span class="nc" id="L276">        check(status);</span>
+<span class="nc" id="L277">        checkEhrExistForParty(ehrId, status);</span>
+
+        // pre-step: check for valid ehrId
+<span class="nc bnc" id="L280" title="All 2 branches missed.">        if (!hasEhr(ehrId)) {</span>
+<span class="nc" id="L281">            throw new ObjectNotFoundException(&quot;ehr&quot;, &quot;No EHR found with given ID: &quot; + ehrId.toString());</span>
+        }
+
+        I_EhrAccess ehrAccess;
+        try {
+<span class="nc" id="L286">            ehrAccess = I_EhrAccess.retrieveInstance(getDataAccess(), ehrId);</span>
+<span class="nc" id="L287">        } catch (Exception e) {</span>
+<span class="nc" id="L288">            throw new InternalServerException(e);</span>
+        }
+
+<span class="nc" id="L291">        ehrAccess.setStatus(status);</span>
+
+        // execute actual update and check for success
+<span class="nc" id="L294">        if (ehrAccess</span>
+<span class="nc" id="L295">                .update(</span>
+<span class="nc" id="L296">                        getCurrentUserId(),</span>
+<span class="nc" id="L297">                        getSystemUuid(),</span>
+<span class="nc" id="L298">                        contributionId,</span>
+<span class="nc" id="L299">                        null,</span>
+<span class="nc" id="L300">                        I_ConceptAccess.ContributionChangeType.MODIFICATION,</span>
+<span class="nc" id="L301">                        DESCRIPTION,</span>
+<span class="nc" id="L302">                        audit)</span>
+<span class="nc bnc" id="L303" title="All 2 branches missed.">                .equals(false))</span>
+<span class="nc" id="L304">            throw new InternalServerException(</span>
+<span class="nc" id="L305">                    &quot;Problem updating EHR_STATUS&quot;); // unexpected problem. expected ones are thrown inside of update()</span>
+
+<span class="nc" id="L307">        return UUID.fromString(getEhrStatus(ehrId).getUid().getRoot().getValue());</span>
+    }
+
+    private void checkEhrExistForParty(UUID ehrId, EhrStatus status) {
+<span class="nc" id="L311">        Optional&lt;PartyRef&gt; partyRef =</span>
+<span class="nc" id="L312">                Optional.ofNullable(status).map(EhrStatus::getSubject).map(PartyProxy::getExternalRef);</span>
+
+<span class="nc bnc" id="L314" title="All 2 branches missed.">        if (partyRef.isPresent()) {</span>
+<span class="nc" id="L315">            String subjectId = partyRef.get().getId().getValue();</span>
+<span class="nc" id="L316">            String namespace = partyRef.get().getNamespace();</span>
+<span class="nc" id="L317">            Optional&lt;UUID&gt; ehrIdOpt = findBySubject(subjectId, namespace);</span>
+<span class="nc bnc" id="L318" title="All 4 branches missed.">            if (ehrIdOpt.isPresent() &amp;&amp; !ehrIdOpt.get().equals(ehrId)) {</span>
+<span class="nc" id="L319">                throw new InvalidApiParameterException(String.format(PARTY_ID_ALREADY_USED, subjectId, namespace));</span>
+            }
+        }
+<span class="nc" id="L322">    }</span>
+
+    private void check(EhrStatus status) {
+        try {
+<span class="nc" id="L326">            validationService.check(status);</span>
+<span class="nc" id="L327">        } catch (Exception e) {</span>
+            // rethrow if this class, but wrap all others in InternalServerException
+<span class="nc bnc" id="L329" title="All 2 branches missed.">            if (e.getClass().equals(UnprocessableEntityException.class)) throw (UnprocessableEntityException) e;</span>
+<span class="nc bnc" id="L330" title="All 2 branches missed.">            if (e.getClass().equals(IllegalArgumentException.class)) throw new ValidationException(e);</span>
+<span class="nc bnc" id="L331" title="All 2 branches missed.">            if (e.getClass().equals(ValidationException.class)) throw e;</span>
+<span class="nc" id="L332">            else throw new InternalServerException(e);</span>
+        }
+<span class="nc" id="L334">    }</span>
+
+    @Override
+    public Optional&lt;UUID&gt; findBySubject(String subjectId, String nameSpace) {
+<span class="nc" id="L338">        UUID subjectUuid = new PersistedPartyRef(getDataAccess()).findInDB(subjectId, nameSpace);</span>
+<span class="nc" id="L339">        return Optional.ofNullable(I_EhrAccess.retrieveInstanceBySubject(getDataAccess(), subjectUuid));</span>
+    }
+
+    /**
+     * Fetches time of creation of specific EHR record
+     *
+     * @param ehrId
+     * @return LocalDateTime instance of timestamp from DB
+     */
+    public DvDateTime getCreationTime(UUID ehrId) {
+        // pre-step: check for valid ehrId
+<span class="nc bnc" id="L350" title="All 2 branches missed.">        if (!hasEhr(ehrId)) {</span>
+<span class="nc" id="L351">            throw new ObjectNotFoundException(&quot;ehr&quot;, &quot;No EHR found with given ID: &quot; + ehrId.toString());</span>
+        }
+
+        try {
+<span class="nc" id="L355">            I_EhrAccess ehrAccess = I_EhrAccess.retrieveInstance(getDataAccess(), ehrId);</span>
+<span class="nc" id="L356">            OffsetDateTime offsetDateTime = OffsetDateTime.from(</span>
+<span class="nc" id="L357">                    LocalDateTime.from(ehrAccess.getEhrRecord().getDateCreated().toLocalDateTime())</span>
+<span class="nc" id="L358">                            .atZone(ZoneId.of(ehrAccess.getEhrRecord().getDateCreatedTzid())));</span>
+<span class="nc" id="L359">            return new DvDateTime(offsetDateTime);</span>
+<span class="nc" id="L360">        } catch (Exception e) {</span>
+<span class="nc" id="L361">            logger.error(e.getMessage());</span>
+<span class="nc" id="L362">            throw new InternalServerException(e);</span>
+        }
+    }
+
+    @Override
+    public Integer getEhrStatusVersionByTimestamp(UUID ehrUid, Timestamp timestamp) {
+<span class="nc" id="L368">        I_EhrAccess ehrAccess = I_EhrAccess.retrieveInstance(getDataAccess(), ehrUid);</span>
+<span class="nc" id="L369">        return ehrAccess.getStatusAccess().getEhrStatusVersionFromTimeStamp(timestamp);</span>
+    }
+
+    /**
+     * Get latest version Uid of an EHR_STATUS by given versioned object UID.
+     * @param ehrStatusId given versioned object UID
+     * @return latest version Uid
+     */
+    public String getLatestVersionUidOfStatus(UUID ehrStatusId) {
+        try {
+<span class="nc" id="L379">            I_EhrAccess ehrAccess = I_EhrAccess.retrieveInstance(getDataAccess(), ehrStatusId);</span>
+<span class="nc" id="L380">            UUID statusId = ehrAccess.getStatusId();</span>
+<span class="nc" id="L381">            Integer version = I_StatusAccess.getLatestVersionNumber(getDataAccess(), statusId);</span>
+
+<span class="nc" id="L383">            return statusId.toString() + &quot;::&quot; + getServerConfig().getNodename() + &quot;::&quot; + version;</span>
+<span class="nc" id="L384">        } catch (Exception e) {</span>
+<span class="nc" id="L385">            throw new InternalServerException(e);</span>
+        }
+    }
+
+    public UUID getEhrStatusVersionedObjectUidByEhr(UUID ehrUid) {
+<span class="nc" id="L390">        I_EhrAccess ehrAccess = I_EhrAccess.retrieveInstance(getDataAccess(), ehrUid);</span>
+<span class="nc" id="L391">        return ehrAccess.getStatusId();</span>
+    }
+
+    @Override
+    public boolean hasEhr(UUID ehrId) {
+<span class="nc" id="L396">        return I_EhrAccess.hasEhr(getDataAccess(), ehrId);</span>
+    }
+
+    @Override
+    /*TODO This method should be cached...
+    For contributions it may be called n times where n is the number of versions in the contribution which will in turn mean
+    n SQL queries are performed*/
+    public Boolean isModifiable(UUID ehrId) {
+<span class="nc" id="L404">        return I_EhrAccess.isModifiable(getDataAccess(), ehrId);</span>
+    }
+
+    @Override
+    public VersionedEhrStatus getVersionedEhrStatus(UUID ehrUid) {
+
+        // FIXME VERSIONED_OBJECT_POC: Pre_has_ehr: has_ehr (an_ehr_id)
+        // FIXME VERSIONED_OBJECT_POC: Pre_has_ehr_status_version: has_ehr_status_version (an_ehr_id,
+        // a_version_uid)
+
+<span class="nc" id="L414">        EhrStatus ehrStatus = getEhrStatus(ehrUid);</span>
+
+<span class="nc" id="L416">        VersionedEhrStatus versionedEhrStatus = new VersionedEhrStatus();</span>
+
+<span class="nc" id="L418">        versionedEhrStatus.setUid(new HierObjectId(ehrStatus.getUid().getRoot().getValue()));</span>
+<span class="nc" id="L419">        versionedEhrStatus.setOwnerId(new ObjectRef&lt;&gt;(new HierObjectId(ehrUid.toString()), &quot;local&quot;, &quot;EHR&quot;));</span>
+<span class="nc" id="L420">        I_EhrAccess ehrAccess = I_EhrAccess.retrieveInstance(getDataAccess(), ehrUid);</span>
+<span class="nc" id="L421">        versionedEhrStatus.setTimeCreated(new DvDateTime(OffsetDateTime.of(</span>
+<span class="nc" id="L422">                ehrAccess.getStatusAccess().getInitialTimeOfVersionedEhrStatus().toLocalDateTime(),</span>
+<span class="nc" id="L423">                OffsetDateTime.now().getOffset())));</span>
+
+<span class="nc" id="L425">        return versionedEhrStatus;</span>
+    }
+
+    @Override
+    public RevisionHistory getRevisionHistoryOfVersionedEhrStatus(UUID ehrUid) {
+<span class="nc" id="L430">        I_EhrAccess ehrAccess = I_EhrAccess.retrieveInstance(getDataAccess(), ehrUid);</span>
+
+        // get number of versions
+<span class="nc" id="L433">        int versions = I_StatusAccess.getLatestVersionNumber(getDataAccess(), ehrAccess.getStatusId());</span>
+        // fetch each version
+<span class="nc" id="L435">        UUID versionedObjectUid = getEhrStatusVersionedObjectUidByEhr(ehrUid);</span>
+<span class="nc" id="L436">        RevisionHistory revisionHistory = new RevisionHistory();</span>
+<span class="nc bnc" id="L437" title="All 2 branches missed.">        for (int i = 1; i &lt;= versions; i++) {</span>
+<span class="nc" id="L438">            Optional&lt;OriginalVersion&lt;EhrStatus&gt;&gt; ehrStatus = getEhrStatusAtVersion(ehrUid, versionedObjectUid, i);</span>
+
+            // create RevisionHistoryItem for each version and append it to RevisionHistory
+<span class="nc bnc" id="L441" title="All 2 branches missed.">            if (ehrStatus.isPresent()) revisionHistory.addItem(revisionHistoryItemFromEhrStatus(ehrStatus.get(), i));</span>
+        }
+
+<span class="nc bnc" id="L444" title="All 2 branches missed.">        if (revisionHistory.getItems().isEmpty()) {</span>
+<span class="nc" id="L445">            throw new InternalServerException(&quot;Problem creating RevisionHistory&quot;); // never should be empty; not valid</span>
+        }
+<span class="nc" id="L447">        return revisionHistory;</span>
+    }
+
+    private RevisionHistoryItem revisionHistoryItemFromEhrStatus(OriginalVersion&lt;EhrStatus&gt; ehrStatus, int version) {
+
+<span class="nc" id="L452">        String statusId = ehrStatus.getUid().getValue().split(&quot;::&quot;)[0];</span>
+<span class="nc" id="L453">        ObjectVersionId objectVersionId =</span>
+<span class="nc" id="L454">                new ObjectVersionId(statusId + &quot;::&quot; + getServerConfig().getNodename() + &quot;::&quot; + version);</span>
+
+        // Note: is List but only has more than one item when there are contributions regarding this object of change
+        // type attestation
+<span class="nc" id="L458">        List&lt;AuditDetails&gt; auditDetailsList = new ArrayList&lt;&gt;();</span>
+        // retrieving the audits
+<span class="nc" id="L460">        auditDetailsList.add(ehrStatus.getCommitAudit());</span>
+
+        // add retrieval of attestations, if there are any
+<span class="nc bnc" id="L463" title="All 2 branches missed.">        if (ehrStatus.getAttestations() != null) {</span>
+<span class="nc bnc" id="L464" title="All 2 branches missed.">            for (Attestation a : ehrStatus.getAttestations()) {</span>
+<span class="nc" id="L465">                AuditDetails newAudit = new AuditDetails(</span>
+<span class="nc" id="L466">                        a.getSystemId(), a.getCommitter(), a.getTimeCommitted(), a.getChangeType(), a.getDescription());</span>
+<span class="nc" id="L467">                auditDetailsList.add(newAudit);</span>
+            }
+        }
+
+<span class="nc" id="L471">        return new RevisionHistoryItem(objectVersionId, auditDetailsList);</span>
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    @PreAuthorize(&quot;hasRole('ADMIN')&quot;)
+    @Override
+    public void adminDeleteEhr(UUID ehrId) {
+
+<span class="nc" id="L481">        ehrFolderRepository.adminDelete(ehrId, null);</span>
+<span class="nc" id="L482">        I_EhrAccess ehrAccess = I_EhrAccess.retrieveInstance(getDataAccess(), ehrId);</span>
+<span class="nc" id="L483">        ehrAccess.adminDeleteEhr();</span>
+<span class="nc" id="L484">    }</span>
+
+    @PreAuthorize(&quot;hasRole('ADMIN')&quot;)
+    @Override
+    public void adminPurgePartyIdentified() {
+<span class="nc" id="L489">        getDataAccess()</span>
+<span class="nc" id="L490">                .getContext()</span>
+<span class="nc" id="L491">                .deleteFrom(PARTY_IDENTIFIED)</span>
+<span class="nc" id="L492">                .where(partyUsage(PARTY_IDENTIFIED.ID).eq(0L))</span>
+<span class="nc" id="L493">                .execute();</span>
+<span class="nc" id="L494">    }</span>
+
+    @PreAuthorize(&quot;hasRole('ADMIN')&quot;)
+    @Override
+    public void adminDeleteOrphanHistory() {
+<span class="nc" id="L499">        Routines.deleteOrphanHistory(getDataAccess().getContext().configuration());</span>
+<span class="nc" id="L500">    }</span>
+
+    @Override
+    public UUID getSubjectUuid(String ehrId) {
+<span class="nc" id="L504">        return getSubjectUuids(List.of(ehrId)).get(0).getRight();</span>
+    }
+
+    private List&lt;Pair&lt;String, UUID&gt;&gt; getSubjectUuids(Collection&lt;String&gt; ehrIds) {
+<span class="nc" id="L508">        return ehrIds.stream()</span>
+<span class="nc" id="L509">                .map(ehrId -&gt; Pair.of(ehrId, getEhrStatus(UUID.fromString(ehrId))))</span>
+<span class="nc" id="L510">                .map(p -&gt; {</span>
+<span class="nc bnc" id="L511" title="All 2 branches missed.">                    if (p.getRight() == null) return Pair.&lt;String, UUID&gt;of(p.getLeft(), null);</span>
+<span class="nc" id="L512">                    return Pair.of(</span>
+<span class="nc" id="L513">                            p.getLeft(),</span>
+<span class="nc" id="L514">                            new PersistedPartyProxy(getDataAccess())</span>
+<span class="nc" id="L515">                                    .getOrCreate(p.getRight().getSubject(), tenantService.getCurrentSysTenant()));</span>
+                })
+<span class="nc" id="L517">                .collect(Collectors.toList());</span>
+    }
+
+    @Override
+    public List&lt;String&gt; getSubjectExtRefs(Collection&lt;String&gt; ehrIds) {
+<span class="nc" id="L522">        List&lt;UUID&gt; nonNullVal = getSubjectUuids(ehrIds).stream()</span>
+<span class="nc bnc" id="L523" title="All 2 branches missed.">                .filter(p -&gt; p.getRight() != null)</span>
+<span class="nc" id="L524">                .map(p -&gt; p.getRight())</span>
+<span class="nc" id="L525">                .collect(Collectors.toList());</span>
+
+<span class="nc bnc" id="L527" title="All 2 branches missed.">        if (nonNullVal.size() == 0) return Collections.emptyList();</span>
+
+<span class="nc" id="L529">        return new PersistedPartyProxy(getDataAccess())</span>
+<span class="nc" id="L530">                .retrieveMany(nonNullVal).stream()</span>
+<span class="nc" id="L531">                        .map(p -&gt; p.getExternalRef())</span>
+<span class="nc bnc" id="L532" title="All 2 branches missed.">                        .filter(p -&gt; p != null)</span>
+<span class="nc" id="L533">                        .map(p -&gt; p.getId().getValue())</span>
+<span class="nc" id="L534">                        .collect(Collectors.toList());</span>
+    }
+
+    @Override
+    public String getSubjectExtRef(String ehrId) {
+<span class="nc" id="L539">        List&lt;String&gt; extRefs = getSubjectExtRefs(List.of(ehrId));</span>
+<span class="nc bnc" id="L540" title="All 2 branches missed.">        return extRefs.size() == 0 ? null : extRefs.get(0);</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.7.202105040129</span></div></body></html>

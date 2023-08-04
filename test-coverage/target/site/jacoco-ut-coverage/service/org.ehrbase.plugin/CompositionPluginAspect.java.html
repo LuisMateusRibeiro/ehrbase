@@ -1,0 +1,144 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../../jacoco-resources/report.gif" type="image/gif"/><title>CompositionPluginAspect.java</title><link rel="stylesheet" href="../../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../../index.html" class="el_report">Coverage with Unit Tests</a> &gt; <a href="../index.html" class="el_bundle">service</a> &gt; <a href="index.source.html" class="el_package">org.ehrbase.plugin</a> &gt; <span class="el_source">CompositionPluginAspect.java</span></div><h1>CompositionPluginAspect.java</h1><pre class="source lang-java linenums">/*
+ * Copyright (c) 2022 vitasystems GmbH and Hannover Medical School.
+ *
+ * This file is part of project EHRbase
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     https://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.ehrbase.plugin;
+
+import static org.ehrbase.plugin.PluginHelper.PLUGIN_MANAGER_PREFIX;
+
+import com.nedap.archie.rm.composition.Composition;
+import com.nedap.archie.rm.support.identification.ObjectVersionId;
+import java.util.Optional;
+import java.util.UUID;
+import org.aspectj.lang.ProceedingJoinPoint;
+import org.aspectj.lang.annotation.Around;
+import org.aspectj.lang.annotation.Aspect;
+import org.ehrbase.plugin.dto.CompositionIdWithVersionAndEhrId;
+import org.ehrbase.plugin.dto.CompositionVersionIdWithEhrId;
+import org.ehrbase.plugin.dto.CompositionWithEhrId;
+import org.ehrbase.plugin.dto.CompositionWithEhrIdAndPreviousVersion;
+import org.ehrbase.plugin.extensionpoints.CompositionExtensionPoint;
+import org.springframework.beans.factory.ListableBeanFactory;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.stereotype.Component;
+
+/**
+ * @author Stefan Spiska
+ */
+@Component
+@Aspect
+@ConditionalOnProperty(prefix = PLUGIN_MANAGER_PREFIX, name = &quot;enable&quot;, havingValue = &quot;true&quot;)
+public class CompositionPluginAspect extends AbstractPluginAspect&lt;CompositionExtensionPoint&gt; {
+
+    public CompositionPluginAspect(ListableBeanFactory beanFactory) {
+<span class="nc" id="L47">        super(beanFactory, CompositionExtensionPoint.class);</span>
+<span class="nc" id="L48">    }</span>
+
+    /**
+     * Handle Extension-points for Composition create
+     *
+     * @param pjp
+     * @return
+     * @see &lt;a href=&quot;I_EHR_COMPOSITION in openEHR Platform Service
+     * Model&quot;&gt;https://specifications.openehr.org/releases/SM/latest/openehr_platform.html#_i_ehr_composition_interface&lt;/a&gt;
+     */
+    @Around(&quot;inServiceLayerPC() &amp;&amp; &quot; + &quot;execution(* org.ehrbase.api.service.CompositionService.create(..))&quot;)
+    public Object aroundCreateComposition(ProceedingJoinPoint pjp) {
+
+<span class="nc" id="L61">        return Optional.of(proceedWithPluginExtensionPoints(</span>
+<span class="nc" id="L62">                pjp,</span>
+<span class="nc" id="L63">                CompositionExtensionPoint::aroundCreation,</span>
+<span class="nc" id="L64">                args -&gt; new CompositionWithEhrId((Composition) args[1], (UUID) args[0]),</span>
+<span class="nc" id="L65">                (i, args) -&gt; {</span>
+<span class="nc" id="L66">                    args[1] = i.getComposition();</span>
+<span class="nc" id="L67">                    args[0] = i.getEhrId();</span>
+<span class="nc" id="L68">                    return args;</span>
+                },
+<span class="nc" id="L70">                ret -&gt; ((Optional&lt;UUID&gt;) ret).orElseThrow()));</span>
+    }
+
+    /**
+     * Handle Extension-points for Composition update
+     *
+     * @param pjp
+     * @return
+     * @see &lt;a href=&quot;I_EHR_COMPOSITION in openEHR Platform Service
+     * Model&quot;&gt;https://specifications.openehr.org/releases/SM/latest/openehr_platform.html#_i_ehr_composition_interface&lt;/a&gt;
+     */
+    @Around(&quot;inServiceLayerPC() &amp;&amp; &quot; + &quot;execution(* org.ehrbase.api.service.CompositionService.update(..))&quot;)
+    public Object aroundUpdateComposition(ProceedingJoinPoint pjp) {
+
+<span class="nc" id="L84">        return Optional.of(proceedWithPluginExtensionPoints(</span>
+<span class="nc" id="L85">                pjp,</span>
+<span class="nc" id="L86">                CompositionExtensionPoint::aroundUpdate,</span>
+<span class="nc" id="L87">                args -&gt; new CompositionWithEhrIdAndPreviousVersion(</span>
+<span class="nc" id="L88">                        (Composition) args[2], (ObjectVersionId) args[1], (UUID) args[0]),</span>
+<span class="nc" id="L89">                (i, args) -&gt; {</span>
+<span class="nc" id="L90">                    args[2] = i.getComposition();</span>
+<span class="nc" id="L91">                    args[1] = i.getPreviousVersion();</span>
+<span class="nc" id="L92">                    args[0] = i.getEhrId();</span>
+<span class="nc" id="L93">                    return args;</span>
+                },
+<span class="nc" id="L95">                ret -&gt; ((Optional&lt;UUID&gt;) ret).orElseThrow()));</span>
+    }
+
+    /**
+     * Handle Extension-points for Composition delete
+     *
+     * @param pjp
+     * @return
+     * @see &lt;a href=&quot;I_EHR_COMPOSITION in openEHR Platform Service
+     * Model&quot;&gt;https://specifications.openehr.org/releases/SM/latest/openehr_platform.html#_i_ehr_composition_interface&lt;/a&gt;
+     */
+    @Around(&quot;inServiceLayerPC() &amp;&amp; &quot; + &quot;execution(* org.ehrbase.api.service.CompositionService.delete(..))&quot;)
+    public void aroundDeleteComposition(ProceedingJoinPoint pjp) {
+
+<span class="nc" id="L109">        proceedWithPluginExtensionPoints(</span>
+<span class="nc" id="L110">                pjp,</span>
+<span class="nc" id="L111">                CompositionExtensionPoint::aroundDelete,</span>
+<span class="nc" id="L112">                args -&gt; new CompositionVersionIdWithEhrId((ObjectVersionId) args[1], (UUID) args[0]),</span>
+<span class="nc" id="L113">                (i, args) -&gt; {</span>
+<span class="nc" id="L114">                    args[1] = i.getVersionId();</span>
+<span class="nc" id="L115">                    args[0] = i.getEhrId();</span>
+<span class="nc" id="L116">                    return args;</span>
+                },
+<span class="nc" id="L118">                Void.class::cast);</span>
+<span class="nc" id="L119">    }</span>
+
+    /**
+     * Handle Extension-points for Composition retrieve
+     *
+     * @param pjp
+     * @return
+     * @see &lt;a href=&quot;I_EHR_COMPOSITION in openEHR Platform Service
+     * Model&quot;&gt;https://specifications.openehr.org/releases/SM/latest/openehr_platform.html#_i_ehr_composition_interface&lt;/a&gt;
+     */
+    @Around(&quot;inServiceLayerPC() &amp;&amp; &quot; + &quot;execution(* org.ehrbase.api.service.CompositionService.retrieve(..))&quot;)
+    public Object aroundRetrieveComposition(ProceedingJoinPoint pjp) {
+
+<span class="nc" id="L132">        return proceedWithPluginExtensionPoints(</span>
+<span class="nc" id="L133">                pjp,</span>
+<span class="nc" id="L134">                CompositionExtensionPoint::aroundRetrieve,</span>
+<span class="nc" id="L135">                args -&gt; new CompositionIdWithVersionAndEhrId((UUID) args[0], (UUID) args[1], (Integer) args[2]),</span>
+<span class="nc" id="L136">                (i, args) -&gt; {</span>
+<span class="nc" id="L137">                    args[2] = i.getVersion();</span>
+<span class="nc" id="L138">                    args[1] = i.getCompositionId();</span>
+<span class="nc" id="L139">                    args[0] = i.getEhrId();</span>
+<span class="nc" id="L140">                    return args;</span>
+                });
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.7.202105040129</span></div></body></html>

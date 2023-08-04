@@ -1,0 +1,117 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../../jacoco-resources/report.gif" type="image/gif"/><title>TerminologyServer.java</title><link rel="stylesheet" href="../../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../../index.html" class="el_report">Overall Coverage</a> &gt; <a href="../index.html" class="el_bundle">api</a> &gt; <a href="index.source.html" class="el_package">org.ehrbase.api.service</a> &gt; <span class="el_source">TerminologyServer.java</span></div><h1>TerminologyServer.java</h1><pre class="source lang-java linenums">/*
+ * Copyright (c) 2020 vitasystems GmbH and Hannover Medical School.
+ *
+ * This file is part of project EHRbase
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     https://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.ehrbase.api.service;
+
+import java.util.EnumSet;
+import java.util.List;
+
+/***
+ *@Created by Luis Marco-Ruiz on Feb 12, 2020
+ *
+ * @param &lt;T&gt; concept type
+ * @param &lt;ID&gt; generic id type to specify the data type used for the identifier of the concept in the terminology server of choice.
+ * @param &lt;ID&gt; generic type for parameters that are custom to each operation implementation.
+ */
+public interface TerminologyServer&lt;T, ID, U&gt; {
+    /**
+     * Expands the value set identified by the provided ID.
+     * @param valueSetId
+     * @return Returns the list of concepts of type T that conform the expansion of the value set.
+     */
+    List&lt;T&gt; expand(ID valueSetId);
+
+    /**
+     * Expands the value set identified by the provided ID.
+     * @param valueSetId
+     * @return Returns the list of concepts of type T that conform the expansion of the value set.
+     */
+    List&lt;T&gt; expandWithParameters(
+            ID valueSetId,
+            @SuppressWarnings(&quot;unchecked&quot;)
+                    U... operationParams); // warning is ignored because the specific implementation will type the
+    // method avoiding possible heap pollution
+
+    /**
+     * Searches all the attributes associated with the concept that corresponds to the provided ID.
+     * @param conceptId
+     * @return A complex Object of type T that contains all the attributes directly associated to the concept identified by the provided ID.
+     */
+    T lookUp(ID conceptId);
+    /**
+     * Evaluates if the concept provided T belongs to the value set identified by the provided ID.
+     * @param concept to evaluate.
+     * @param valueSetId
+     * @return true if the concept belongs to the specified value set.
+     */
+    Boolean validate(T concept, ID valueSetId);
+
+    /**
+     * Evaluates if the concept provided as one operationParams  belongs to the value set provided as another operationParam.
+     * @param dynamic list of parameters to perform the operation against an external terminology server.
+     * @return true if the concept belongs to the specified value set.
+     */
+    Boolean validate(U... operationParams);
+    /**
+     * Evaluates if the concept B subsumes concept A.
+     * @param concept that is subsumed by the concept in the second param.
+     * @param concept that subsumes the concept in the first param.
+     * @return {@link org.ehrbase.aql.compiler.tsclient.TerminologyServer.SubsumptionResult} indicating the result of the subsumption evaluation.
+     */
+    SubsumptionResult subsumes(T conceptA, T conceptB);
+    /**
+     *
+     * Possible subsumption evaluation results.
+     *
+     */
+<span class="nc" id="L81">    public enum SubsumptionResult {</span>
+<span class="nc" id="L82">        EQUIVALENT,</span>
+<span class="nc" id="L83">        SUBSUMES,</span>
+<span class="nc" id="L84">        SUBSUMEDBY,</span>
+<span class="nc" id="L85">        NOTSUBSUMED;</span>
+    }
+
+<span class="nc" id="L88">    public enum TerminologyAdapter {</span>
+<span class="nc" id="L89">        FHIR(&quot;hl7.org/fhir/R4&quot;),</span>
+<span class="nc" id="L90">        OCEAN(&quot;OTS.OCEANHEALTHSYSTEMS.COM&quot;),</span>
+<span class="nc" id="L91">        BETTER(&quot;bts.better.care&quot;),</span>
+<span class="nc" id="L92">        DTS4(&quot;dts4.apelon.com&quot;),</span>
+<span class="nc" id="L93">        INDIZEN(&quot;cts2.indizen.com&quot;);</span>
+
+        private String adapterId;
+
+        public String getAdapterId() {
+<span class="nc" id="L98">            return adapterId;</span>
+        }
+
+<span class="nc" id="L101">        private static EnumSet&lt;TerminologyAdapter&gt; supportedAdapters = EnumSet.of(FHIR);</span>
+
+<span class="nc" id="L103">        private TerminologyAdapter(String adapterId) {</span>
+<span class="nc" id="L104">            this.adapterId = adapterId;</span>
+<span class="nc" id="L105">        }</span>
+
+        public static boolean isAdapterSupported(String adapterToCheck) {
+<span class="nc bnc" id="L108" title="All 2 branches missed.">            for (TerminologyAdapter ta : supportedAdapters) {</span>
+<span class="nc bnc" id="L109" title="All 2 branches missed.">                if (ta.name().equals(adapterToCheck)) {</span>
+<span class="nc" id="L110">                    return true;</span>
+                }
+<span class="nc" id="L112">            }</span>
+<span class="nc" id="L113">            return false;</span>
+        }
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.7.202105040129</span></div></body></html>

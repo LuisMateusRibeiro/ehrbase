@@ -1,0 +1,109 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../../jacoco-resources/report.gif" type="image/gif"/><title>I_DomainAccess.java</title><link rel="stylesheet" href="../../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../../index.html" class="el_report">Coverage with Unit Tests</a> &gt; <a href="../index.html" class="el_bundle">service</a> &gt; <a href="index.source.html" class="el_package">org.ehrbase.dao.access.interfaces</a> &gt; <span class="el_source">I_DomainAccess.java</span></div><h1>I_DomainAccess.java</h1><pre class="source lang-java linenums">/*
+ * Copyright (c) 2019 vitasystems GmbH and Hannover Medical School.
+ *
+ * This file is part of project EHRbase
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     https://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.ehrbase.dao.access.interfaces;
+
+import java.sql.Connection;
+import org.ehrbase.api.definitions.ServerConfig;
+import org.ehrbase.dao.access.support.DataAccess;
+import org.ehrbase.dao.access.support.ServiceDataAccess;
+import org.ehrbase.ehr.knowledge.I_KnowledgeCache;
+import org.ehrbase.service.IntrospectService;
+import org.jooq.DSLContext;
+import org.jooq.SQLDialect;
+
+/**
+ * Helper to hold SQL context and knowledge cache reference
+ * Created by Christian Chevalley on 4/21/2015.
+ */
+public interface I_DomainAccess {
+
+    String PG_POOL = &quot;PG_POOL&quot;;
+    String DBCP2_POOL = &quot;DBCP2_POOL&quot;;
+    String KEY_MAX_IDLE = &quot;max_idle&quot;;
+    String KEY_MAX_ACTIVE = &quot;max_active&quot;;
+    String KEY_REMOVE_ABANDONNED = &quot;remove_abandonned&quot;;
+    String KEY_REMOVE_ABANDONNED_TIMEOUT = &quot;remove_abandonned_timeout&quot;;
+    String KEY_TEST_ON_BORROW = &quot;test_on_borrow&quot;;
+    String KEY_LOG_ABANDONNED = &quot;log_abandonned&quot;;
+    String KEY_AUTO_RECONNECT = &quot;auto_reconnect&quot;;
+
+    String KEY_DIALECT = &quot;dialect&quot;;
+    String KEY_URL = &quot;url&quot;;
+    String KEY_LOGIN = &quot;login&quot;;
+    String KEY_PASSWORD = &quot;password&quot;;
+    String KEY_KNOWLEDGE = &quot;knowledge&quot;;
+    String KEY_HOST = &quot;host&quot;;
+    String KEY_PORT = &quot;port&quot;;
+    String KEY_MAX_CONNECTION = &quot;max_connection&quot;;
+    String KEY_INITIAL_CONNECTIONS = &quot;initial_connections&quot;;
+    String KEY_CONNECTION_MODE = &quot;connection_mode&quot;;
+    String KEY_DATABASE = &quot;database&quot;;
+    String KEY_WAIT_MS = &quot;wait_milliseconds&quot;;
+    String KEY_SCHEMA = &quot;schema&quot;;
+    String KEY_SET_POOL_PREPARED_STATEMENTS = &quot;set_pool_prepared_statement&quot;;
+    String KEY_SET_MAX_PREPARED_STATEMENTS = &quot;set_max_prepared_statements&quot;;
+    String KEY_INTROSPECT_CACHE = &quot;introspect&quot;;
+
+    static I_DomainAccess getInstance(I_DomainAccess dataAccess) {
+<span class="nc" id="L63">        return new ServiceDataAccess(dataAccess);</span>
+    }
+
+    /**
+     * get jOOQ SQL dialect
+     *
+     * @return SQLDialect
+     * @see org.jooq.SQLDialect
+     */
+    SQLDialect getDialect();
+
+    /**
+     * get the JDBC connection to the DB
+     *
+     * @return Connection
+     * @see java.sql.Connection
+     */
+    Connection getConnection();
+
+    /**
+     * have JOOQ release the DB connection
+     */
+    void releaseConnection(Connection connection);
+
+    /**
+     * get the jOOQ DSL context to perform DB queries
+     *
+     * @return DSLContext
+     * @see org.jooq.DSLContext
+     */
+    DSLContext getContext();
+
+    /**
+     * get the interface to the current knowledge cache
+     *
+     * @return I_KnowledgeCache
+     * @see I_KnowledgeCache
+     */
+    I_KnowledgeCache getKnowledgeManager();
+
+    IntrospectService getIntrospectService();
+
+    ServerConfig getServerConfig();
+
+    DataAccess getDataAccess();
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.7.202105040129</span></div></body></html>

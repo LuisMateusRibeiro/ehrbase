@@ -1,0 +1,160 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../../jacoco-resources/report.gif" type="image/gif"/><title>AuthenticatedExtractionStrategy.java</title><link rel="stylesheet" href="../../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../../index.html" class="el_report">Coverage with Unit Tests</a> &gt; <a href="../index.html" class="el_bundle">service</a> &gt; <a href="index.source.html" class="el_package">org.ehrbase.tenant.extraction</a> &gt; <span class="el_source">AuthenticatedExtractionStrategy.java</span></div><h1>AuthenticatedExtractionStrategy.java</h1><pre class="source lang-java linenums">/*
+ * Copyright (c) 2019 vitasystems GmbH and Hannover Medical School.
+ *
+ * This file is part of project EHRbase
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     https://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.ehrbase.tenant.extraction;
+
+import java.lang.reflect.Method;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.Optional;
+import java.util.function.Predicate;
+import org.apache.commons.lang3.function.TriFunction;
+import org.ehrbase.api.tenant.TenantAuthentication;
+import org.ehrbase.api.tenant.TenantIdExtractionStrategy;
+import org.ehrbase.tenant.DefaultTenantAuthentication;
+import org.ehrbase.tenant.TokenSupport;
+import org.springframework.cglib.proxy.Enhancer;
+import org.springframework.cglib.proxy.MethodInterceptor;
+import org.springframework.cglib.proxy.MethodProxy;
+import org.springframework.security.authentication.AbstractAuthenticationToken;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContext;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.oauth2.core.AbstractOAuth2Token;
+
+// @format:off
+public abstract class AuthenticatedExtractionStrategy&lt;A extends Authentication&gt; implements TenantIdExtractionStrategy&lt;String&gt; {
+
+    static class TenantAuthenticationAdapter implements MethodInterceptor {
+        private static Method tenantIdCall;
+        private static Method defTenantIdCall;
+        private static Method authenticationCall;
+
+        static {
+            try {
+<span class="nc" id="L50">                defTenantIdCall = TenantAuthentication.class.getDeclaredMethod(&quot;getDefaultTenantId&quot;);</span>
+<span class="nc" id="L51">                tenantIdCall = TenantAuthentication.class.getDeclaredMethod(&quot;getTenantId&quot;);</span>
+<span class="nc" id="L52">                authenticationCall = TenantAuthentication.class.getDeclaredMethod(&quot;getAuthentication&quot;);</span>
+<span class="nc" id="L53">            } catch (NoSuchMethodException | SecurityException e) {</span>
+<span class="nc" id="L54">                throw new IllegalStateException(e);</span>
+            }
+<span class="nc" id="L56">        }</span>
+
+        private final Authentication authentication;
+        private final String rawToken;
+        private final String tenantId;
+
+<span class="nc" id="L62">        TenantAuthenticationAdapter(Authentication authentication, String rawToken, String tenantId) {</span>
+<span class="nc" id="L63">            this.authentication = authentication;</span>
+<span class="nc" id="L64">            this.rawToken = rawToken;</span>
+<span class="nc" id="L65">            this.tenantId = tenantId;</span>
+<span class="nc" id="L66">        }</span>
+
+        public Object intercept(Object me, Method method, Object[] args, MethodProxy proxy) throws Throwable {
+<span class="nc bnc" id="L69" title="All 2 branches missed.">            if (TenantAuthenticationAdapter.defTenantIdCall.equals(method))</span>
+<span class="nc" id="L70">                return TenantAuthentication.getDefaultTenantId();</span>
+<span class="nc bnc" id="L71" title="All 2 branches missed.">            else if (TenantAuthenticationAdapter.tenantIdCall.equals(method)) return tenantId;</span>
+<span class="nc bnc" id="L72" title="All 2 branches missed.">            else if (TenantAuthenticationAdapter.authenticationCall.equals(method)) return rawToken;</span>
+<span class="nc" id="L73">            else return method.invoke(authentication, args);</span>
+        }
+    }
+
+    @SuppressWarnings(&quot;unchecked&quot;)
+<span class="nc" id="L78">    private static final TriFunction&lt;Authentication, String, String, TenantAuthentication&lt;String&gt;&gt; TO_AUTH =</span>
+<span class="nc" id="L79">            (Authentication auth, String rawToken, String tenantId) -&gt; {</span>
+<span class="nc" id="L80">                Enhancer enhancer = new Enhancer();</span>
+<span class="nc" id="L81">                enhancer.setSuperclass(AbstractAuthenticationToken.class);</span>
+<span class="nc" id="L82">                enhancer.setInterfaces(new Class[] {TenantAuthentication.class});</span>
+<span class="nc" id="L83">                enhancer.setCallback(new TenantAuthenticationAdapter(auth, rawToken, tenantId));</span>
+<span class="nc" id="L84">                Object created =</span>
+<span class="nc" id="L85">                        enhancer.create(new Class[] {Collection.class}, new Object[] {Collections.emptyList()});</span>
+<span class="nc" id="L86">                return (TenantAuthentication&lt;String&gt;) created;</span>
+<span class="nc" id="L87">            };</span>
+
+    public static class TokenAuthenticatedExtractionStrategy extends AuthenticatedExtractionStrategy&lt;AbstractAuthenticationToken&gt; {
+        public TokenAuthenticatedExtractionStrategy() {
+<span class="nc" id="L91">            super(auth -&gt; auth instanceof AbstractAuthenticationToken);</span>
+<span class="nc" id="L92">        }</span>
+
+        public Optional&lt;TenantAuthentication&lt;String&gt;&gt; extractWithPrior(Optional&lt;TenantAuthentication&lt;?&gt;&gt; priorAuthentication, Object... args) {
+<span class="nc" id="L95">            SecurityContext ctx = SecurityContextHolder.getContext();</span>
+
+<span class="nc bnc" id="L97" title="All 2 branches missed.">            if (ctx.getAuthentication() instanceof AbstractAuthenticationToken auth) {</span>
+<span class="nc bnc" id="L98" title="All 2 branches missed.">                if (auth.getCredentials() instanceof AbstractOAuth2Token token) {</span>
+<span class="nc" id="L99">                    Optional&lt;String&gt; optTenantId = TokenSupport.extractClaim(token.getTokenValue(), DefaultTenantAuthentication.TENANT_CLAIM);</span>
+
+<span class="nc bnc" id="L101" title="All 2 branches missed.">                    if (optTenantId.isPresent())</span>
+<span class="nc" id="L102">                        return Optional.of(TO_AUTH.apply(auth, token.getTokenValue(), optTenantId.get()));</span>
+<span class="nc bnc" id="L103" title="All 2 branches missed.">                    else if (priorAuthentication.isPresent()) {</span>
+                        // try to resolve tenantId from prior authentication
+<span class="nc" id="L105">                        return Optional.of(TO_AUTH.apply(</span>
+<span class="nc" id="L106">                                auth,</span>
+<span class="nc" id="L107">                                token.getTokenValue(),</span>
+<span class="nc" id="L108">                                priorAuthentication.get().getTenantId()));</span>
+<span class="nc" id="L109">                    } else throw new IllegalStateException();</span>
+                } else {
+<span class="nc" id="L111">                    return Optional.empty();</span>
+                }
+<span class="nc" id="L113">            } else throw new IllegalStateException();</span>
+        }
+
+        public int priority() {
+<span class="nc" id="L117">            return 1000;</span>
+        }
+    }
+
+    public static class AuthenticationExtractionStrategy extends AuthenticatedExtractionStrategy&lt;UsernamePasswordAuthenticationToken&gt; {
+        public AuthenticationExtractionStrategy() {
+<span class="nc" id="L123">            super(auth -&gt; auth instanceof UsernamePasswordAuthenticationToken);</span>
+<span class="nc" id="L124">        }</span>
+
+        public Optional&lt;TenantAuthentication&lt;String&gt;&gt; extractWithPrior(Optional&lt;TenantAuthentication&lt;?&gt;&gt; priorAuthentication, Object... args) {
+<span class="nc" id="L127">            SecurityContext ctx = SecurityContextHolder.getContext();</span>
+
+<span class="nc bnc" id="L129" title="All 2 branches missed.">            if (priorAuthentication.isPresent())</span>
+<span class="nc" id="L130">                return Optional.of(TO_AUTH.apply(</span>
+<span class="nc" id="L131">                        ctx.getAuthentication(),</span>
+<span class="nc" id="L132">                        priorAuthentication.get().getAuthentication().toString(),</span>
+<span class="nc" id="L133">                        priorAuthentication.get().getTenantId()));</span>
+<span class="nc" id="L134">            else throw new IllegalStateException();</span>
+        }
+
+        public int priority() {
+<span class="nc" id="L138">            return 900;</span>
+        }
+    }
+
+    private final Predicate&lt;Authentication&gt; predicate;
+
+<span class="nc" id="L144">    protected AuthenticatedExtractionStrategy(Predicate&lt;Authentication&gt; predicate) {</span>
+<span class="nc" id="L145">        this.predicate = predicate;</span>
+<span class="nc" id="L146">    }</span>
+
+    public boolean accept(Object... args) {
+<span class="nc" id="L149">        SecurityContext ctx = SecurityContextHolder.getContext();</span>
+<span class="nc" id="L150">        Authentication theAuthentication = ctx.getAuthentication();</span>
+
+<span class="nc bnc" id="L152" title="All 4 branches missed.">        return null != theAuthentication &amp;&amp; predicate.test(theAuthentication);</span>
+    }
+
+    public Optional&lt;TenantAuthentication&lt;String&gt;&gt; extract(Object... args) {
+<span class="nc" id="L156">        return extract(null, args);</span>
+    }
+}
+// @format:on
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.7.202105040129</span></div></body></html>

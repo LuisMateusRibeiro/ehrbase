@@ -1,0 +1,653 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../../jacoco-resources/report.gif" type="image/gif"/><title>AqlBaseListener.java</title><link rel="stylesheet" href="../../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../../index.html" class="el_report">Overall Coverage</a> &gt; <a href="../index.html" class="el_bundle">service</a> &gt; <a href="index.source.html" class="el_package">org.ehrbase.aql.parser</a> &gt; <span class="el_source">AqlBaseListener.java</span></div><h1>AqlBaseListener.java</h1><pre class="source lang-java linenums">// Generated from java-escape by ANTLR 4.11.1
+package org.ehrbase.aql.parser;
+
+import org.antlr.v4.runtime.ParserRuleContext;
+import org.antlr.v4.runtime.tree.ErrorNode;
+import org.antlr.v4.runtime.tree.TerminalNode;
+
+/**
+ * This class provides an empty implementation of {@link AqlListener},
+ * which can be extended to create a listener which only needs to handle a subset
+ * of the available methods.
+ */
+@SuppressWarnings(&quot;CheckReturnValue&quot;)
+<span class="fc" id="L14">public class AqlBaseListener implements AqlListener {</span>
+	/**
+	 * {@inheritDoc}
+	 *
+	 * &lt;p&gt;The default implementation does nothing.&lt;/p&gt;
+	 */
+<span class="fc" id="L20">	@Override public void enterQuery(AqlParser.QueryContext ctx) { }</span>
+	/**
+	 * {@inheritDoc}
+	 *
+	 * &lt;p&gt;The default implementation does nothing.&lt;/p&gt;
+	 */
+<span class="fc" id="L26">	@Override public void exitQuery(AqlParser.QueryContext ctx) { }</span>
+	/**
+	 * {@inheritDoc}
+	 *
+	 * &lt;p&gt;The default implementation does nothing.&lt;/p&gt;
+	 */
+<span class="fc" id="L32">	@Override public void enterQueryExpr(AqlParser.QueryExprContext ctx) { }</span>
+	/**
+	 * {@inheritDoc}
+	 *
+	 * &lt;p&gt;The default implementation does nothing.&lt;/p&gt;
+	 */
+<span class="fc" id="L38">	@Override public void exitQueryExpr(AqlParser.QueryExprContext ctx) { }</span>
+	/**
+	 * {@inheritDoc}
+	 *
+	 * &lt;p&gt;The default implementation does nothing.&lt;/p&gt;
+	 */
+<span class="fc" id="L44">	@Override public void enterSelect(AqlParser.SelectContext ctx) { }</span>
+	/**
+	 * {@inheritDoc}
+	 *
+	 * &lt;p&gt;The default implementation does nothing.&lt;/p&gt;
+	 */
+<span class="fc" id="L50">	@Override public void exitSelect(AqlParser.SelectContext ctx) { }</span>
+	/**
+	 * {@inheritDoc}
+	 *
+	 * &lt;p&gt;The default implementation does nothing.&lt;/p&gt;
+	 */
+<span class="fc" id="L56">	@Override public void enterTopExpr(AqlParser.TopExprContext ctx) { }</span>
+	/**
+	 * {@inheritDoc}
+	 *
+	 * &lt;p&gt;The default implementation does nothing.&lt;/p&gt;
+	 */
+<span class="fc" id="L62">	@Override public void exitTopExpr(AqlParser.TopExprContext ctx) { }</span>
+	/**
+	 * {@inheritDoc}
+	 *
+	 * &lt;p&gt;The default implementation does nothing.&lt;/p&gt;
+	 */
+<span class="fc" id="L68">	@Override public void enterFunction(AqlParser.FunctionContext ctx) { }</span>
+	/**
+	 * {@inheritDoc}
+	 *
+	 * &lt;p&gt;The default implementation does nothing.&lt;/p&gt;
+	 */
+<span class="fc" id="L74">	@Override public void exitFunction(AqlParser.FunctionContext ctx) { }</span>
+	/**
+	 * {@inheritDoc}
+	 *
+	 * &lt;p&gt;The default implementation does nothing.&lt;/p&gt;
+	 */
+<span class="fc" id="L80">	@Override public void enterCastFunction(AqlParser.CastFunctionContext ctx) { }</span>
+	/**
+	 * {@inheritDoc}
+	 *
+	 * &lt;p&gt;The default implementation does nothing.&lt;/p&gt;
+	 */
+<span class="fc" id="L86">	@Override public void exitCastFunction(AqlParser.CastFunctionContext ctx) { }</span>
+	/**
+	 * {@inheritDoc}
+	 *
+	 * &lt;p&gt;The default implementation does nothing.&lt;/p&gt;
+	 */
+<span class="nc" id="L92">	@Override public void enterExtension(AqlParser.ExtensionContext ctx) { }</span>
+	/**
+	 * {@inheritDoc}
+	 *
+	 * &lt;p&gt;The default implementation does nothing.&lt;/p&gt;
+	 */
+<span class="nc" id="L98">	@Override public void exitExtension(AqlParser.ExtensionContext ctx) { }</span>
+	/**
+	 * {@inheritDoc}
+	 *
+	 * &lt;p&gt;The default implementation does nothing.&lt;/p&gt;
+	 */
+<span class="fc" id="L104">	@Override public void enterWhere(AqlParser.WhereContext ctx) { }</span>
+	/**
+	 * {@inheritDoc}
+	 *
+	 * &lt;p&gt;The default implementation does nothing.&lt;/p&gt;
+	 */
+<span class="fc" id="L110">	@Override public void exitWhere(AqlParser.WhereContext ctx) { }</span>
+	/**
+	 * {@inheritDoc}
+	 *
+	 * &lt;p&gt;The default implementation does nothing.&lt;/p&gt;
+	 */
+<span class="fc" id="L116">	@Override public void enterOrderBy(AqlParser.OrderByContext ctx) { }</span>
+	/**
+	 * {@inheritDoc}
+	 *
+	 * &lt;p&gt;The default implementation does nothing.&lt;/p&gt;
+	 */
+<span class="fc" id="L122">	@Override public void exitOrderBy(AqlParser.OrderByContext ctx) { }</span>
+	/**
+	 * {@inheritDoc}
+	 *
+	 * &lt;p&gt;The default implementation does nothing.&lt;/p&gt;
+	 */
+<span class="fc" id="L128">	@Override public void enterLimit(AqlParser.LimitContext ctx) { }</span>
+	/**
+	 * {@inheritDoc}
+	 *
+	 * &lt;p&gt;The default implementation does nothing.&lt;/p&gt;
+	 */
+<span class="fc" id="L134">	@Override public void exitLimit(AqlParser.LimitContext ctx) { }</span>
+	/**
+	 * {@inheritDoc}
+	 *
+	 * &lt;p&gt;The default implementation does nothing.&lt;/p&gt;
+	 */
+<span class="fc" id="L140">	@Override public void enterOffset(AqlParser.OffsetContext ctx) { }</span>
+	/**
+	 * {@inheritDoc}
+	 *
+	 * &lt;p&gt;The default implementation does nothing.&lt;/p&gt;
+	 */
+<span class="fc" id="L146">	@Override public void exitOffset(AqlParser.OffsetContext ctx) { }</span>
+	/**
+	 * {@inheritDoc}
+	 *
+	 * &lt;p&gt;The default implementation does nothing.&lt;/p&gt;
+	 */
+<span class="fc" id="L152">	@Override public void enterOrderBySeq(AqlParser.OrderBySeqContext ctx) { }</span>
+	/**
+	 * {@inheritDoc}
+	 *
+	 * &lt;p&gt;The default implementation does nothing.&lt;/p&gt;
+	 */
+<span class="fc" id="L158">	@Override public void exitOrderBySeq(AqlParser.OrderBySeqContext ctx) { }</span>
+	/**
+	 * {@inheritDoc}
+	 *
+	 * &lt;p&gt;The default implementation does nothing.&lt;/p&gt;
+	 */
+<span class="fc" id="L164">	@Override public void enterOrderByExpr(AqlParser.OrderByExprContext ctx) { }</span>
+	/**
+	 * {@inheritDoc}
+	 *
+	 * &lt;p&gt;The default implementation does nothing.&lt;/p&gt;
+	 */
+<span class="fc" id="L170">	@Override public void exitOrderByExpr(AqlParser.OrderByExprContext ctx) { }</span>
+	/**
+	 * {@inheritDoc}
+	 *
+	 * &lt;p&gt;The default implementation does nothing.&lt;/p&gt;
+	 */
+<span class="fc" id="L176">	@Override public void enterSelectExpr(AqlParser.SelectExprContext ctx) { }</span>
+	/**
+	 * {@inheritDoc}
+	 *
+	 * &lt;p&gt;The default implementation does nothing.&lt;/p&gt;
+	 */
+<span class="fc" id="L182">	@Override public void exitSelectExpr(AqlParser.SelectExprContext ctx) { }</span>
+	/**
+	 * {@inheritDoc}
+	 *
+	 * &lt;p&gt;The default implementation does nothing.&lt;/p&gt;
+	 */
+<span class="fc" id="L188">	@Override public void enterStdExpression(AqlParser.StdExpressionContext ctx) { }</span>
+	/**
+	 * {@inheritDoc}
+	 *
+	 * &lt;p&gt;The default implementation does nothing.&lt;/p&gt;
+	 */
+<span class="fc" id="L194">	@Override public void exitStdExpression(AqlParser.StdExpressionContext ctx) { }</span>
+	/**
+	 * {@inheritDoc}
+	 *
+	 * &lt;p&gt;The default implementation does nothing.&lt;/p&gt;
+	 */
+<span class="fc" id="L200">	@Override public void enterFrom(AqlParser.FromContext ctx) { }</span>
+	/**
+	 * {@inheritDoc}
+	 *
+	 * &lt;p&gt;The default implementation does nothing.&lt;/p&gt;
+	 */
+<span class="fc" id="L206">	@Override public void exitFrom(AqlParser.FromContext ctx) { }</span>
+	/**
+	 * {@inheritDoc}
+	 *
+	 * &lt;p&gt;The default implementation does nothing.&lt;/p&gt;
+	 */
+<span class="fc" id="L212">	@Override public void enterFromEHR(AqlParser.FromEHRContext ctx) { }</span>
+	/**
+	 * {@inheritDoc}
+	 *
+	 * &lt;p&gt;The default implementation does nothing.&lt;/p&gt;
+	 */
+<span class="fc" id="L218">	@Override public void exitFromEHR(AqlParser.FromEHRContext ctx) { }</span>
+	/**
+	 * {@inheritDoc}
+	 *
+	 * &lt;p&gt;The default implementation does nothing.&lt;/p&gt;
+	 */
+<span class="nc" id="L224">	@Override public void enterFromForeignData(AqlParser.FromForeignDataContext ctx) { }</span>
+	/**
+	 * {@inheritDoc}
+	 *
+	 * &lt;p&gt;The default implementation does nothing.&lt;/p&gt;
+	 */
+<span class="nc" id="L230">	@Override public void exitFromForeignData(AqlParser.FromForeignDataContext ctx) { }</span>
+	/**
+	 * {@inheritDoc}
+	 *
+	 * &lt;p&gt;The default implementation does nothing.&lt;/p&gt;
+	 */
+<span class="nc" id="L236">	@Override public void enterFromExpr(AqlParser.FromExprContext ctx) { }</span>
+	/**
+	 * {@inheritDoc}
+	 *
+	 * &lt;p&gt;The default implementation does nothing.&lt;/p&gt;
+	 */
+<span class="nc" id="L242">	@Override public void exitFromExpr(AqlParser.FromExprContext ctx) { }</span>
+	/**
+	 * {@inheritDoc}
+	 *
+	 * &lt;p&gt;The default implementation does nothing.&lt;/p&gt;
+	 */
+<span class="fc" id="L248">	@Override public void enterContainsExpression(AqlParser.ContainsExpressionContext ctx) { }</span>
+	/**
+	 * {@inheritDoc}
+	 *
+	 * &lt;p&gt;The default implementation does nothing.&lt;/p&gt;
+	 */
+<span class="fc" id="L254">	@Override public void exitContainsExpression(AqlParser.ContainsExpressionContext ctx) { }</span>
+	/**
+	 * {@inheritDoc}
+	 *
+	 * &lt;p&gt;The default implementation does nothing.&lt;/p&gt;
+	 */
+<span class="fc" id="L260">	@Override public void enterContainExpressionBool(AqlParser.ContainExpressionBoolContext ctx) { }</span>
+	/**
+	 * {@inheritDoc}
+	 *
+	 * &lt;p&gt;The default implementation does nothing.&lt;/p&gt;
+	 */
+<span class="fc" id="L266">	@Override public void exitContainExpressionBool(AqlParser.ContainExpressionBoolContext ctx) { }</span>
+	/**
+	 * {@inheritDoc}
+	 *
+	 * &lt;p&gt;The default implementation does nothing.&lt;/p&gt;
+	 */
+<span class="fc" id="L272">	@Override public void enterContains(AqlParser.ContainsContext ctx) { }</span>
+	/**
+	 * {@inheritDoc}
+	 *
+	 * &lt;p&gt;The default implementation does nothing.&lt;/p&gt;
+	 */
+<span class="fc" id="L278">	@Override public void exitContains(AqlParser.ContainsContext ctx) { }</span>
+	/**
+	 * {@inheritDoc}
+	 *
+	 * &lt;p&gt;The default implementation does nothing.&lt;/p&gt;
+	 */
+<span class="fc" id="L284">	@Override public void enterIdentifiedExpr(AqlParser.IdentifiedExprContext ctx) { }</span>
+	/**
+	 * {@inheritDoc}
+	 *
+	 * &lt;p&gt;The default implementation does nothing.&lt;/p&gt;
+	 */
+<span class="fc" id="L290">	@Override public void exitIdentifiedExpr(AqlParser.IdentifiedExprContext ctx) { }</span>
+	/**
+	 * {@inheritDoc}
+	 *
+	 * &lt;p&gt;The default implementation does nothing.&lt;/p&gt;
+	 */
+<span class="fc" id="L296">	@Override public void enterIdentifiedEquality(AqlParser.IdentifiedEqualityContext ctx) { }</span>
+	/**
+	 * {@inheritDoc}
+	 *
+	 * &lt;p&gt;The default implementation does nothing.&lt;/p&gt;
+	 */
+<span class="fc" id="L302">	@Override public void exitIdentifiedEquality(AqlParser.IdentifiedEqualityContext ctx) { }</span>
+	/**
+	 * {@inheritDoc}
+	 *
+	 * &lt;p&gt;The default implementation does nothing.&lt;/p&gt;
+	 */
+<span class="fc" id="L308">	@Override public void enterIdentifiedOperand(AqlParser.IdentifiedOperandContext ctx) { }</span>
+	/**
+	 * {@inheritDoc}
+	 *
+	 * &lt;p&gt;The default implementation does nothing.&lt;/p&gt;
+	 */
+<span class="fc" id="L314">	@Override public void exitIdentifiedOperand(AqlParser.IdentifiedOperandContext ctx) { }</span>
+	/**
+	 * {@inheritDoc}
+	 *
+	 * &lt;p&gt;The default implementation does nothing.&lt;/p&gt;
+	 */
+<span class="fc" id="L320">	@Override public void enterIdentifiedPath(AqlParser.IdentifiedPathContext ctx) { }</span>
+	/**
+	 * {@inheritDoc}
+	 *
+	 * &lt;p&gt;The default implementation does nothing.&lt;/p&gt;
+	 */
+<span class="fc" id="L326">	@Override public void exitIdentifiedPath(AqlParser.IdentifiedPathContext ctx) { }</span>
+	/**
+	 * {@inheritDoc}
+	 *
+	 * &lt;p&gt;The default implementation does nothing.&lt;/p&gt;
+	 */
+<span class="fc" id="L332">	@Override public void enterPredicate(AqlParser.PredicateContext ctx) { }</span>
+	/**
+	 * {@inheritDoc}
+	 *
+	 * &lt;p&gt;The default implementation does nothing.&lt;/p&gt;
+	 */
+<span class="fc" id="L338">	@Override public void exitPredicate(AqlParser.PredicateContext ctx) { }</span>
+	/**
+	 * {@inheritDoc}
+	 *
+	 * &lt;p&gt;The default implementation does nothing.&lt;/p&gt;
+	 */
+<span class="fc" id="L344">	@Override public void enterNodePredicateOr(AqlParser.NodePredicateOrContext ctx) { }</span>
+	/**
+	 * {@inheritDoc}
+	 *
+	 * &lt;p&gt;The default implementation does nothing.&lt;/p&gt;
+	 */
+<span class="fc" id="L350">	@Override public void exitNodePredicateOr(AqlParser.NodePredicateOrContext ctx) { }</span>
+	/**
+	 * {@inheritDoc}
+	 *
+	 * &lt;p&gt;The default implementation does nothing.&lt;/p&gt;
+	 */
+<span class="fc" id="L356">	@Override public void enterNodePredicateAnd(AqlParser.NodePredicateAndContext ctx) { }</span>
+	/**
+	 * {@inheritDoc}
+	 *
+	 * &lt;p&gt;The default implementation does nothing.&lt;/p&gt;
+	 */
+<span class="fc" id="L362">	@Override public void exitNodePredicateAnd(AqlParser.NodePredicateAndContext ctx) { }</span>
+	/**
+	 * {@inheritDoc}
+	 *
+	 * &lt;p&gt;The default implementation does nothing.&lt;/p&gt;
+	 */
+<span class="fc" id="L368">	@Override public void enterNodePredicateComparable(AqlParser.NodePredicateComparableContext ctx) { }</span>
+	/**
+	 * {@inheritDoc}
+	 *
+	 * &lt;p&gt;The default implementation does nothing.&lt;/p&gt;
+	 */
+<span class="fc" id="L374">	@Override public void exitNodePredicateComparable(AqlParser.NodePredicateComparableContext ctx) { }</span>
+	/**
+	 * {@inheritDoc}
+	 *
+	 * &lt;p&gt;The default implementation does nothing.&lt;/p&gt;
+	 */
+<span class="nc" id="L380">	@Override public void enterNodePredicateRegEx(AqlParser.NodePredicateRegExContext ctx) { }</span>
+	/**
+	 * {@inheritDoc}
+	 *
+	 * &lt;p&gt;The default implementation does nothing.&lt;/p&gt;
+	 */
+<span class="nc" id="L386">	@Override public void exitNodePredicateRegEx(AqlParser.NodePredicateRegExContext ctx) { }</span>
+	/**
+	 * {@inheritDoc}
+	 *
+	 * &lt;p&gt;The default implementation does nothing.&lt;/p&gt;
+	 */
+<span class="fc" id="L392">	@Override public void enterMatchesOperand(AqlParser.MatchesOperandContext ctx) { }</span>
+	/**
+	 * {@inheritDoc}
+	 *
+	 * &lt;p&gt;The default implementation does nothing.&lt;/p&gt;
+	 */
+<span class="fc" id="L398">	@Override public void exitMatchesOperand(AqlParser.MatchesOperandContext ctx) { }</span>
+	/**
+	 * {@inheritDoc}
+	 *
+	 * &lt;p&gt;The default implementation does nothing.&lt;/p&gt;
+	 */
+<span class="fc" id="L404">	@Override public void enterValueListItems(AqlParser.ValueListItemsContext ctx) { }</span>
+	/**
+	 * {@inheritDoc}
+	 *
+	 * &lt;p&gt;The default implementation does nothing.&lt;/p&gt;
+	 */
+<span class="fc" id="L410">	@Override public void exitValueListItems(AqlParser.ValueListItemsContext ctx) { }</span>
+	/**
+	 * {@inheritDoc}
+	 *
+	 * &lt;p&gt;The default implementation does nothing.&lt;/p&gt;
+	 */
+<span class="nc" id="L416">	@Override public void enterVersionpredicate(AqlParser.VersionpredicateContext ctx) { }</span>
+	/**
+	 * {@inheritDoc}
+	 *
+	 * &lt;p&gt;The default implementation does nothing.&lt;/p&gt;
+	 */
+<span class="nc" id="L422">	@Override public void exitVersionpredicate(AqlParser.VersionpredicateContext ctx) { }</span>
+	/**
+	 * {@inheritDoc}
+	 *
+	 * &lt;p&gt;The default implementation does nothing.&lt;/p&gt;
+	 */
+<span class="nc" id="L428">	@Override public void enterVersionpredicateOptions(AqlParser.VersionpredicateOptionsContext ctx) { }</span>
+	/**
+	 * {@inheritDoc}
+	 *
+	 * &lt;p&gt;The default implementation does nothing.&lt;/p&gt;
+	 */
+<span class="nc" id="L434">	@Override public void exitVersionpredicateOptions(AqlParser.VersionpredicateOptionsContext ctx) { }</span>
+	/**
+	 * {@inheritDoc}
+	 *
+	 * &lt;p&gt;The default implementation does nothing.&lt;/p&gt;
+	 */
+<span class="fc" id="L440">	@Override public void enterStandardPredicate(AqlParser.StandardPredicateContext ctx) { }</span>
+	/**
+	 * {@inheritDoc}
+	 *
+	 * &lt;p&gt;The default implementation does nothing.&lt;/p&gt;
+	 */
+<span class="fc" id="L446">	@Override public void exitStandardPredicate(AqlParser.StandardPredicateContext ctx) { }</span>
+	/**
+	 * {@inheritDoc}
+	 *
+	 * &lt;p&gt;The default implementation does nothing.&lt;/p&gt;
+	 */
+<span class="nc" id="L452">	@Override public void enterJoinPredicate(AqlParser.JoinPredicateContext ctx) { }</span>
+	/**
+	 * {@inheritDoc}
+	 *
+	 * &lt;p&gt;The default implementation does nothing.&lt;/p&gt;
+	 */
+<span class="nc" id="L458">	@Override public void exitJoinPredicate(AqlParser.JoinPredicateContext ctx) { }</span>
+	/**
+	 * {@inheritDoc}
+	 *
+	 * &lt;p&gt;The default implementation does nothing.&lt;/p&gt;
+	 */
+<span class="fc" id="L464">	@Override public void enterPredicateExpr(AqlParser.PredicateExprContext ctx) { }</span>
+	/**
+	 * {@inheritDoc}
+	 *
+	 * &lt;p&gt;The default implementation does nothing.&lt;/p&gt;
+	 */
+<span class="fc" id="L470">	@Override public void exitPredicateExpr(AqlParser.PredicateExprContext ctx) { }</span>
+	/**
+	 * {@inheritDoc}
+	 *
+	 * &lt;p&gt;The default implementation does nothing.&lt;/p&gt;
+	 */
+<span class="fc" id="L476">	@Override public void enterPredicateAnd(AqlParser.PredicateAndContext ctx) { }</span>
+	/**
+	 * {@inheritDoc}
+	 *
+	 * &lt;p&gt;The default implementation does nothing.&lt;/p&gt;
+	 */
+<span class="fc" id="L482">	@Override public void exitPredicateAnd(AqlParser.PredicateAndContext ctx) { }</span>
+	/**
+	 * {@inheritDoc}
+	 *
+	 * &lt;p&gt;The default implementation does nothing.&lt;/p&gt;
+	 */
+<span class="fc" id="L488">	@Override public void enterPredicateEquality(AqlParser.PredicateEqualityContext ctx) { }</span>
+	/**
+	 * {@inheritDoc}
+	 *
+	 * &lt;p&gt;The default implementation does nothing.&lt;/p&gt;
+	 */
+<span class="fc" id="L494">	@Override public void exitPredicateEquality(AqlParser.PredicateEqualityContext ctx) { }</span>
+	/**
+	 * {@inheritDoc}
+	 *
+	 * &lt;p&gt;The default implementation does nothing.&lt;/p&gt;
+	 */
+<span class="fc" id="L500">	@Override public void enterPredicateOperand(AqlParser.PredicateOperandContext ctx) { }</span>
+	/**
+	 * {@inheritDoc}
+	 *
+	 * &lt;p&gt;The default implementation does nothing.&lt;/p&gt;
+	 */
+<span class="fc" id="L506">	@Override public void exitPredicateOperand(AqlParser.PredicateOperandContext ctx) { }</span>
+	/**
+	 * {@inheritDoc}
+	 *
+	 * &lt;p&gt;The default implementation does nothing.&lt;/p&gt;
+	 */
+<span class="fc" id="L512">	@Override public void enterOperand(AqlParser.OperandContext ctx) { }</span>
+	/**
+	 * {@inheritDoc}
+	 *
+	 * &lt;p&gt;The default implementation does nothing.&lt;/p&gt;
+	 */
+<span class="fc" id="L518">	@Override public void exitOperand(AqlParser.OperandContext ctx) { }</span>
+	/**
+	 * {@inheritDoc}
+	 *
+	 * &lt;p&gt;The default implementation does nothing.&lt;/p&gt;
+	 */
+<span class="nc" id="L524">	@Override public void enterInvokeOperand(AqlParser.InvokeOperandContext ctx) { }</span>
+	/**
+	 * {@inheritDoc}
+	 *
+	 * &lt;p&gt;The default implementation does nothing.&lt;/p&gt;
+	 */
+<span class="nc" id="L530">	@Override public void exitInvokeOperand(AqlParser.InvokeOperandContext ctx) { }</span>
+	/**
+	 * {@inheritDoc}
+	 *
+	 * &lt;p&gt;The default implementation does nothing.&lt;/p&gt;
+	 */
+<span class="nc" id="L536">	@Override public void enterInvokeExpr(AqlParser.InvokeExprContext ctx) { }</span>
+	/**
+	 * {@inheritDoc}
+	 *
+	 * &lt;p&gt;The default implementation does nothing.&lt;/p&gt;
+	 */
+<span class="nc" id="L542">	@Override public void exitInvokeExpr(AqlParser.InvokeExprContext ctx) { }</span>
+	/**
+	 * {@inheritDoc}
+	 *
+	 * &lt;p&gt;The default implementation does nothing.&lt;/p&gt;
+	 */
+<span class="fc" id="L548">	@Override public void enterObjectPath(AqlParser.ObjectPathContext ctx) { }</span>
+	/**
+	 * {@inheritDoc}
+	 *
+	 * &lt;p&gt;The default implementation does nothing.&lt;/p&gt;
+	 */
+<span class="fc" id="L554">	@Override public void exitObjectPath(AqlParser.ObjectPathContext ctx) { }</span>
+	/**
+	 * {@inheritDoc}
+	 *
+	 * &lt;p&gt;The default implementation does nothing.&lt;/p&gt;
+	 */
+<span class="fc" id="L560">	@Override public void enterPathPart(AqlParser.PathPartContext ctx) { }</span>
+	/**
+	 * {@inheritDoc}
+	 *
+	 * &lt;p&gt;The default implementation does nothing.&lt;/p&gt;
+	 */
+<span class="fc" id="L566">	@Override public void exitPathPart(AqlParser.PathPartContext ctx) { }</span>
+	/**
+	 * {@inheritDoc}
+	 *
+	 * &lt;p&gt;The default implementation does nothing.&lt;/p&gt;
+	 */
+<span class="nc" id="L572">	@Override public void enterClassExpr(AqlParser.ClassExprContext ctx) { }</span>
+	/**
+	 * {@inheritDoc}
+	 *
+	 * &lt;p&gt;The default implementation does nothing.&lt;/p&gt;
+	 */
+<span class="nc" id="L578">	@Override public void exitClassExpr(AqlParser.ClassExprContext ctx) { }</span>
+	/**
+	 * {@inheritDoc}
+	 *
+	 * &lt;p&gt;The default implementation does nothing.&lt;/p&gt;
+	 */
+<span class="fc" id="L584">	@Override public void enterSimpleClassExpr(AqlParser.SimpleClassExprContext ctx) { }</span>
+	/**
+	 * {@inheritDoc}
+	 *
+	 * &lt;p&gt;The default implementation does nothing.&lt;/p&gt;
+	 */
+<span class="fc" id="L590">	@Override public void exitSimpleClassExpr(AqlParser.SimpleClassExprContext ctx) { }</span>
+	/**
+	 * {@inheritDoc}
+	 *
+	 * &lt;p&gt;The default implementation does nothing.&lt;/p&gt;
+	 */
+<span class="fc" id="L596">	@Override public void enterArchetypedClassExpr(AqlParser.ArchetypedClassExprContext ctx) { }</span>
+	/**
+	 * {@inheritDoc}
+	 *
+	 * &lt;p&gt;The default implementation does nothing.&lt;/p&gt;
+	 */
+<span class="fc" id="L602">	@Override public void exitArchetypedClassExpr(AqlParser.ArchetypedClassExprContext ctx) { }</span>
+	/**
+	 * {@inheritDoc}
+	 *
+	 * &lt;p&gt;The default implementation does nothing.&lt;/p&gt;
+	 */
+<span class="nc" id="L608">	@Override public void enterVersionedClassExpr(AqlParser.VersionedClassExprContext ctx) { }</span>
+	/**
+	 * {@inheritDoc}
+	 *
+	 * &lt;p&gt;The default implementation does nothing.&lt;/p&gt;
+	 */
+<span class="nc" id="L614">	@Override public void exitVersionedClassExpr(AqlParser.VersionedClassExprContext ctx) { }</span>
+	/**
+	 * {@inheritDoc}
+	 *
+	 * &lt;p&gt;The default implementation does nothing.&lt;/p&gt;
+	 */
+<span class="nc" id="L620">	@Override public void enterVersionClassExpr(AqlParser.VersionClassExprContext ctx) { }</span>
+	/**
+	 * {@inheritDoc}
+	 *
+	 * &lt;p&gt;The default implementation does nothing.&lt;/p&gt;
+	 */
+<span class="nc" id="L626">	@Override public void exitVersionClassExpr(AqlParser.VersionClassExprContext ctx) { }</span>
+
+	/**
+	 * {@inheritDoc}
+	 *
+	 * &lt;p&gt;The default implementation does nothing.&lt;/p&gt;
+	 */
+<span class="fc" id="L633">	@Override public void enterEveryRule(ParserRuleContext ctx) { }</span>
+	/**
+	 * {@inheritDoc}
+	 *
+	 * &lt;p&gt;The default implementation does nothing.&lt;/p&gt;
+	 */
+<span class="fc" id="L639">	@Override public void exitEveryRule(ParserRuleContext ctx) { }</span>
+	/**
+	 * {@inheritDoc}
+	 *
+	 * &lt;p&gt;The default implementation does nothing.&lt;/p&gt;
+	 */
+<span class="fc" id="L645">	@Override public void visitTerminal(TerminalNode node) { }</span>
+	/**
+	 * {@inheritDoc}
+	 *
+	 * &lt;p&gt;The default implementation does nothing.&lt;/p&gt;
+	 */
+<span class="nc" id="L651">	@Override public void visitErrorNode(ErrorNode node) { }</span>
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.7.202105040129</span></div></body></html>

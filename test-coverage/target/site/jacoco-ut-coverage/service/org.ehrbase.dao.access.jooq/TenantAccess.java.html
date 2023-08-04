@@ -1,0 +1,158 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../../jacoco-resources/report.gif" type="image/gif"/><title>TenantAccess.java</title><link rel="stylesheet" href="../../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../../index.html" class="el_report">Coverage with Unit Tests</a> &gt; <a href="../index.html" class="el_bundle">service</a> &gt; <a href="index.source.html" class="el_package">org.ehrbase.dao.access.jooq</a> &gt; <span class="el_source">TenantAccess.java</span></div><h1>TenantAccess.java</h1><pre class="source lang-java linenums">/*
+ * Copyright (c) 2022 vitasystems GmbH and Hannover Medical School.
+ *
+ * This file is part of project EHRbase
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     https://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.ehrbase.dao.access.jooq;
+
+import static org.apache.commons.lang3.StringUtils.isNotBlank;
+import static org.ehrbase.jooq.pg.Tables.TENANT;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
+import java.util.Collections;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.function.Function;
+import java.util.stream.Collectors;
+import java.util.stream.StreamSupport;
+import org.apache.commons.lang3.StringUtils;
+import org.ehrbase.api.exception.InternalServerException;
+import org.ehrbase.api.tenant.Tenant;
+import org.ehrbase.dao.access.interfaces.I_DomainAccess;
+import org.ehrbase.dao.access.interfaces.I_TenantAccess;
+import org.ehrbase.jooq.pg.Routines;
+import org.ehrbase.jooq.pg.Tables;
+import org.ehrbase.jooq.pg.tables.records.AdminDeleteTenantFullRecord;
+import org.ehrbase.jooq.pg.tables.records.TenantRecord;
+import org.ehrbase.openehr.sdk.util.functional.ExceptionalSupplier;
+import org.jooq.DSLContext;
+import org.jooq.JSON;
+import org.jooq.Result;
+
+public class TenantAccess implements I_TenantAccess {
+
+    private final TenantRecord record;
+
+    public TenantAccess(DSLContext ctx, Tenant tenant) {
+<span class="nc" id="L50">        this(ctx, initTenantRec(ctx, tenant));</span>
+<span class="nc" id="L51">    }</span>
+
+<span class="nc" id="L53">    private TenantAccess(DSLContext ctx, TenantRecord rec) {</span>
+<span class="nc" id="L54">        this.record = rec;</span>
+<span class="nc" id="L55">    }</span>
+
+    private static TenantRecord initTenantRec(DSLContext ctx, Tenant tenant) {
+<span class="nc" id="L58">        TenantRecord rec = ctx.newRecord(Tables.TENANT);</span>
+<span class="nc" id="L59">        rec.setTenantId(tenant.getTenantId());</span>
+<span class="nc" id="L60">        rec.setTenantName(tenant.getTenantName());</span>
+<span class="nc" id="L61">        String json = mapToJson.apply(tenant.getTenantProperties());</span>
+<span class="nc bnc" id="L62" title="All 2 branches missed.">        rec.setTenantProperties(isNotBlank(json) ? JSON.json(json) : null);</span>
+<span class="nc" id="L63">        return rec;</span>
+    }
+
+    @Override
+    public Short commit() {
+<span class="nc" id="L68">        record.store();</span>
+<span class="nc" id="L69">        return record.getId();</span>
+    }
+
+    public static List&lt;I_TenantAccess&gt; getAll(DSLContext ctx) {
+<span class="nc" id="L73">        Result&lt;TenantRecord&gt; allRecs = ctx.fetch(Tables.TENANT);</span>
+<span class="nc" id="L74">        return StreamSupport.stream(allRecs.spliterator(), false)</span>
+<span class="nc" id="L75">                .map(rec -&gt; new TenantAccess(ctx, rec))</span>
+<span class="nc" id="L76">                .collect(Collectors.toList());</span>
+    }
+
+    public static I_TenantAccess retrieveInstanceBy(DSLContext ctx, String tenantId) {
+<span class="nc" id="L80">        return Optional.ofNullable(ctx.fetchOne(Tables.TENANT, Tables.TENANT.TENANT_ID.eq(tenantId)))</span>
+<span class="nc" id="L81">                .map(rec -&gt; new TenantAccess(ctx, rec))</span>
+<span class="nc" id="L82">                .orElse(null);</span>
+    }
+
+    public static Map&lt;String, Short&gt; getSysTenants(DSLContext ctx) {
+<span class="nc" id="L86">        return ctx.fetch(Tables.TENANT).stream()</span>
+<span class="nc" id="L87">                .collect(Collectors.toMap(TenantRecord::getTenantId, TenantRecord::getId));</span>
+    }
+
+<span class="nc" id="L90">    private static Function&lt;Map&lt;String, Object&gt;, String&gt; mapToJson = map -&gt; {</span>
+<span class="nc bnc" id="L91" title="All 2 branches missed.">        if (map == null) return null;</span>
+
+<span class="nc" id="L93">        ExceptionalSupplier&lt;String, Exception&gt; sup = () -&gt; new ObjectMapper().writeValueAsString(map);</span>
+<span class="nc" id="L94">        return sup.get();</span>
+    };
+
+    @SuppressWarnings(&quot;unchecked&quot;)
+<span class="nc" id="L98">    private static Function&lt;JSON, Map&lt;String, Object&gt;&gt; jsonToMap = json -&gt; {</span>
+<span class="nc bnc" id="L99" title="All 4 branches missed.">        if (json == null || StringUtils.isEmpty(json.data())) return Collections.emptyMap();</span>
+
+<span class="nc" id="L101">        ExceptionalSupplier&lt;Map&lt;String, Object&gt;, Exception&gt; sup =</span>
+<span class="nc" id="L102">                () -&gt; (Map&lt;String, Object&gt;) new ObjectMapper().readValue(json.data(), Map.class);</span>
+<span class="nc" id="L103">        return sup.get();</span>
+    };
+
+    @Override
+    public Tenant convert() {
+<span class="nc" id="L108">        return new Tenant() {</span>
+            public String getTenantId() {
+<span class="nc" id="L110">                return record.getTenantId();</span>
+            }
+
+            public String getTenantName() {
+<span class="nc" id="L114">                return record.getTenantName();</span>
+            }
+
+            public Map&lt;String, Object&gt; getTenantProperties() {
+<span class="nc" id="L118">                return jsonToMap.apply(record.getTenantProperties());</span>
+            }
+        };
+    }
+
+<span class="nc" id="L123">    private static final String ERR_TENANT_ID = &quot;Updating tenant id[%s] is not allowed&quot;;</span>
+
+    @Override
+    public Tenant update(Tenant tenant) {
+<span class="nc bnc" id="L127" title="All 2 branches missed.">        if (!record.getTenantId().equals(tenant.getTenantId()))</span>
+<span class="nc" id="L128">            throw new InternalServerException(String.format(ERR_TENANT_ID, tenant.getTenantId()));</span>
+
+<span class="nc" id="L130">        record.setTenantName(tenant.getTenantName());</span>
+<span class="nc" id="L131">        String json = mapToJson.apply(tenant.getTenantProperties());</span>
+<span class="nc bnc" id="L132" title="All 2 branches missed.">        record.setTenantProperties(isNotBlank(json) ? JSON.json(json) : null);</span>
+<span class="nc" id="L133">        record.update();</span>
+
+<span class="nc" id="L135">        return convert();</span>
+    }
+
+    public static void deleteTenant(DSLContext ctx, String tenantId) {
+<span class="nc" id="L139">        Result&lt;AdminDeleteTenantFullRecord&gt; result =</span>
+<span class="nc" id="L140">                Routines.adminDeleteTenantFull(ctx.configuration(), getSysTenant(ctx, tenantId));</span>
+
+<span class="nc bnc" id="L142" title="All 4 branches missed.">        if (result.isEmpty() || !Boolean.TRUE.equals(result.get(0).getDeleted())) {</span>
+<span class="nc" id="L143">            throw new InternalServerException(&quot;Deletion of tenant failed!&quot;);</span>
+        }
+<span class="nc" id="L145">    }</span>
+
+    private static Short getSysTenant(DSLContext ctx, String tenantId) {
+<span class="nc" id="L148">        TenantRecord tenantRecord = ctx.fetchOne(TENANT, TENANT.TENANT_ID.eq(tenantId));</span>
+<span class="nc" id="L149">        return Optional.ofNullable(tenantRecord)</span>
+<span class="nc" id="L150">                .map(TenantRecord::getId)</span>
+<span class="nc" id="L151">                .orElseThrow(() -&gt; new InternalServerException(&quot;Tenant System ID cannot be empty/null&quot;));</span>
+    }
+
+    public static boolean hasTenant(I_DomainAccess domainAccess, String tenantId) {
+<span class="nc" id="L155">        return domainAccess.getContext().fetchExists(TENANT, TENANT.TENANT_ID.eq(tenantId));</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.7.202105040129</span></div></body></html>

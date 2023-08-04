@@ -1,0 +1,181 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../../jacoco-resources/report.gif" type="image/gif"/><title>FunctionDefinition.java</title><link rel="stylesheet" href="../../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../../index.html" class="el_report">Overall Coverage</a> &gt; <a href="../index.html" class="el_bundle">service</a> &gt; <a href="index.source.html" class="el_package">org.ehrbase.aql.definition</a> &gt; <span class="el_source">FunctionDefinition.java</span></div><h1>FunctionDefinition.java</h1><pre class="source lang-java linenums">/*
+ * Copyright (c) 2019 vitasystems GmbH and Hannover Medical School.
+ *
+ * This file is part of project EHRbase
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     https://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.ehrbase.aql.definition;
+
+import java.util.List;
+import java.util.Set;
+import org.jooq.DataType;
+
+/**
+ * Created by christian on 9/20/2016.
+ */
+public class FunctionDefinition implements I_VariableDefinition {
+
+    private String identifier;
+    private String alias;
+    private String path;
+    private List&lt;FuncParameter&gt; parameters;
+
+<span class="fc" id="L34">    public FunctionDefinition(String identifier, String alias, String path, List&lt;FuncParameter&gt; parameters) {</span>
+<span class="fc" id="L35">        this.identifier = identifier;</span>
+<span class="fc" id="L36">        this.alias = alias;</span>
+<span class="fc" id="L37">        this.path = path;</span>
+<span class="fc" id="L38">        this.parameters = parameters;</span>
+<span class="fc" id="L39">    }</span>
+
+    @Override
+    public String getAlias() {
+<span class="fc" id="L43">        return alias;</span>
+    }
+
+    @Override
+    public String getPath() {
+<span class="nc" id="L48">        return path;</span>
+    }
+
+    @Override
+    public String getIdentifier() {
+<span class="fc" id="L53">        return identifier;</span>
+    }
+
+    @Override
+    public LateralJoinDefinition getLateralJoinDefinition(String templateId, int index) {
+<span class="nc" id="L58">        return null;</span>
+    }
+
+    @Override
+    public int getLateralJoinsSize(String templateId) {
+<span class="nc" id="L63">        return 0;</span>
+    }
+
+    @Override
+    public boolean isLateralJoinsEmpty(String templateId) {
+<span class="nc" id="L68">        return false;</span>
+    }
+
+    @Override
+    public LateralJoinDefinition getLastLateralJoin(String templateId) {
+<span class="nc" id="L73">        return null;</span>
+    }
+
+    @Override
+    public void setLateralJoinTable(String templateId, LateralJoinDefinition lateralJoinDefinition) {
+        // n/a
+<span class="nc" id="L79">    }</span>
+
+    @Override
+    public boolean isDistinct() {
+<span class="fc" id="L83">        return false;</span>
+    }
+
+    @Override
+    public boolean isFunction() {
+<span class="fc" id="L88">        return true;</span>
+    }
+
+    @Override
+    public boolean isExtension() {
+<span class="nc" id="L93">        return false;</span>
+    }
+
+    @Override
+    public boolean isHidden() {
+<span class="nc" id="L98">        return false;</span>
+    }
+
+    @Override
+    public List&lt;FuncParameter&gt; getFuncParameters() {
+<span class="fc" id="L103">        return parameters;</span>
+    }
+
+    @Override
+    public I_VariableDefinition duplicate() {
+<span class="nc" id="L108">        return new FunctionDefinition(this.identifier, this.alias, this.path, this.parameters);</span>
+    }
+
+    @Override
+    public void setPath(String path) {
+<span class="nc" id="L113">        this.path = path;</span>
+<span class="nc" id="L114">    }</span>
+
+    @Override
+    public void setDistinct(boolean distinct) {
+        // n/a
+<span class="fc" id="L119">    }</span>
+
+    @Override
+    public void setHidden(boolean hidden) {
+        // n/a
+<span class="nc" id="L124">    }</span>
+
+    @Override
+    public void setAlias(String alias) {
+        // n/a
+<span class="nc" id="L129">    }</span>
+
+    @Override
+    public boolean isConstant() {
+<span class="nc" id="L133">        return false;</span>
+    }
+
+    @Override
+    public boolean isLateralJoin(String templateId) {
+<span class="fc" id="L138">        return false;</span>
+    }
+
+    @Override
+    public Set&lt;LateralJoinDefinition&gt; getLateralJoinDefinitions(String templateId) {
+<span class="nc" id="L143">        return null;</span>
+    }
+
+    @Override
+    public PredicateDefinition getPredicateDefinition() {
+<span class="nc" id="L148">        return null;</span>
+    }
+
+    @Override
+    public void setSubstituteFieldVariable(String variableAlias) {
+        // na
+<span class="nc" id="L154">    }</span>
+
+    @Override
+    public String getSubstituteFieldVariable() {
+<span class="nc" id="L158">        return null;</span>
+    }
+
+    @Override
+    public void setSelectType(DataType castTypeAs) {
+        // na
+<span class="nc" id="L164">    }</span>
+
+    @Override
+    public DataType getSelectType() {
+<span class="nc" id="L168">        return null;</span>
+    }
+
+    @Override
+    public boolean isVoidAlias() {
+<span class="nc" id="L173">        return false;</span>
+    }
+
+    @Override
+    public void setVoidAlias(boolean isVoidAlias) {
+        // na
+<span class="nc" id="L179">    }</span>
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.7.202105040129</span></div></body></html>

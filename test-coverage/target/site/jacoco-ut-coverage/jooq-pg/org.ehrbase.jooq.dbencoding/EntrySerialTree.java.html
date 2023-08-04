@@ -1,0 +1,236 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../../jacoco-resources/report.gif" type="image/gif"/><title>EntrySerialTree.java</title><link rel="stylesheet" href="../../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../../index.html" class="el_report">Coverage with Unit Tests</a> &gt; <a href="../index.html" class="el_bundle">jooq-pg</a> &gt; <a href="index.source.html" class="el_package">org.ehrbase.jooq.dbencoding</a> &gt; <span class="el_source">EntrySerialTree.java</span></div><h1>EntrySerialTree.java</h1><pre class="source lang-java linenums">/*
+ * Copyright (c) 2020 vitasystems GmbH and Hannover Medical School.
+ *
+ * This file is part of project EHRbase
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     https://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.ehrbase.jooq.dbencoding;
+
+import com.nedap.archie.rm.composition.*;
+import com.nedap.archie.rm.datastructures.Event;
+import com.nedap.archie.rm.datastructures.History;
+import java.util.Map;
+
+/** Used to insert Entry specific attributes in the encoded map. */
+public class EntrySerialTree extends SerialTree {
+
+    private final CompositionSerializer.WalkerOutputMode tagMode;
+
+    public EntrySerialTree(Map&lt;String, Object&gt; map, CompositionSerializer.WalkerOutputMode tagMode) {
+<span class="fc" id="L31">        super(map);</span>
+<span class="fc" id="L32">        this.tagMode = tagMode;</span>
+<span class="fc" id="L33">    }</span>
+
+    public Map&lt;String, Object&gt; insert(Composition composition, String attribute, Object addStructure) {
+        Map&lt;String, Object&gt; retMap;
+<span class="pc bpc" id="L37" title="1 of 2 branches missed.">        switch (attribute) {</span>
+            case CompositionSerializer.TAG_COMPOSITION:
+<span class="fc" id="L39">                retMap = super.insert(</span>
+                        composition,
+<span class="fc" id="L41">                        new NodeEncoding(tagMode).tag(CompositionSerializer.TAG_COMPOSITION, composition, map),</span>
+                        addStructure);
+<span class="fc" id="L43">                break;</span>
+            default:
+<span class="nc" id="L45">                retMap = map;</span>
+        }
+
+<span class="fc" id="L48">        return retMap;</span>
+    }
+
+    public Map&lt;String, Object&gt; insert(ContentItem contentItem, String attribute, Object addStructure) {
+        Map&lt;String, Object&gt; retMap;
+<span class="pc bpc" id="L53" title="1 of 2 branches missed.">        switch (attribute) {</span>
+            case CompositionSerializer.TAG_CONTENT:
+<span class="pc bpc" id="L55" title="2 of 4 branches missed.">                if (addStructure != null &amp;&amp; !((Map) addStructure).containsKey(CompositionSerializer.TAG_NAME))</span>
+<span class="nc" id="L56">                    ((Map) addStructure)</span>
+<span class="nc" id="L57">                            .put(</span>
+                                    CompositionSerializer.TAG_NAME,
+<span class="nc" id="L59">                                    new NameAsDvText(contentItem.getName())</span>
+<span class="nc" id="L60">                                            .toMap()); // this fixes the issue with SECTION name</span>
+<span class="fc" id="L61">                retMap = super.insert(</span>
+                        contentItem,
+<span class="fc" id="L63">                        new NodeEncoding(tagMode).tag(CompositionSerializer.TAG_CONTENT, contentItem, map),</span>
+                        addStructure);
+<span class="fc" id="L65">                break;</span>
+            default:
+<span class="nc" id="L67">                retMap = map;</span>
+        }
+
+<span class="fc" id="L70">        return retMap;</span>
+    }
+
+    public Map&lt;String, Object&gt; insert(Observation observation, String attribute, Object addStructure) {
+        Map&lt;String, Object&gt; retMap;
+<span class="pc bpc" id="L75" title="2 of 4 branches missed.">        switch (attribute) {</span>
+            case CompositionSerializer.TAG_PROTOCOL:
+<span class="fc" id="L77">                retMap = super.insert(</span>
+                        observation,
+                        new NodeEncoding(tagMode)
+<span class="fc" id="L80">                                .tag(CompositionSerializer.TAG_PROTOCOL, observation.getProtocol(), map),</span>
+                        addStructure);
+<span class="fc" id="L82">                break;</span>
+            case CompositionSerializer.TAG_DATA:
+<span class="fc" id="L84">                retMap = super.insert(</span>
+                        observation,
+<span class="fc" id="L86">                        new NodeEncoding(tagMode).tag(CompositionSerializer.TAG_DATA, observation.getData(), map),</span>
+                        addStructure);
+<span class="fc" id="L88">                break;</span>
+            case CompositionSerializer.TAG_STATE:
+<span class="nc" id="L90">                retMap = super.insert(</span>
+                        observation,
+<span class="nc" id="L92">                        new NodeEncoding(tagMode).tag(CompositionSerializer.TAG_STATE, observation.getState(), map),</span>
+                        addStructure);
+<span class="nc" id="L94">                break;</span>
+            default:
+<span class="nc" id="L96">                retMap = map;</span>
+        }
+
+<span class="fc" id="L99">        return retMap;</span>
+    }
+
+    public Map&lt;String, Object&gt; insert(Evaluation evaluation, String attribute, Object addStructure) {
+        Map&lt;String, Object&gt; retMap;
+<span class="pc bpc" id="L104" title="1 of 3 branches missed.">        switch (attribute) {</span>
+            case CompositionSerializer.TAG_PROTOCOL:
+<span class="fc" id="L106">                retMap = super.insert(</span>
+                        evaluation,
+                        new NodeEncoding(tagMode)
+<span class="fc" id="L109">                                .tag(CompositionSerializer.TAG_PROTOCOL, evaluation.getProtocol(), map),</span>
+                        addStructure);
+<span class="fc" id="L111">                break;</span>
+            case CompositionSerializer.TAG_DATA:
+<span class="fc" id="L113">                retMap = super.insert(</span>
+                        evaluation,
+<span class="fc" id="L115">                        new NodeEncoding(tagMode).tag(CompositionSerializer.TAG_DATA, evaluation.getData(), map),</span>
+                        addStructure);
+<span class="fc" id="L117">                break;</span>
+            default:
+<span class="nc" id="L119">                retMap = map;</span>
+        }
+
+<span class="fc" id="L122">        return retMap;</span>
+    }
+
+    public Map&lt;String, Object&gt; insert(Instruction instruction, String attribute, Object addStructure) {
+        Map&lt;String, Object&gt; retMap;
+<span class="pc bpc" id="L127" title="2 of 3 branches missed.">        switch (attribute) {</span>
+            case CompositionSerializer.TAG_PROTOCOL:
+<span class="nc" id="L129">                retMap = super.insert(</span>
+                        instruction,
+                        new NodeEncoding(tagMode)
+<span class="nc" id="L132">                                .tag(CompositionSerializer.TAG_PROTOCOL, instruction.getProtocol(), map),</span>
+                        addStructure);
+<span class="nc" id="L134">                break;</span>
+            case CompositionSerializer.TAG_ACTIVITIES:
+<span class="fc" id="L136">                retMap = super.insert(instruction, CompositionSerializer.TAG_ACTIVITIES, addStructure);</span>
+<span class="fc" id="L137">                break;</span>
+            default:
+<span class="nc" id="L139">                retMap = map;</span>
+        }
+
+<span class="fc" id="L142">        return retMap;</span>
+    }
+
+    public Map&lt;String, Object&gt; insert(Activity activity, String attribute, Object addStructure) {
+        Map&lt;String, Object&gt; retMap;
+<span class="pc bpc" id="L147" title="1 of 3 branches missed.">        switch (attribute) {</span>
+            case CompositionSerializer.TAG_ACTIVITIES:
+<span class="fc" id="L149">                retMap = super.insert(</span>
+                        activity,
+<span class="fc" id="L151">                        new NodeEncoding(tagMode).tag(CompositionSerializer.TAG_ACTIVITIES, activity, map),</span>
+                        addStructure);
+<span class="fc" id="L153">                break;</span>
+            case CompositionSerializer.TAG_DESCRIPTION:
+<span class="fc" id="L155">                retMap = super.insert(</span>
+                        activity,
+                        new NodeEncoding(tagMode)
+<span class="fc" id="L158">                                .tag(CompositionSerializer.TAG_DESCRIPTION, activity.getDescription(), map),</span>
+                        addStructure);
+<span class="fc" id="L160">                break;</span>
+
+            default:
+<span class="nc" id="L163">                retMap = map;</span>
+        }
+
+<span class="fc" id="L166">        return retMap;</span>
+    }
+
+    public Map&lt;String, Object&gt; insert(Action action, String attribute, Object addStructure) {
+        Map&lt;String, Object&gt; retMap;
+<span class="pc bpc" id="L171" title="1 of 3 branches missed.">        switch (attribute) {</span>
+            case CompositionSerializer.TAG_PROTOCOL:
+<span class="fc" id="L173">                retMap = super.insert(</span>
+                        action,
+<span class="fc" id="L175">                        new NodeEncoding(tagMode).tag(CompositionSerializer.TAG_PROTOCOL, action.getProtocol(), map),</span>
+                        addStructure);
+<span class="fc" id="L177">                break;</span>
+            case CompositionSerializer.TAG_DESCRIPTION:
+<span class="fc" id="L179">                retMap = super.insert(</span>
+                        action,
+                        new NodeEncoding(tagMode)
+<span class="fc" id="L182">                                .tag(CompositionSerializer.TAG_DESCRIPTION, action.getDescription(), map),</span>
+                        addStructure);
+<span class="fc" id="L184">                break;</span>
+            default:
+<span class="nc" id="L186">                retMap = map;</span>
+        }
+
+<span class="fc" id="L189">        return retMap;</span>
+    }
+
+    public Map&lt;String, Object&gt; insert(History&lt;?&gt; history, String attribute, Object addStructure) {
+        Map&lt;String, Object&gt; retMap;
+<span class="pc bpc" id="L194" title="2 of 3 branches missed.">        switch (attribute) {</span>
+            case CompositionSerializer.TAG_SUMMARY:
+<span class="nc" id="L196">                retMap = super.insert(</span>
+                        history,
+<span class="nc" id="L198">                        new NodeEncoding(tagMode).tag(CompositionSerializer.TAG_SUMMARY, history, map),</span>
+                        addStructure);
+<span class="nc" id="L200">                break;</span>
+            case CompositionSerializer.TAG_EVENTS:
+<span class="fc" id="L202">                retMap = super.insert(</span>
+                        history,
+<span class="fc" id="L204">                        new NodeEncoding(tagMode).tag(CompositionSerializer.TAG_EVENTS, null, map),</span>
+                        addStructure);
+<span class="fc" id="L206">                break;</span>
+            default:
+<span class="nc" id="L208">                retMap = map;</span>
+        }
+
+<span class="fc" id="L211">        return retMap;</span>
+    }
+
+    public Map&lt;String, Object&gt; insert(Event&lt;?&gt; event, String attribute, Object addStructure) {
+        Map&lt;String, Object&gt; retMap;
+<span class="pc bpc" id="L216" title="1 of 3 branches missed.">        switch (attribute) {</span>
+            case CompositionSerializer.TAG_DATA:
+<span class="fc" id="L218">                retMap = super.insert(</span>
+                        event,
+<span class="fc" id="L220">                        new NodeEncoding(tagMode).tag(CompositionSerializer.TAG_DATA, event.getData(), map),</span>
+                        addStructure);
+<span class="fc" id="L222">                break;</span>
+            case CompositionSerializer.TAG_STATE:
+<span class="fc" id="L224">                retMap = super.insert(</span>
+                        event,
+<span class="fc" id="L226">                        new NodeEncoding(tagMode).tag(CompositionSerializer.TAG_STATE, event.getState(), map),</span>
+                        addStructure);
+<span class="fc" id="L228">                break;</span>
+            default:
+<span class="nc" id="L230">                retMap = map;</span>
+        }
+
+<span class="fc" id="L233">        return retMap;</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.7.202105040129</span></div></body></html>

@@ -1,0 +1,181 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../../jacoco-resources/report.gif" type="image/gif"/><title>I_KnowledgeCache.java</title><link rel="stylesheet" href="../../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../../index.html" class="el_report">Coverage with Unit Tests</a> &gt; <a href="../index.html" class="el_bundle">service</a> &gt; <a href="index.source.html" class="el_package">org.ehrbase.ehr.knowledge</a> &gt; <span class="el_source">I_KnowledgeCache.java</span></div><h1>I_KnowledgeCache.java</h1><pre class="source lang-java linenums">/*
+ * Copyright (c) 2019 vitasystems GmbH and Hannover Medical School.
+ *
+ * This file is part of project EHRbase
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     https://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.ehrbase.ehr.knowledge;
+
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.Serializable;
+import java.util.Collection;
+import java.util.List;
+import java.util.Optional;
+import java.util.Set;
+import java.util.UUID;
+import java.util.function.BiFunction;
+import java.util.function.Function;
+import org.ehrbase.api.exception.InternalServerException;
+import org.ehrbase.api.exception.InvalidApiParameterException;
+import org.ehrbase.api.exception.StateConflictException;
+import org.ehrbase.aql.containment.JsonPathQueryResult;
+import org.ehrbase.openehr.sdk.webtemplate.parser.NodeId;
+import org.openehr.schemas.v1.OPERATIONALTEMPLATE;
+
+public interface I_KnowledgeCache {
+
+    String TEMPLATE_ID = &quot;templateId&quot;;
+
+    Set&lt;String&gt; getAllTemplateIds();
+
+    /**
+     * Adds operational template to system and also in current cache.
+     *
+     * @param content operational template input
+     * @return resulting template ID, when successful
+     * @throws InvalidApiParameterException when input can't be pared to OPT instance
+     * @throws StateConflictException       when template with same template ID is already in the system
+     * @throws InternalServerException      when an unspecified problem occurs
+     */
+    String addOperationalTemplate(InputStream content);
+
+    String addOperationalTemplate(OPERATIONALTEMPLATE template);
+
+    List&lt;TemplateMetaData&gt; listAllOperationalTemplates() throws IOException;
+
+    /**
+     * retrieve an operational template document instance
+     *
+     * @param key the name of the operational template
+     * @return an OPERATIONALTEMPLATE document instance or null
+     * @see org.openehr.schemas.v1.OPERATIONALTEMPLATE
+     */
+    Optional&lt;OPERATIONALTEMPLATE&gt; retrieveOperationalTemplate(String key);
+
+    /**
+     * retrieve a &lt;b&gt;cached&lt;/b&gt; operational template document instance using its unique Id
+     *
+     * @param uuid the name of the operational template
+     * @return an OPERATIONALTEMPLATE document instance or null
+     * @throws Exception
+     * @see org.openehr.schemas.v1.OPERATIONALTEMPLATE
+     */
+    Optional&lt;OPERATIONALTEMPLATE&gt; retrieveOperationalTemplate(UUID uuid);
+
+    /**
+     * Deletes a given operational template physically from cache and from template storage and from cache. Should only
+     * be executed if the template is no longer referenced by any Composition. Make sure you check for references before
+     * deleting a template otherwise this causes inconsistencies and no longer deliverable Composition entries.
+     *
+     * @param template - The template instance to delete
+     * @return - Template has been deleted
+     */
+    boolean deleteOperationalTemplate(OPERATIONALTEMPLATE template);
+
+    JsonPathQueryResult resolveForTemplate(String templateId, Collection&lt;NodeId&gt; jsonQueryExpression);
+
+    ConceptValue getConceptByConceptId(int code, String language, BiFunction&lt;Integer, String, ConceptValue&gt; provider);
+
+    ConceptValue getConceptById(UUID uuid, Function&lt;UUID, ConceptValue&gt; provider);
+
+    ConceptValue getConceptByDescription(
+            String description, String language, BiFunction&lt;String, String, ConceptValue&gt; provider);
+
+    TerritoryValue getTerritoryCodeByTwoLetterCode(String territoryAsString, Function&lt;String, TerritoryValue&gt; provider);
+
+    LanguageValue getLanguageByCode(String languageCode, Function&lt;String, LanguageValue&gt; provider);
+
+    class ConceptValue implements Serializable {
+
+        private final UUID id;
+        private final int conceptId;
+        private final String description;
+        private final String language;
+
+<span class="nc" id="L107">        public ConceptValue(UUID id, int conceptId, String description, String language) {</span>
+<span class="nc" id="L108">            this.id = id;</span>
+<span class="nc" id="L109">            this.conceptId = conceptId;</span>
+<span class="nc" id="L110">            this.description = description;</span>
+<span class="nc" id="L111">            this.language = language;</span>
+<span class="nc" id="L112">        }</span>
+
+        public UUID getId() {
+<span class="nc" id="L115">            return id;</span>
+        }
+
+        public int getConceptId() {
+<span class="nc" id="L119">            return conceptId;</span>
+        }
+
+        public String getDescription() {
+<span class="nc" id="L123">            return description;</span>
+        }
+
+        public String getLanguage() {
+<span class="nc" id="L127">            return language;</span>
+        }
+    }
+
+    class LanguageValue implements Serializable {
+
+        private final String code;
+        private final String description;
+
+<span class="nc" id="L136">        public LanguageValue(String code, String description) {</span>
+<span class="nc" id="L137">            this.code = code;</span>
+<span class="nc" id="L138">            this.description = description;</span>
+<span class="nc" id="L139">        }</span>
+
+        public String getCode() {
+<span class="nc" id="L142">            return code;</span>
+        }
+
+        public String getDescription() {
+<span class="nc" id="L146">            return description;</span>
+        }
+    }
+
+    class TerritoryValue implements Serializable {
+
+        private final int code;
+        private final String twoletter;
+        private final String threeletter;
+        private final String text;
+
+<span class="nc" id="L157">        public TerritoryValue(int code, String twoletter, String threeletter, String text) {</span>
+<span class="nc" id="L158">            this.code = code;</span>
+<span class="nc" id="L159">            this.twoletter = twoletter;</span>
+<span class="nc" id="L160">            this.threeletter = threeletter;</span>
+<span class="nc" id="L161">            this.text = text;</span>
+<span class="nc" id="L162">        }</span>
+
+        public int getCode() {
+<span class="nc" id="L165">            return code;</span>
+        }
+
+        public String getTwoletter() {
+<span class="nc" id="L169">            return twoletter;</span>
+        }
+
+        public String getThreeletter() {
+<span class="nc" id="L173">            return threeletter;</span>
+        }
+
+        public String getText() {
+<span class="nc" id="L177">            return text;</span>
+        }
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.7.202105040129</span></div></body></html>

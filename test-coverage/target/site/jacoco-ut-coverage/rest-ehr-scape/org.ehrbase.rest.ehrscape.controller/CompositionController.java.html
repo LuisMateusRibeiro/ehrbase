@@ -1,0 +1,232 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../../jacoco-resources/report.gif" type="image/gif"/><title>CompositionController.java</title><link rel="stylesheet" href="../../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../../index.html" class="el_report">Coverage with Unit Tests</a> &gt; <a href="../index.html" class="el_bundle">rest-ehr-scape</a> &gt; <a href="index.source.html" class="el_package">org.ehrbase.rest.ehrscape.controller</a> &gt; <span class="el_source">CompositionController.java</span></div><h1>CompositionController.java</h1><pre class="source lang-java linenums">/*
+ * Copyright (c) 2019 vitasystems GmbH and Hannover Medical School.
+ *
+ * This file is part of project EHRbase
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     https://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.ehrbase.rest.ehrscape.controller;
+
+import static org.ehrbase.rest.ehrscape.controller.BaseController.API_ECIS_CONTEXT_PATH_WITH_VERSION;
+
+import com.nedap.archie.rm.support.identification.ObjectVersionId;
+import java.net.URI;
+import java.util.Objects;
+import java.util.Optional;
+import java.util.UUID;
+import org.apache.commons.lang3.StringUtils;
+import org.ehrbase.api.annotations.TenantAware;
+import org.ehrbase.api.authorization.EhrbaseAuthorization;
+import org.ehrbase.api.authorization.EhrbasePermission;
+import org.ehrbase.api.exception.InternalServerException;
+import org.ehrbase.api.exception.InvalidApiParameterException;
+import org.ehrbase.api.service.CompositionService;
+import org.ehrbase.openehr.sdk.response.dto.ehrscape.CompositionDto;
+import org.ehrbase.openehr.sdk.response.dto.ehrscape.CompositionFormat;
+import org.ehrbase.openehr.sdk.response.dto.ehrscape.StructuredString;
+import org.ehrbase.rest.ehrscape.responsedata.Action;
+import org.ehrbase.rest.ehrscape.responsedata.ActionRestResponseData;
+import org.ehrbase.rest.ehrscape.responsedata.CompositionResponseData;
+import org.ehrbase.rest.ehrscape.responsedata.CompositionWriteRestResponseData;
+import org.ehrbase.rest.ehrscape.responsedata.Meta;
+import org.ehrbase.rest.ehrscape.responsedata.RestHref;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
+
+@TenantAware
+@RestController
+@RequestMapping(
+        path = API_ECIS_CONTEXT_PATH_WITH_VERSION + &quot;/&quot; + BaseController.COMPOSITION,
+        produces = {MediaType.APPLICATION_JSON_VALUE, MediaType.APPLICATION_XML_VALUE})
+public class CompositionController extends BaseController {
+
+    private final CompositionService compositionService;
+
+<span class="nc" id="L64">    public CompositionController(CompositionService compositionService) {</span>
+<span class="nc" id="L65">        this.compositionService = Objects.requireNonNull(compositionService);</span>
+<span class="nc" id="L66">    }</span>
+
+    @EhrbaseAuthorization(permission = EhrbasePermission.EHRBASE_COMPOSITION_CREATE)
+    @PostMapping
+    public ResponseEntity&lt;CompositionWriteRestResponseData&gt; createComposition(
+            @RequestParam(value = &quot;format&quot;, defaultValue = &quot;XML&quot;) CompositionFormat format,
+            @RequestParam(value = &quot;templateId&quot;, required = false) String templateId,
+            @RequestParam(value = &quot;ehrId&quot;) UUID ehrId,
+            @RequestBody String content) {
+
+<span class="nc bnc" id="L76" title="All 6 branches missed.">        if ((format == CompositionFormat.FLAT</span>
+                        || format == CompositionFormat.STRUCTURED
+                        || format == CompositionFormat.ECISFLAT)
+<span class="nc bnc" id="L79" title="All 2 branches missed.">                &amp;&amp; StringUtils.isEmpty(templateId)) {</span>
+<span class="nc" id="L80">            throw new InvalidApiParameterException(</span>
+<span class="nc" id="L81">                    String.format(&quot;Template Id needs to specified for format %s&quot;, format));</span>
+        }
+
+<span class="nc" id="L84">        var composition = compositionService.buildComposition(content, format, templateId);</span>
+<span class="nc" id="L85">        var compositionUuid = compositionService</span>
+<span class="nc" id="L86">                .create(ehrId, composition)</span>
+<span class="nc" id="L87">                .orElseThrow(() -&gt; new InternalServerException(&quot;Failed to create composition&quot;));</span>
+
+<span class="nc" id="L89">        var responseData = new CompositionWriteRestResponseData();</span>
+<span class="nc" id="L90">        responseData.setAction(Action.CREATE);</span>
+<span class="nc" id="L91">        responseData.setCompositionUid(</span>
+<span class="nc" id="L92">                compositionUuid + &quot;::&quot; + compositionService.getServerConfig().getNodename() + &quot;::&quot; + 1);</span>
+<span class="nc" id="L93">        responseData.setMeta(buildMeta(responseData.getCompositionUid()));</span>
+
+<span class="nc" id="L95">        return ResponseEntity.created(</span>
+<span class="nc" id="L96">                        URI.create(responseData.getMeta().getHref().getUrl()))</span>
+<span class="nc" id="L97">                .body(responseData);</span>
+    }
+
+    @EhrbaseAuthorization(permission = EhrbasePermission.EHRBASE_COMPOSITION_READ)
+    @GetMapping(path = &quot;/{uid}&quot;)
+    public ResponseEntity&lt;CompositionResponseData&gt; getComposition(
+            @PathVariable(&quot;uid&quot;) String compositionUid,
+            @RequestParam(value = &quot;format&quot;, defaultValue = &quot;XML&quot;) CompositionFormat format) {
+<span class="nc" id="L105">        UUID identifier = getCompositionIdentifier(compositionUid);</span>
+<span class="nc" id="L106">        Integer version = null;</span>
+
+<span class="nc bnc" id="L108" title="All 2 branches missed.">        if (isFullCompositionUid(compositionUid)) {</span>
+<span class="nc" id="L109">            version = getCompositionVersion(compositionUid); // version number is inorder: 1, 2, 3 etc.</span>
+        }
+
+<span class="nc" id="L112">        UUID ehrId = compositionService.getEhrId(identifier);</span>
+<span class="nc" id="L113">        Optional&lt;CompositionDto&gt; compositionDto =</span>
+<span class="nc" id="L114">                compositionService.retrieve(ehrId, identifier, version).map(c -&gt; CompositionService.from(ehrId, c));</span>
+<span class="nc bnc" id="L115" title="All 2 branches missed.">        if (compositionDto.isPresent()) {</span>
+
+            // Serialize onto target format
+<span class="nc" id="L118">            StructuredString serialize = compositionService.serialize(compositionDto.get(), format);</span>
+
+<span class="nc" id="L120">            CompositionResponseData responseDto = new CompositionResponseData();</span>
+<span class="nc" id="L121">            responseDto.setComposition(serialize);</span>
+<span class="nc" id="L122">            responseDto.setAction(Action.RETRIEVE);</span>
+<span class="nc" id="L123">            responseDto.setFormat(format);</span>
+<span class="nc" id="L124">            responseDto.setTemplateId(compositionDto.get().getTemplateId());</span>
+<span class="nc" id="L125">            String fullUid = compositionDto.get().getUuid() + &quot;::&quot;</span>
+<span class="nc" id="L126">                    + compositionService.getServerConfig().getNodename() + &quot;::&quot;</span>
+<span class="nc" id="L127">                    + compositionService.getLastVersionNumber(</span>
+<span class="nc" id="L128">                            compositionDto.get().getUuid());</span>
+<span class="nc" id="L129">            responseDto.setCompositionUid(fullUid);</span>
+<span class="nc" id="L130">            responseDto.setEhrId(compositionDto.get().getEhrId());</span>
+<span class="nc" id="L131">            Meta meta = buildMeta(responseDto.getCompositionUid());</span>
+<span class="nc" id="L132">            responseDto.setMeta(meta);</span>
+<span class="nc" id="L133">            return ResponseEntity.ok(responseDto);</span>
+        } else {
+<span class="nc" id="L135">            return ResponseEntity.notFound().build();</span>
+        }
+    }
+
+    @EhrbaseAuthorization(permission = EhrbasePermission.EHRBASE_COMPOSITION_UPDATE)
+    @PutMapping(path = &quot;/{uid}&quot;)
+    public ResponseEntity&lt;ActionRestResponseData&gt; update(
+            @PathVariable(&quot;uid&quot;) String compositionUid,
+            @RequestParam(value = &quot;format&quot;, defaultValue = &quot;XML&quot;) CompositionFormat format,
+            @RequestParam(value = &quot;templateId&quot;, required = false) String templateId,
+            @RequestBody String content) {
+
+<span class="nc bnc" id="L147" title="All 6 branches missed.">        if ((format == CompositionFormat.FLAT</span>
+                        || format == CompositionFormat.STRUCTURED
+                        || format == CompositionFormat.ECISFLAT)
+<span class="nc bnc" id="L150" title="All 2 branches missed.">                &amp;&amp; StringUtils.isEmpty(templateId)) {</span>
+<span class="nc" id="L151">            throw new InvalidApiParameterException(</span>
+<span class="nc" id="L152">                    String.format(&quot;Template Id needs to specified for format %s&quot;, format));</span>
+        }
+
+<span class="nc" id="L155">        ObjectVersionId objectVersionId = getObjectVersionId(compositionUid);</span>
+<span class="nc" id="L156">        UUID compositionIdentifier = getCompositionIdentifier(compositionUid);</span>
+<span class="nc" id="L157">        UUID ehrId = compositionService.getEhrId(compositionIdentifier);</span>
+
+<span class="nc" id="L159">        var compoObj = compositionService.buildComposition(content, format, templateId);</span>
+
+        // Actual update
+<span class="nc" id="L162">        Optional&lt;UUID&gt; dtoOptional = compositionService.update(ehrId, objectVersionId, compoObj);</span>
+
+<span class="nc" id="L164">        var compositionVersionUid = dtoOptional</span>
+<span class="nc" id="L165">                .orElseThrow(() -&gt; new InternalServerException(&quot;Failed to create composition&quot;))</span>
+<span class="nc" id="L166">                .toString();</span>
+<span class="nc" id="L167">        ActionRestResponseData responseData = new ActionRestResponseData();</span>
+<span class="nc" id="L168">        responseData.setAction(Action.UPDATE);</span>
+<span class="nc" id="L169">        responseData.setMeta(buildMeta(compositionVersionUid));</span>
+<span class="nc" id="L170">        return ResponseEntity.ok(responseData);</span>
+    }
+
+    @EhrbaseAuthorization(permission = EhrbasePermission.EHRBASE_COMPOSITION_DELETE)
+    @DeleteMapping(path = &quot;/{uid}&quot;)
+    public ResponseEntity&lt;ActionRestResponseData&gt; delete(@PathVariable(&quot;uid&quot;) String compositionUid) {
+
+<span class="nc" id="L177">        ObjectVersionId objectVersionId = getObjectVersionId(compositionUid);</span>
+<span class="nc" id="L178">        UUID compositionIdentifier = getCompositionIdentifier(compositionUid);</span>
+<span class="nc" id="L179">        UUID ehrId = compositionService.getEhrId(compositionIdentifier);</span>
+
+<span class="nc" id="L181">        compositionService.delete(ehrId, objectVersionId);</span>
+<span class="nc" id="L182">        ActionRestResponseData responseData = new ActionRestResponseData();</span>
+<span class="nc" id="L183">        responseData.setAction(Action.DELETE);</span>
+<span class="nc" id="L184">        responseData.setMeta(buildMeta(&quot;&quot;));</span>
+<span class="nc" id="L185">        return ResponseEntity.ok(responseData);</span>
+    }
+
+    private ObjectVersionId getLatestVersionId(UUID compositionId) {
+        // EhrScape API doesn't have access to the &quot;If-Match&quot; header or previous version, so it needs to
+        // be retrieved.
+<span class="nc" id="L191">        return new ObjectVersionId(</span>
+<span class="nc" id="L192">                compositionId.toString(),</span>
+<span class="nc" id="L193">                compositionService.getServerConfig().getNodename(),</span>
+<span class="nc" id="L194">                compositionService.getLastVersionNumber(compositionId).toString());</span>
+    }
+
+    private Meta buildMeta(String compositionUid) {
+<span class="nc" id="L198">        RestHref url = new RestHref();</span>
+<span class="nc" id="L199">        url.setUrl(createLocationUri(COMPOSITION, compositionUid));</span>
+<span class="nc" id="L200">        Meta meta = new Meta();</span>
+<span class="nc" id="L201">        meta.setHref(url);</span>
+<span class="nc" id="L202">        return meta;</span>
+    }
+
+    private boolean isFullCompositionUid(String compositionUid) {
+<span class="nc" id="L206">        return StringUtils.contains(compositionUid, &quot;::&quot;);</span>
+    }
+
+    private UUID getCompositionIdentifier(String compositionUid) {
+<span class="nc bnc" id="L210" title="All 2 branches missed.">        if (isFullCompositionUid(compositionUid)) {</span>
+<span class="nc" id="L211">            return UUID.fromString(compositionUid.substring(0, compositionUid.indexOf(&quot;::&quot;)));</span>
+        } else {
+<span class="nc" id="L213">            return UUID.fromString(compositionUid);</span>
+        }
+    }
+
+    private int getCompositionVersion(String compositionUid) {
+<span class="nc bnc" id="L218" title="All 2 branches missed.">        if (!compositionUid.contains(&quot;::&quot;)) {</span>
+<span class="nc" id="L219">            throw new IllegalArgumentException(&quot;UID of the composition does not contain domain and version parts&quot;);</span>
+        }
+<span class="nc" id="L221">        return Integer.parseInt(compositionUid.substring(compositionUid.lastIndexOf(&quot;::&quot;) + 2));</span>
+    }
+
+    private ObjectVersionId getObjectVersionId(String compositionUid) {
+<span class="nc bnc" id="L225" title="All 2 branches missed.">        if (isFullCompositionUid(compositionUid)) {</span>
+<span class="nc" id="L226">            return new ObjectVersionId(compositionUid);</span>
+        } else {
+<span class="nc" id="L228">            return getLatestVersionId(UUID.fromString(compositionUid));</span>
+        }
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.7.202105040129</span></div></body></html>

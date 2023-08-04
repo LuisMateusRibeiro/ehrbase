@@ -1,0 +1,169 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../../jacoco-resources/report.gif" type="image/gif"/><title>DvDateTimeAttributes.java</title><link rel="stylesheet" href="../../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../../index.html" class="el_report">Coverage with Unit Tests</a> &gt; <a href="../index.html" class="el_bundle">jooq-pg</a> &gt; <a href="index.source.html" class="el_package">org.ehrbase.jooq.dbencoding.attributes.datavalues.datetime.datetime</a> &gt; <span class="el_source">DvDateTimeAttributes.java</span></div><h1>DvDateTimeAttributes.java</h1><pre class="source lang-java linenums">/*
+ * Copyright (c) 2020 vitasystems GmbH and Hannover Medical School.
+ *
+ * This file is part of project EHRbase
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     https://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.ehrbase.jooq.dbencoding.attributes.datavalues.datetime.datetime;
+
+import com.nedap.archie.rm.datavalues.quantity.datetime.DvDate;
+import com.nedap.archie.rm.datavalues.quantity.datetime.DvDateTime;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
+import java.time.Year;
+import java.time.YearMonth;
+import java.time.ZoneOffset;
+import java.time.temporal.ChronoField;
+import java.time.temporal.Temporal;
+import java.time.temporal.TemporalAccessor;
+import org.ehrbase.jooq.dbencoding.attributes.datavalues.datetime.I_DateAttributes;
+import org.ehrbase.jooq.dbencoding.attributes.datavalues.datetime.I_DateTimeAttributes;
+import org.ehrbase.jooq.dbencoding.attributes.datavalues.datetime.I_TimeAttributes;
+import org.ehrbase.jooq.dbencoding.attributes.datavalues.datetime.TemporalAttributes;
+import org.ehrbase.jooq.dbencoding.attributes.datavalues.datetime.date.DvDateAttributes;
+import org.ehrbase.jooq.dbencoding.attributes.datavalues.datetime.time.DvTimeAttributes;
+
+/**
+ * decorator for DvDateTime.
+ * Add attributes and handling for partial date/time (f.e. 2019-12)
+ * Provide a defaulted representation (f.e. 2019-12-01:00:00:00Z for the above)
+ * Calculate a timestamp based on the defaulted representation
+ */
+public class DvDateTimeAttributes extends TemporalAttributes implements I_DateTimeAttributes {
+
+    protected DvDateTime dvDateTime;
+    protected I_DateAttributes datePart;
+    protected I_TimeAttributes timePart;
+    protected ZoneOffset zoneOffset;
+
+<span class="fc" id="L51">    private DvDateTimeAttributes(DvDateTime dvDateTime, I_DateAttributes datePart, I_TimeAttributes timePart) {</span>
+<span class="fc" id="L52">        this.dvDateTime = dvDateTime;</span>
+<span class="fc" id="L53">        this.datePart = datePart;</span>
+<span class="fc" id="L54">        this.timePart = timePart;</span>
+<span class="fc bfc" id="L55" title="All 2 branches covered.">        this.zoneOffset = timePart == null ? null : timePart.getZoneOffset();</span>
+<span class="fc" id="L56">    }</span>
+
+    public static DvDateTimeAttributes instanceFromValue(DvDateTime dvDateTime) {
+
+        TemporalAccessor localDate;
+<span class="fc" id="L61">        TemporalAccessor actual = dvDateTime.getValue();</span>
+
+<span class="pc bpc" id="L63" title="1 of 2 branches missed.">        if (actual.isSupported(ChronoField.YEAR)</span>
+<span class="pc bpc" id="L64" title="1 of 2 branches missed.">                &amp;&amp; actual.isSupported(ChronoField.MONTH_OF_YEAR)</span>
+<span class="pc bpc" id="L65" title="1 of 2 branches missed.">                &amp;&amp; actual.isSupported(ChronoField.DAY_OF_MONTH))</span>
+<span class="fc" id="L66">            localDate = LocalDate.of(</span>
+<span class="fc" id="L67">                    actual.get(ChronoField.YEAR),</span>
+<span class="fc" id="L68">                    actual.get(ChronoField.MONTH_OF_YEAR),</span>
+<span class="fc" id="L69">                    actual.get(ChronoField.DAY_OF_MONTH));</span>
+<span class="nc bnc" id="L70" title="All 4 branches missed.">        else if (actual.isSupported(ChronoField.YEAR) &amp;&amp; actual.isSupported(ChronoField.MONTH_OF_YEAR))</span>
+<span class="nc" id="L71">            localDate = YearMonth.of(actual.get(ChronoField.YEAR), actual.get(ChronoField.MONTH_OF_YEAR));</span>
+<span class="nc bnc" id="L72" title="All 2 branches missed.">        else if (actual.isSupported(ChronoField.YEAR)) localDate = Year.of(actual.get(ChronoField.YEAR));</span>
+<span class="nc" id="L73">        else throw new IllegalArgumentException(&quot;DvDateTime supplied is not valid:&quot; + actual);</span>
+
+<span class="fc" id="L75">        DvTimeAttributes dvTimeAttributes = DvTimeAttributes.instanceFromValue(dvDateTime.getValue());</span>
+<span class="fc" id="L76">        DvDateAttributes dvDateAttributes = DvDateAttributes.instanceFromValue(new DvDate((Temporal) localDate));</span>
+
+<span class="fc bfc" id="L78" title="All 2 branches covered.">        if (dvTimeAttributes == null) {</span>
+<span class="fc" id="L79">            dvDateTime = new DvDateTime(dvDateAttributes.getValueAsProvided());</span>
+        }
+
+<span class="fc" id="L82">        return new DvDateTimeAttributes(dvDateTime, dvDateAttributes, dvTimeAttributes);</span>
+    }
+
+    @Override
+    public Long getMagnitude() {
+<span class="nc" id="L87">        return LocalDate.from(getValueExtended()).toEpochDay();</span>
+    }
+
+    @Override
+    public Temporal getValueAsProvided() {
+<span class="fc" id="L92">        return (Temporal) dvDateTime.getValue();</span>
+    }
+
+    @Override
+    public Temporal getValueExtended() {
+<span class="fc" id="L97">        StringBuilder stringBuilder = new StringBuilder();</span>
+<span class="fc" id="L98">        stringBuilder.append(datePart.getValueExtended());</span>
+<span class="fc" id="L99">        stringBuilder.append(&quot;T&quot;);</span>
+<span class="fc bfc" id="L100" title="All 2 branches covered.">        stringBuilder.append(timePart == null ? &quot;00:00:00&quot; : timePart.getValueExtended());</span>
+<span class="fc bfc" id="L101" title="All 2 branches covered.">        if (zoneOffset != null) return OffsetDateTime.parse(stringBuilder.toString());</span>
+<span class="fc" id="L102">        else return LocalDateTime.parse(stringBuilder.toString());</span>
+    }
+
+    @Override
+    public Integer getSupportedChronoFields() {
+<span class="fc" id="L107">        return TemporalAttributes.DV_DATE_TIME</span>
+<span class="fc" id="L108">                | (datePart.getSupportedChronoFields() &amp; ~TemporalAttributes.DV_DATE)</span>
+<span class="fc bfc" id="L109" title="All 2 branches covered.">                | (timePart == null ? 0 : timePart.getSupportedChronoFields() &amp; ~TemporalAttributes.DV_TIME);</span>
+    }
+
+    @Override
+    public Long getTimeStamp() {
+<span class="fc bfc" id="L114" title="All 2 branches covered.">        if (zoneOffset == null)</span>
+<span class="fc" id="L115">            return LocalDateTime.parse(getValueExtended().toString()).toEpochSecond(ZoneOffset.UTC);</span>
+<span class="fc" id="L116">        else return OffsetDateTime.parse(getValueExtended().toString()).toEpochSecond();</span>
+    }
+
+    @Override
+    public boolean isRmDvDateTime() {
+<span class="pc bpc" id="L121" title="1 of 2 branches missed.">        if (timePart == null) return false;</span>
+<span class="pc bpc" id="L122" title="2 of 6 branches missed.">        return datePart.isDateYYYYMMDD() &amp;&amp; (timePart.isTimeHHMMSSmmm() || timePart.isTimeHHMMSS());</span>
+    }
+
+    @Override
+    public boolean isDateTimeYYYY() {
+<span class="nc" id="L127">        return datePart.isDateYYYY();</span>
+    }
+
+    @Override
+    public boolean isDateTimeYYYYMM() {
+<span class="fc" id="L132">        return datePart.isDateYYYYMM();</span>
+    }
+
+    @Override
+    public boolean isDateTimeYYYYMMDD() {
+<span class="fc" id="L137">        return datePart.isDateYYYYMMDD();</span>
+    }
+
+    @Override
+    public boolean isDateTimeYYYYMMDDHH() {
+<span class="nc bnc" id="L142" title="All 2 branches missed.">        if (timePart == null) return false;</span>
+<span class="nc bnc" id="L143" title="All 4 branches missed.">        return datePart.isDateYYYYMMDD() &amp;&amp; timePart.isTimeHH();</span>
+    }
+
+    @Override
+    public boolean isDateTimeYYYYMMDDHHMM() {
+<span class="nc bnc" id="L148" title="All 2 branches missed.">        if (timePart == null) return false;</span>
+<span class="nc bnc" id="L149" title="All 4 branches missed.">        return datePart.isDateYYYYMMDD() &amp;&amp; timePart.isTimeHHMM();</span>
+    }
+
+    @Override
+    public boolean isDateTimeYYYYMMDDHHMMSS() {
+<span class="fc bfc" id="L154" title="All 2 branches covered.">        if (timePart == null) return false;</span>
+<span class="pc bpc" id="L155" title="2 of 4 branches missed.">        return datePart.isDateYYYYMMDD() &amp;&amp; timePart.isTimeHHMMSS();</span>
+    }
+
+    @Override
+    public boolean isDateTimeYYYYMMDDHHMMSSmmm() {
+<span class="nc bnc" id="L160" title="All 2 branches missed.">        if (timePart == null) return false;</span>
+<span class="nc bnc" id="L161" title="All 4 branches missed.">        return datePart.isDateYYYYMMDD() &amp;&amp; timePart.isTimeHHMMSSmmm();</span>
+    }
+
+    @Override
+    public ZoneOffset getZoneOffset() {
+<span class="nc" id="L166">        return zoneOffset;</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.7.202105040129</span></div></body></html>

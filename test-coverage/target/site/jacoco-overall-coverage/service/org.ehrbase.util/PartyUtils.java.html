@@ -1,0 +1,97 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../../jacoco-resources/report.gif" type="image/gif"/><title>PartyUtils.java</title><link rel="stylesheet" href="../../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../../index.html" class="el_report">Overall Coverage</a> &gt; <a href="../index.html" class="el_bundle">service</a> &gt; <a href="index.source.html" class="el_package">org.ehrbase.util</a> &gt; <span class="el_source">PartyUtils.java</span></div><h1>PartyUtils.java</h1><pre class="source lang-java linenums">/*
+ * Copyright (c) 2021 vitasystems GmbH and Hannover Medical School.
+ *
+ * This file is part of project EHRbase
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     https://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.ehrbase.util;
+
+import com.nedap.archie.rm.generic.PartyIdentified;
+import com.nedap.archie.rm.generic.PartyProxy;
+import com.nedap.archie.rm.generic.PartyRelated;
+import com.nedap.archie.rm.generic.PartySelf;
+import com.nedap.archie.rm.support.identification.PartyRef;
+import java.util.Objects;
+import org.ehrbase.api.exception.InternalServerException;
+
+/**
+ * Utility class for PartyProxy and its concrete implementations.
+ */
+public class PartyUtils {
+
+    private PartyUtils() {}
+
+    public static boolean isEmpty(PartyProxy partyProxy) {
+<span class="nc bnc" id="L36" title="All 2 branches missed.">        if (partyProxy == null) {</span>
+<span class="nc" id="L37">            return true;</span>
+        }
+
+<span class="nc bnc" id="L40" title="All 2 branches missed.">        if (isPartySelf(partyProxy)) {</span>
+<span class="nc" id="L41">            return isEmpty((PartySelf) partyProxy);</span>
+<span class="nc bnc" id="L42" title="All 2 branches missed.">        } else if (isPartyIdentified(partyProxy)) {</span>
+<span class="nc" id="L43">            return isEmpty((PartyIdentified) partyProxy);</span>
+<span class="nc bnc" id="L44" title="All 2 branches missed.">        } else if (isPartyRelated(partyProxy)) {</span>
+<span class="nc" id="L45">            return isEmpty((PartyRelated) partyProxy);</span>
+        } else {
+<span class="nc" id="L47">            throw new InternalServerException(</span>
+<span class="nc" id="L48">                    &quot;Unhandled Party type detected:&quot; + partyProxy.getClass().getSimpleName());</span>
+        }
+    }
+
+    public static boolean isEmpty(PartyIdentified partyIdentified) {
+<span class="nc bnc" id="L53" title="All 2 branches missed.">        if (partyIdentified == null) {</span>
+<span class="nc" id="L54">            return true;</span>
+        }
+<span class="nc bnc" id="L56" title="All 2 branches missed.">        return partyIdentified.getName() == null</span>
+<span class="nc bnc" id="L57" title="All 2 branches missed.">                &amp;&amp; partyIdentified.getIdentifiers().isEmpty()</span>
+<span class="nc bnc" id="L58" title="All 4 branches missed.">                &amp;&amp; (partyIdentified.getExternalRef() == null || isEmpty(partyIdentified.getExternalRef()));</span>
+    }
+
+    public static boolean isEmpty(PartySelf partySelf) {
+<span class="nc bnc" id="L62" title="All 2 branches missed.">        if (partySelf == null) {</span>
+<span class="nc" id="L63">            return true;</span>
+        }
+<span class="nc bnc" id="L65" title="All 4 branches missed.">        return partySelf.getExternalRef() == null || isEmpty(partySelf.getExternalRef());</span>
+    }
+
+    public static boolean isEmpty(PartyRef partyRef) {
+<span class="nc bnc" id="L69" title="All 2 branches missed.">        if (partyRef == null) {</span>
+<span class="nc" id="L70">            return true;</span>
+        }
+<span class="nc bnc" id="L72" title="All 6 branches missed.">        return partyRef.getId() == null &amp;&amp; partyRef.getNamespace() == null &amp;&amp; partyRef.getType() == null;</span>
+    }
+
+    public static boolean isEmpty(PartyRelated partyRelated) {
+<span class="nc bnc" id="L76" title="All 2 branches missed.">        if (partyRelated == null) {</span>
+<span class="nc" id="L77">            return true;</span>
+        }
+<span class="nc bnc" id="L79" title="All 2 branches missed.">        return partyRelated.getName() == null</span>
+<span class="nc bnc" id="L80" title="All 2 branches missed.">                &amp;&amp; partyRelated.getIdentifiers().isEmpty()</span>
+<span class="nc bnc" id="L81" title="All 2 branches missed.">                &amp;&amp; partyRelated.getRelationship() == null</span>
+<span class="nc bnc" id="L82" title="All 4 branches missed.">                &amp;&amp; (partyRelated.getExternalRef() == null || isEmpty(partyRelated.getExternalRef()));</span>
+    }
+
+    public static boolean isPartySelf(PartyProxy partyProxy) {
+<span class="nc" id="L86">        return Objects.equals(partyProxy.getClass().getSimpleName(), &quot;PartySelf&quot;);</span>
+    }
+
+    public static boolean isPartyIdentified(PartyProxy partyProxy) {
+<span class="nc" id="L90">        return Objects.equals(partyProxy.getClass().getSimpleName(), &quot;PartyIdentified&quot;);</span>
+    }
+
+    public static boolean isPartyRelated(PartyProxy partyProxy) {
+<span class="nc" id="L94">        return Objects.equals(partyProxy.getClass().getSimpleName(), &quot;PartyRelated&quot;);</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.7.202105040129</span></div></body></html>

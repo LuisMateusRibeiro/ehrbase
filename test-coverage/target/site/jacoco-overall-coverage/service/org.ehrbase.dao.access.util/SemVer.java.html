@@ -1,0 +1,134 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../../jacoco-resources/report.gif" type="image/gif"/><title>SemVer.java</title><link rel="stylesheet" href="../../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../../index.html" class="el_report">Overall Coverage</a> &gt; <a href="../index.html" class="el_bundle">service</a> &gt; <a href="index.source.html" class="el_package">org.ehrbase.dao.access.util</a> &gt; <span class="el_source">SemVer.java</span></div><h1>SemVer.java</h1><pre class="source lang-java linenums">/*
+ * Copyright (c) 2022 vitasystems GmbH and Hannover Medical School.
+ *
+ * This file is part of project EHRbase
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     https://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.ehrbase.dao.access.util;
+
+import java.util.Optional;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+import org.apache.commons.lang3.StringUtils;
+import org.springframework.lang.NonNull;
+
+<span class="fc" id="L26">public record SemVer(Integer major, Integer minor, Integer patch, String suffix) {</span>
+
+    private static String capturing(String content) {
+<span class="fc" id="L29">        return &quot;(&quot; + content + &quot;)&quot;;</span>
+    }
+
+    private static String nonCapturing(String content) {
+<span class="fc" id="L33">        return &quot;(?:&quot; + content + &quot;)&quot;;</span>
+    }
+
+    private static String optionalNonCapturing(String content) {
+<span class="fc" id="L37">        return nonCapturing(content) + '?';</span>
+    }
+
+    /**
+     * partial, release and pre-release versions are permitted
+     */
+    public static final Pattern SEMVER_REGEX;
+
+    static {
+<span class="fc" id="L46">        String dot = &quot;\\.&quot;;</span>
+<span class="fc" id="L47">        String versionPart = &quot;0|[1-9]\\d*&quot;;</span>
+<span class="fc" id="L48">        String versionGroup = capturing(versionPart);</span>
+
+<span class="fc" id="L50">        String preReleaseIdentifier = nonCapturing(versionPart + &quot;|\\d*[a-zA-Z-][0-9a-zA-Z-]*&quot;);</span>
+<span class="fc" id="L51">        String dotSeparatedPreReleaseIdentifiers =</span>
+<span class="fc" id="L52">                preReleaseIdentifier + nonCapturing(dot + preReleaseIdentifier) + '*';</span>
+
+<span class="fc" id="L54">        SEMVER_REGEX = Pattern.compile(</span>
+                // major
+<span class="fc" id="L56">                versionGroup</span>
+<span class="fc" id="L57">                        + optionalNonCapturing(dot</span>
+                                // minor
+<span class="fc" id="L59">                                + versionGroup</span>
+<span class="fc" id="L60">                                + optionalNonCapturing(dot</span>
+                                        // patch
+<span class="fc" id="L62">                                        + versionGroup</span>
+                                        // dot-separated pre-release identifiers:
+                                        // numeric identifier prohibits leading 0
+<span class="fc" id="L65">                                        + optionalNonCapturing('-' + capturing(dotSeparatedPreReleaseIdentifiers)))));</span>
+    }
+
+<span class="fc" id="L68">    public static final SemVer NO_VERSION = new SemVer(null, null, null, null);</span>
+
+    public static @NonNull SemVer parse(String semVerStr) throws InvalidVersionFormatException {
+<span class="fc bfc" id="L71" title="All 4 branches covered.">        if (StringUtils.isBlank(semVerStr) || &quot;LATEST&quot;.equalsIgnoreCase(semVerStr)) {</span>
+<span class="fc" id="L72">            return NO_VERSION;</span>
+        }
+
+<span class="fc" id="L75">        Matcher matcher = SEMVER_REGEX.matcher(semVerStr);</span>
+<span class="fc bfc" id="L76" title="All 2 branches covered.">        if (!matcher.matches()) {</span>
+<span class="fc" id="L77">            throw new InvalidVersionFormatException(semVerStr);</span>
+        }
+
+<span class="fc" id="L80">        return new SemVer(</span>
+<span class="fc" id="L81">                integerFromGroup(matcher, 1),</span>
+<span class="fc" id="L82">                integerFromGroup(matcher, 2),</span>
+<span class="fc" id="L83">                integerFromGroup(matcher, 3),</span>
+<span class="fc" id="L84">                group(matcher, 4).orElse(null));</span>
+    }
+
+    public String toVersionString() {
+<span class="pc bpc" id="L88" title="1 of 2 branches missed.">        if (isNoVersion()) {</span>
+<span class="nc" id="L89">            return &quot;&quot;;</span>
+        }
+<span class="fc" id="L91">        StringBuilder sb = new StringBuilder();</span>
+<span class="fc" id="L92">        sb.append(major);</span>
+<span class="fc bfc" id="L93" title="All 2 branches covered.">        if (minor != null) {</span>
+<span class="fc" id="L94">            sb.append('.').append(minor);</span>
+<span class="fc bfc" id="L95" title="All 2 branches covered.">            if (patch != null) {</span>
+<span class="fc" id="L96">                sb.append('.').append(patch);</span>
+<span class="fc bfc" id="L97" title="All 2 branches covered.">                if (suffix != null) {</span>
+<span class="fc" id="L98">                    sb.append('-').append(suffix);</span>
+                }
+            }
+        }
+<span class="fc" id="L102">        return sb.toString();</span>
+    }
+
+    public boolean isNoVersion() {
+<span class="fc bfc" id="L106" title="All 2 branches covered.">        return major == null;</span>
+    }
+
+    public boolean isPartial() {
+<span class="fc bfc" id="L110" title="All 2 branches covered.">        return patch == null;</span>
+    }
+
+    public boolean isRelease() {
+<span class="pc bpc" id="L114" title="3 of 4 branches missed.">        return patch != null &amp;&amp; suffix == null;</span>
+    }
+
+    public boolean isPreRelease() {
+<span class="fc bfc" id="L118" title="All 2 branches covered.">        return suffix != null;</span>
+    }
+
+    private static Optional&lt;String&gt; group(Matcher matcher, int groupNr) {
+<span class="pc bpc" id="L122" title="1 of 2 branches missed.">        return Optional.of(matcher).filter(m -&gt; m.groupCount() &gt;= groupNr).map(m -&gt; m.group(groupNr));</span>
+    }
+
+    private static Integer integerFromGroup(Matcher matcher, int groupNr) {
+<span class="fc" id="L126">        return group(matcher, groupNr).map(Integer::parseInt).orElse(null);</span>
+    }
+
+    @Override
+    public String toString() {
+<span class="fc" id="L131">        return toVersionString();</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.7.202105040129</span></div></body></html>

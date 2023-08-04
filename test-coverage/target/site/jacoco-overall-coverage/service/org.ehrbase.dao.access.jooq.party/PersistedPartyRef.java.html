@@ -1,0 +1,106 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../../jacoco-resources/report.gif" type="image/gif"/><title>PersistedPartyRef.java</title><link rel="stylesheet" href="../../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../../index.html" class="el_report">Overall Coverage</a> &gt; <a href="../index.html" class="el_bundle">service</a> &gt; <a href="index.source.html" class="el_package">org.ehrbase.dao.access.jooq.party</a> &gt; <span class="el_source">PersistedPartyRef.java</span></div><h1>PersistedPartyRef.java</h1><pre class="source lang-java linenums">/*
+ * Copyright (c) 2020 vitasystems GmbH and Hannover Medical School.
+ *
+ * This file is part of project EHRbase
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     https://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.ehrbase.dao.access.jooq.party;
+
+import static org.ehrbase.jooq.pg.Tables.PARTY_IDENTIFIED;
+
+import com.nedap.archie.rm.support.identification.*;
+import java.util.UUID;
+import org.ehrbase.dao.access.interfaces.I_DomainAccess;
+import org.jooq.Record;
+
+/**
+ * Manages persisted PartyRef
+ */
+public class PersistedPartyRef {
+
+    I_DomainAccess domainAccess;
+
+<span class="nc" id="L34">    public PersistedPartyRef(I_DomainAccess domainAccess) {</span>
+<span class="nc" id="L35">        this.domainAccess = domainAccess;</span>
+<span class="nc" id="L36">    }</span>
+
+    /**
+     * find matching Party for a given PartyRef depending on object_id specialization
+     * @param partyRef
+     * @return
+     */
+    public UUID findInDB(PartyRef partyRef) {
+<span class="nc bnc" id="L44" title="All 2 branches missed.">        if (partyRef == null) return null;</span>
+
+<span class="nc" id="L46">        Object ref = partyRef.getId();</span>
+        Record record;
+
+<span class="nc bnc" id="L49" title="All 4 branches missed.">        if (ref instanceof ObjectVersionId || ref instanceof HierObjectId) {</span>
+
+<span class="nc" id="L51">            ObjectId objectId = (ObjectId) ref;</span>
+
+<span class="nc" id="L53">            record = domainAccess</span>
+<span class="nc" id="L54">                    .getContext()</span>
+<span class="nc" id="L55">                    .fetchAny(</span>
+<span class="nc" id="L56">                            PARTY_IDENTIFIED,</span>
+<span class="nc" id="L57">                            PARTY_IDENTIFIED</span>
+<span class="nc" id="L58">                                    .PARTY_REF_NAMESPACE</span>
+<span class="nc" id="L59">                                    .eq(partyRef.getNamespace())</span>
+<span class="nc" id="L60">                                    .and(PARTY_IDENTIFIED.PARTY_REF_VALUE.eq(objectId.getValue())));</span>
+
+<span class="nc bnc" id="L62" title="All 2 branches missed.">        } else if (ref instanceof GenericId) {</span>
+<span class="nc" id="L63">            GenericId genericId = (GenericId) ref;</span>
+
+<span class="nc" id="L65">            record = domainAccess</span>
+<span class="nc" id="L66">                    .getContext()</span>
+<span class="nc" id="L67">                    .fetchAny(</span>
+<span class="nc" id="L68">                            PARTY_IDENTIFIED,</span>
+<span class="nc" id="L69">                            PARTY_IDENTIFIED</span>
+<span class="nc" id="L70">                                    .PARTY_REF_NAMESPACE</span>
+<span class="nc" id="L71">                                    .eq(partyRef.getNamespace())</span>
+<span class="nc" id="L72">                                    .and(PARTY_IDENTIFIED.PARTY_REF_SCHEME.eq(genericId.getScheme()))</span>
+<span class="nc" id="L73">                                    .and(PARTY_IDENTIFIED.PARTY_REF_VALUE.eq(genericId.getValue())));</span>
+<span class="nc" id="L74">        } else</span>
+<span class="nc" id="L75">            throw new IllegalStateException(</span>
+<span class="nc" id="L76">                    &quot;Unsupported PartyRef identification:&quot; + ref.getClass().getSimpleName());</span>
+
+<span class="nc bnc" id="L78" title="All 2 branches missed.">        if (record != null) return (UUID) record.get(&quot;id&quot;);</span>
+<span class="nc" id="L79">        else return null;</span>
+    }
+
+    /**
+     * retrieve an assumed partyRef with GenericId
+     * @param value
+     * @param scheme
+     * @param namespace
+     * @param type
+     * @return
+     */
+    public UUID findInDB(String value, String scheme, String namespace, String type) {
+<span class="nc" id="L91">        PartyRef partyRef = new PartyRef(new GenericId(value, scheme), namespace, type);</span>
+<span class="nc" id="L92">        return findInDB(partyRef);</span>
+    }
+
+    /**
+     * to retrieve a subject with subject_id and namespace (REST API requirement)
+     * @param id
+     * @param namespace
+     * @return
+     */
+    public UUID findInDB(String id, String namespace) {
+<span class="nc" id="L102">        PartyRef partyRef = new PartyRef(new HierObjectId(id), namespace, &quot;PERSON&quot;);</span>
+<span class="nc" id="L103">        return findInDB(partyRef);</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.7.202105040129</span></div></body></html>

@@ -1,0 +1,84 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../../jacoco-resources/report.gif" type="image/gif"/><title>LocatableAttributes.java</title><link rel="stylesheet" href="../../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../../index.html" class="el_report">Coverage with Unit Tests</a> &gt; <a href="../index.html" class="el_bundle">jooq-pg</a> &gt; <a href="index.source.html" class="el_package">org.ehrbase.jooq.dbencoding.attributes</a> &gt; <span class="el_source">LocatableAttributes.java</span></div><h1>LocatableAttributes.java</h1><pre class="source lang-java linenums">/*
+ * Copyright (c) 2020 vitasystems GmbH and Hannover Medical School.
+ *
+ * This file is part of project EHRbase
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     https://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.ehrbase.jooq.dbencoding.attributes;
+
+import static org.ehrbase.jooq.dbencoding.CompositionSerializer.*;
+
+import com.nedap.archie.rm.archetyped.Locatable;
+import java.util.Map;
+import org.apache.commons.collections.map.MultiValueMap;
+import org.ehrbase.jooq.dbencoding.CompositionSerializer;
+import org.ehrbase.jooq.dbencoding.ItemStack;
+import org.ehrbase.jooq.dbencoding.NameAsDvText;
+import org.ehrbase.jooq.dbencoding.NameInMap;
+import org.ehrbase.jooq.dbencoding.RmObjectEncoding;
+
+/**
+ * populate the attributes for RM Locatable Most RM object in a Composition inherit from this class
+ */
+public abstract class LocatableAttributes extends RMAttributes {
+
+    protected LocatableAttributes(
+            CompositionSerializer compositionSerializer, ItemStack itemStack, Map&lt;String, Object&gt; map) {
+<span class="fc" id="L38">        super(compositionSerializer, itemStack, map);</span>
+<span class="fc" id="L39">    }</span>
+
+    /**
+     * map Locatable attributes in a queryable (AQL) form, that is the key follows openEHR RM UML
+     * conventions lower case, snake_case
+     *
+     * @param locatable
+     * @return
+     */
+    protected Map&lt;String, Object&gt; toMap(Locatable locatable) {
+        // add complementary attributes
+
+<span class="fc bfc" id="L51" title="All 2 branches covered.">        if (locatable.getArchetypeNodeId() != null) {</span>
+<span class="fc" id="L52">            map.put(TAG_ARCHETYPE_NODE_ID, locatable.getArchetypeNodeId());</span>
+        }
+<span class="fc bfc" id="L54" title="All 2 branches covered.">        if (locatable.getArchetypeDetails() != null) {</span>
+<span class="fc" id="L55">            map.put(TAG_ARCHETYPE_DETAILS, new RmObjectEncoding(locatable.getArchetypeDetails()).toMap());</span>
+        }
+<span class="fc bfc" id="L57" title="All 2 branches covered.">        if (locatable.getFeederAudit() != null) {</span>
+<span class="fc" id="L58">            map.put(TAG_FEEDER_AUDIT, new FeederAuditAttributes(locatable.getFeederAudit()).toMap());</span>
+        }
+<span class="fc bfc" id="L60" title="All 2 branches covered.">        if (locatable.getUid() != null) {</span>
+<span class="fc" id="L61">            map = toMap(TAG_UID, locatable.getUid(), NO_NAME);</span>
+        }
+<span class="pc bpc" id="L63" title="1 of 4 branches missed.">        if (locatable.getLinks() != null &amp;&amp; !locatable.getLinks().isEmpty()) {</span>
+<span class="fc" id="L64">            map.put(TAG_LINKS, new LinksAttributes(locatable.getLinks()).toMap());</span>
+        }
+<span class="fc bfc" id="L66" title="All 2 branches covered.">        if (!map.containsKey(TAG_NAME)</span>
+<span class="fc bfc" id="L67" title="All 2 branches covered.">                &amp;&amp; locatable.getName() != null) { // since name maybe resolved from the archetype node id</span>
+<span class="fc bfc" id="L68" title="All 2 branches covered.">            if (map instanceof MultiValueMap) map.put(TAG_NAME, new NameAsDvText(locatable.getName()).toMap());</span>
+<span class="fc" id="L69">            else new NameInMap(map, new NameAsDvText(locatable.getName()).toMap()).toMap();</span>
+        }
+
+<span class="fc" id="L72">        return map;</span>
+    }
+
+    public static boolean isLocatableAttribute(String key) {
+<span class="pc bpc" id="L76" title="1 of 2 branches missed.">        return (key.equals(TAG_ARCHETYPE_NODE_ID)</span>
+<span class="pc bpc" id="L77" title="1 of 2 branches missed.">                || key.equals(TAG_ARCHETYPE_DETAILS)</span>
+<span class="pc bpc" id="L78" title="1 of 2 branches missed.">                || key.equals(TAG_FEEDER_AUDIT)</span>
+<span class="pc bpc" id="L79" title="1 of 2 branches missed.">                || key.equals(TAG_UID)</span>
+<span class="pc bpc" id="L80" title="1 of 2 branches missed.">                || key.equals(TAG_LINKS)</span>
+<span class="pc bpc" id="L81" title="1 of 2 branches missed.">                || key.equals(TAG_NAME));</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.7.202105040129</span></div></body></html>

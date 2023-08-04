@@ -1,0 +1,690 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../../jacoco-resources/report.gif" type="image/gif"/><title>StatusAccess.java</title><link rel="stylesheet" href="../../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../../index.html" class="el_report">Overall Coverage</a> &gt; <a href="../index.html" class="el_bundle">service</a> &gt; <a href="index.source.html" class="el_package">org.ehrbase.dao.access.jooq</a> &gt; <span class="el_source">StatusAccess.java</span></div><h1>StatusAccess.java</h1><pre class="source lang-java linenums">/*
+ * Copyright (c) 2019 vitasystems GmbH and Hannover Medical School.
+ *
+ * This file is part of project EHRbase
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     https://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.ehrbase.dao.access.jooq;
+
+import static org.ehrbase.jooq.pg.Tables.PARTY_IDENTIFIED;
+import static org.ehrbase.jooq.pg.Tables.STATUS;
+import static org.ehrbase.jooq.pg.Tables.STATUS_HISTORY;
+import static org.jooq.impl.DSL.count;
+
+import com.nedap.archie.rm.datastructures.ItemStructure;
+import com.nedap.archie.rm.datavalues.DvCodedText;
+import com.nedap.archie.rm.datavalues.DvText;
+import com.nedap.archie.rm.ehr.EhrStatus;
+import com.nedap.archie.rm.generic.PartySelf;
+import com.nedap.archie.rm.support.identification.HierObjectId;
+import com.nedap.archie.rm.support.identification.ObjectVersionId;
+import java.math.BigDecimal;
+import java.sql.Timestamp;
+import java.time.LocalDateTime;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Map;
+import java.util.Set;
+import java.util.UUID;
+import org.ehrbase.api.exception.InternalServerException;
+import org.ehrbase.api.exception.InvalidApiParameterException;
+import org.ehrbase.api.exception.ObjectNotFoundException;
+import org.ehrbase.dao.access.interfaces.I_AuditDetailsAccess;
+import org.ehrbase.dao.access.interfaces.I_ConceptAccess;
+import org.ehrbase.dao.access.interfaces.I_ConceptAccess.ContributionChangeType;
+import org.ehrbase.dao.access.interfaces.I_ContributionAccess;
+import org.ehrbase.dao.access.interfaces.I_DomainAccess;
+import org.ehrbase.dao.access.interfaces.I_StatusAccess;
+import org.ehrbase.dao.access.jooq.party.PersistedPartyProxy;
+import org.ehrbase.dao.access.support.DataAccess;
+import org.ehrbase.dao.access.util.ContributionDef;
+import org.ehrbase.jooq.pg.tables.records.StatusHistoryRecord;
+import org.ehrbase.jooq.pg.tables.records.StatusRecord;
+import org.ehrbase.service.RecordedDvCodedText;
+import org.jooq.AggregateFunction;
+import org.jooq.DSLContext;
+import org.jooq.Param;
+import org.jooq.Record1;
+import org.jooq.Result;
+import org.jooq.Table;
+import org.jooq.impl.DSL;
+
+/**
+ * Persistence operations on EHR status.
+ *
+ * @author Christian Chevalley
+ * @author Jake Smolka
+ * @author Luis Marco-Ruiz
+ * @since 1.0.0
+ */
+public class StatusAccess extends DataAccess implements I_StatusAccess {
+
+    private StatusRecord statusRecord;
+    private I_ContributionAccess contributionAccess; // locally referenced contribution associated to this status
+    private I_AuditDetailsAccess auditDetailsAccess; // audit associated with this status
+
+    public StatusAccess(I_DomainAccess domainAccess, UUID ehrId, Short sysTenant) {
+<span class="nc" id="L78">        super(domainAccess);</span>
+
+<span class="nc" id="L80">        statusRecord = getContext().newRecord(STATUS);</span>
+<span class="nc" id="L81">        statusRecord.setSysTenant(sysTenant);</span>
+
+        // associate a contribution with this composition
+<span class="nc" id="L84">        contributionAccess = I_ContributionAccess.getInstance(this, ehrId, sysTenant);</span>
+<span class="nc" id="L85">        contributionAccess.setState(ContributionDef.ContributionState.COMPLETE);</span>
+
+        // associate status' own audit with this status access instance
+<span class="nc" id="L88">        auditDetailsAccess = I_AuditDetailsAccess.getInstance(getDataAccess(), sysTenant);</span>
+<span class="nc" id="L89">    }</span>
+
+    @Override
+    public UUID commit(LocalDateTime timestamp, UUID committerId, UUID systemId, String description) {
+<span class="nc" id="L93">        createAndSetContribution(committerId, systemId, description, ContributionChangeType.CREATION);</span>
+<span class="nc" id="L94">        return internalCommit(timestamp);</span>
+    }
+
+    @Override
+    public UUID commit(LocalDateTime timestamp, UUID contribution, UUID audit) {
+<span class="nc bnc" id="L99" title="All 2 branches missed.">        if (contribution == null) {</span>
+<span class="nc" id="L100">            throw new InternalServerException(&quot;Invalid null valued contribution.&quot;);</span>
+        }
+<span class="nc" id="L102">        setContributionId(contribution);</span>
+
+<span class="nc bnc" id="L104" title="All 2 branches missed.">        if (audit != null) {</span>
+<span class="nc" id="L105">            statusRecord.setHasAudit(audit);</span>
+        }
+
+<span class="nc" id="L108">        return internalCommit(timestamp);</span>
+    }
+
+    private UUID internalCommit(LocalDateTime transactionTime) {
+
+        // generate if not externally set
+<span class="nc bnc" id="L114" title="All 2 branches missed.">        if (statusRecord.getHasAudit() == null) {</span>
+<span class="nc" id="L115">            auditDetailsAccess.setChangeType(</span>
+<span class="nc" id="L116">                    I_ConceptAccess.fetchContributionChangeType(this, I_ConceptAccess.ContributionChangeType.CREATION));</span>
+<span class="nc bnc" id="L117" title="All 2 branches missed.">            if (auditDetailsAccess.getChangeType() == null</span>
+<span class="nc bnc" id="L118" title="All 2 branches missed.">                    || auditDetailsAccess.getSystemId() == null</span>
+<span class="nc bnc" id="L119" title="All 2 branches missed.">                    || auditDetailsAccess.getCommitter() == null) {</span>
+<span class="nc" id="L120">                throw new InternalServerException(</span>
+<span class="nc" id="L121">                        &quot;Illegal to commit AuditDetailsAccess without setting mandatory fields.&quot;);</span>
+            }
+<span class="nc" id="L123">            UUID auditId = auditDetailsAccess.commit();</span>
+<span class="nc" id="L124">            statusRecord.setHasAudit(auditId);</span>
+        }
+
+<span class="nc" id="L127">        statusRecord.setSysTransaction(Timestamp.valueOf(transactionTime));</span>
+
+<span class="nc bnc" id="L129" title="All 2 branches missed.">        if (statusRecord.store() == 0) {</span>
+<span class="nc" id="L130">            throw new InvalidApiParameterException(&quot;Input EHR couldn't be stored; Storing EHR_STATUS failed&quot;);</span>
+        }
+
+<span class="nc" id="L133">        return statusRecord.getId();</span>
+    }
+
+    @Override
+    public boolean update(
+            LocalDateTime timestamp,
+            UUID committerId,
+            UUID systemId,
+            String description,
+            ContributionChangeType changeType) {
+
+<span class="nc" id="L144">        createAndSetContribution(committerId, systemId, description, ContributionChangeType.MODIFICATION);</span>
+
+        // new audit ID
+<span class="nc" id="L147">        auditDetailsAccess.commit();</span>
+<span class="nc" id="L148">        statusRecord.setHasAudit(auditDetailsAccess.getId());</span>
+
+<span class="nc" id="L150">        return internalUpdate(timestamp);</span>
+    }
+
+    @Override
+    public boolean update(LocalDateTime timestamp, UUID contribution, UUID audit) {
+<span class="nc bnc" id="L155" title="All 2 branches missed.">        if (contribution == null) {</span>
+<span class="nc" id="L156">            throw new InternalServerException(&quot;Invalid null valued contribution.&quot;);</span>
+        }
+<span class="nc" id="L158">        setContributionId(contribution);</span>
+<span class="nc" id="L159">        statusRecord.setHasAudit(audit);</span>
+
+<span class="nc" id="L161">        return internalUpdate(timestamp);</span>
+    }
+
+    private Boolean internalUpdate(LocalDateTime transactionTime) {
+
+<span class="nc" id="L166">        statusRecord.setSysTransaction(Timestamp.valueOf(transactionTime));</span>
+
+        try {
+<span class="nc bnc" id="L169" title="All 2 branches missed.">            return statusRecord.update() &gt; 0;</span>
+<span class="nc" id="L170">        } catch (RuntimeException e) {</span>
+<span class="nc" id="L171">            throw new InvalidApiParameterException(</span>
+<span class="nc" id="L172">                    &quot;Couldn't marshall given EHR_STATUS / OTHER_DETAILS, content probably breaks RM rules&quot;);</span>
+        }
+    }
+
+    @Override
+    public int delete(LocalDateTime timestamp, UUID committerId, UUID systemId, String description) {
+
+<span class="nc" id="L179">        createAndSetContribution(committerId, systemId, description, ContributionChangeType.DELETED);</span>
+
+<span class="nc" id="L181">        return internalDelete(timestamp, committerId, systemId, description);</span>
+    }
+
+    @Override
+    public int delete(LocalDateTime timestamp, UUID contribution, UUID audit) {
+<span class="nc bnc" id="L186" title="All 2 branches missed.">        if (contribution == null) {</span>
+<span class="nc" id="L187">            throw new InternalServerException(&quot;Invalid null valued contribution.&quot;);</span>
+        }
+<span class="nc" id="L189">        setContributionId(contribution);</span>
+
+        // Retrieve audit metadata from given contribution
+<span class="nc" id="L192">        var newContributionAccess = I_ContributionAccess.retrieveInstance(this.getDataAccess(), contribution);</span>
+<span class="nc" id="L193">        UUID systemId = newContributionAccess.getAuditsSystemId();</span>
+<span class="nc" id="L194">        UUID committerId = newContributionAccess.getAuditsCommitter();</span>
+<span class="nc" id="L195">        String description = newContributionAccess.getAuditsDescription();</span>
+
+<span class="nc" id="L197">        return internalDelete(timestamp, committerId, systemId, description);</span>
+    }
+
+    private Integer internalDelete(LocalDateTime timestamp, UUID committerId, UUID systemId, String description) {
+<span class="nc" id="L201">        Short sysTenant = statusRecord.getSysTenant();</span>
+<span class="nc" id="L202">        statusRecord.setSysTransaction(Timestamp.valueOf(timestamp));</span>
+<span class="nc" id="L203">        statusRecord.delete();</span>
+
+        // create new deletion audit
+<span class="nc" id="L206">        var delAudit = I_AuditDetailsAccess.getInstance(</span>
+<span class="nc" id="L207">                this, systemId, committerId, I_ConceptAccess.ContributionChangeType.DELETED, description, sysTenant);</span>
+<span class="nc" id="L208">        UUID delAuditId = delAudit.commit();</span>
+
+        // create new, BUT already moved to _history, version documenting the deletion
+<span class="nc" id="L211">        return createAndCommitNewDeletedVersionAsHistory(delAuditId, statusRecord.getInContribution(), sysTenant);</span>
+    }
+
+    private int createAndCommitNewDeletedVersionAsHistory(UUID delAuditId, UUID contrib, Short sysTenant) {
+        // a bit hacky: create new, BUT already moved to _history, version documenting the deletion
+        // (Normal approach of first .update() then .delete() won't work, because postgres' transaction optimizer will
+        // just skip the update if it will get deleted anyway.)
+        // so copy values, but add deletion meta data
+<span class="nc" id="L219">        StatusHistoryRecord newRecord = getDataAccess().getContext().newRecord(STATUS_HISTORY);</span>
+<span class="nc" id="L220">        newRecord.setId(statusRecord.getId());</span>
+<span class="nc" id="L221">        newRecord.setEhrId(statusRecord.getEhrId());</span>
+<span class="nc" id="L222">        newRecord.setInContribution(contrib);</span>
+<span class="nc" id="L223">        newRecord.setArchetypeNodeId(statusRecord.getArchetypeNodeId());</span>
+<span class="nc" id="L224">        newRecord.setAttestationRef(statusRecord.getAttestationRef());</span>
+<span class="nc" id="L225">        newRecord.setName(statusRecord.getName());</span>
+<span class="nc" id="L226">        newRecord.setSysTenant(sysTenant);</span>
+<span class="nc" id="L227">        newRecord.setIsModifiable(statusRecord.getIsModifiable());</span>
+<span class="nc" id="L228">        newRecord.setIsQueryable(statusRecord.getIsQueryable());</span>
+<span class="nc" id="L229">        newRecord.setOtherDetails(statusRecord.getOtherDetails());</span>
+<span class="nc" id="L230">        newRecord.setParty(statusRecord.getParty());</span>
+<span class="nc" id="L231">        newRecord.setHasAudit(delAuditId);</span>
+
+<span class="nc" id="L233">        getDataAccess().getContext().attach(newRecord);</span>
+<span class="nc bnc" id="L234" title="All 2 branches missed.">        if (newRecord.insert() != 1) {</span>
+<span class="nc" id="L235">            throw new InternalServerException(&quot;DB inconsistency&quot;);</span>
+        } else {
+<span class="nc" id="L237">            return 1;</span>
+        }
+    }
+
+    private void createAndSetContribution(
+            UUID committerId, UUID systemId, String description, ContributionChangeType changeType) {
+<span class="nc" id="L243">        contributionAccess.setAuditDetailsChangeType(I_ConceptAccess.fetchContributionChangeType(this, changeType));</span>
+<span class="nc bnc" id="L244" title="All 4 branches missed.">        if (contributionAccess.getAuditsCommitter() == null || contributionAccess.getAuditsSystemId() == null) {</span>
+<span class="nc bnc" id="L245" title="All 4 branches missed.">            if (committerId == null || systemId == null) {</span>
+<span class="nc" id="L246">                throw new InternalServerException(</span>
+<span class="nc" id="L247">                        &quot;Illegal to commit the contribution's AuditDetailsAccess without setting mandatory fields.&quot;);</span>
+            } else {
+<span class="nc" id="L249">                contributionAccess.setAuditDetailsCommitter(committerId);</span>
+<span class="nc" id="L250">                contributionAccess.setAuditDetailsSystemId(systemId);</span>
+<span class="nc" id="L251">                contributionAccess.setAuditDetailsDescription(description);</span>
+            }
+        }
+<span class="nc" id="L254">        UUID contributionId = this.contributionAccess.commit();</span>
+<span class="nc" id="L255">        setContributionId(contributionId);</span>
+<span class="nc" id="L256">    }</span>
+
+    public static I_StatusAccess retrieveInstance(I_DomainAccess domainAccess, UUID statusId) {
+<span class="nc" id="L259">        StatusRecord record = domainAccess.getContext().fetchOne(STATUS, STATUS.ID.eq(statusId));</span>
+
+<span class="nc bnc" id="L261" title="All 2 branches missed.">        if (record == null) {</span>
+<span class="nc" id="L262">            return null;</span>
+        }
+
+<span class="nc" id="L265">        return createStatusAccessForRetrieval(domainAccess, record, null, record.getSysTenant());</span>
+    }
+
+    public static I_StatusAccess retrieveInstanceByNamedSubject(I_DomainAccess domainAccess, String partyName) {
+
+<span class="nc" id="L270">        DSLContext context = domainAccess.getContext();</span>
+
+<span class="nc" id="L272">        StatusRecord record = domainAccess</span>
+<span class="nc" id="L273">                .getContext()</span>
+<span class="nc" id="L274">                .fetchOne(</span>
+<span class="nc" id="L275">                        STATUS,</span>
+<span class="nc" id="L276">                        STATUS.PARTY.eq(context.select(PARTY_IDENTIFIED.ID)</span>
+<span class="nc" id="L277">                                .from(PARTY_IDENTIFIED)</span>
+<span class="nc" id="L278">                                .where(PARTY_IDENTIFIED.NAME.eq(partyName))));</span>
+
+<span class="nc bnc" id="L280" title="All 2 branches missed.">        if (record == null) {</span>
+<span class="nc" id="L281">            return null;</span>
+        }
+
+<span class="nc" id="L284">        return createStatusAccessForRetrieval(domainAccess, record, null, record.getSysTenant());</span>
+    }
+
+    public static I_StatusAccess retrieveInstanceByParty(I_DomainAccess domainAccess, UUID partyIdentified) {
+
+<span class="nc" id="L289">        DSLContext context = domainAccess.getContext();</span>
+
+<span class="nc" id="L291">        StatusRecord record = domainAccess</span>
+<span class="nc" id="L292">                .getContext()</span>
+<span class="nc" id="L293">                .fetchOne(</span>
+<span class="nc" id="L294">                        STATUS,</span>
+<span class="nc" id="L295">                        STATUS.PARTY.eq(context.select(PARTY_IDENTIFIED.ID)</span>
+<span class="nc" id="L296">                                .from(PARTY_IDENTIFIED)</span>
+<span class="nc" id="L297">                                .where(PARTY_IDENTIFIED.ID.eq(partyIdentified))));</span>
+
+<span class="nc bnc" id="L299" title="All 2 branches missed.">        if (record == null) {</span>
+<span class="nc" id="L300">            return null;</span>
+        }
+
+<span class="nc" id="L303">        return createStatusAccessForRetrieval(domainAccess, record, null, record.getSysTenant());</span>
+    }
+
+    public static I_StatusAccess retrieveByVersion(I_DomainAccess domainAccess, UUID statusId, int version) {
+<span class="nc bnc" id="L307" title="All 2 branches missed.">        if (version == getLatestVersionNumber(domainAccess, statusId)) return retrieveInstance(domainAccess, statusId);</span>
+
+<span class="nc" id="L309">        Map&lt;Integer, I_StatusAccess&gt; allVersions = getVersionMapOfStatus(domainAccess, statusId);</span>
+
+<span class="nc" id="L311">        return allVersions.get(Integer.valueOf(version));</span>
+    }
+
+    // fetch latest status
+    public static I_StatusAccess retrieveInstanceByEhrId(I_DomainAccess domainAccess, UUID ehrId) {
+<span class="nc" id="L316">        StatusRecord record = null;</span>
+
+<span class="nc bnc" id="L318" title="All 2 branches missed.">        if (domainAccess.getContext().fetchExists(STATUS, STATUS.EHR_ID.eq(ehrId))) {</span>
+<span class="nc" id="L319">            record = domainAccess.getContext().fetchOne(STATUS, STATUS.EHR_ID.eq(ehrId));</span>
+<span class="nc" id="L320">        } else {</span>
+<span class="nc bnc" id="L321" title="All 2 branches missed.">            if (!domainAccess.getContext().fetchExists(STATUS_HISTORY, STATUS_HISTORY.EHR_ID.eq(ehrId)))</span>
+            // no current one (premise from above) and no history --&gt; inconsistency
+            {
+<span class="nc" id="L324">                throw new InternalServerException(&quot;DB inconsistency. No STATUS for given EHR ID: &quot; + ehrId);</span>
+            } else {
+<span class="nc" id="L326">                Result&lt;StatusHistoryRecord&gt; recordsRes = domainAccess</span>
+<span class="nc" id="L327">                        .getContext()</span>
+<span class="nc" id="L328">                        .selectFrom(STATUS_HISTORY)</span>
+<span class="nc" id="L329">                        .where(STATUS_HISTORY.EHR_ID.eq(ehrId))</span>
+<span class="nc" id="L330">                        .orderBy(STATUS_HISTORY.SYS_TRANSACTION.desc()) // latest at top, i.e. [0]</span>
+<span class="nc" id="L331">                        .fetch();</span>
+                // get latest
+<span class="nc bnc" id="L333" title="All 2 branches missed.">                if (recordsRes.get(0) != null) {</span>
+<span class="nc" id="L334">                    record = historyRecToNormalRec(domainAccess, recordsRes.get(0));</span>
+                }
+            }
+        }
+
+<span class="nc bnc" id="L339" title="All 2 branches missed.">        if (record == null) {</span>
+<span class="nc" id="L340">            return null;</span>
+        }
+
+<span class="nc" id="L343">        return createStatusAccessForRetrieval(domainAccess, record, null, record.getSysTenant());</span>
+    }
+
+    public static Map&lt;ObjectVersionId, I_StatusAccess&gt; retrieveInstanceByContribution(
+            I_DomainAccess domainAccess, UUID contributionId, String node) {
+<span class="nc" id="L348">        Set&lt;UUID&gt; statuses = new HashSet&lt;&gt;(); // Set, because of unique values</span>
+        // add all compositions having a link to given contribution
+<span class="nc" id="L350">        domainAccess</span>
+<span class="nc" id="L351">                .getContext()</span>
+<span class="nc" id="L352">                .select(STATUS.ID)</span>
+<span class="nc" id="L353">                .from(STATUS)</span>
+<span class="nc" id="L354">                .where(STATUS.IN_CONTRIBUTION.eq(contributionId))</span>
+<span class="nc" id="L355">                .fetch()</span>
+<span class="nc" id="L356">                .forEach(rec -&gt; statuses.add(rec.value1()));</span>
+        // and older versions or deleted ones, too
+<span class="nc" id="L358">        domainAccess</span>
+<span class="nc" id="L359">                .getContext()</span>
+<span class="nc" id="L360">                .select(STATUS_HISTORY.ID)</span>
+<span class="nc" id="L361">                .from(STATUS_HISTORY)</span>
+<span class="nc" id="L362">                .where(STATUS_HISTORY.IN_CONTRIBUTION.eq(contributionId))</span>
+<span class="nc" id="L363">                .fetch()</span>
+<span class="nc" id="L364">                .forEach(rec -&gt; statuses.add(rec.value1()));</span>
+
+        // get whole &quot;version map&quot; of each matching status and do fine-grain check for matching contribution
+        // precondition: each UUID in `statuses` set is unique, so for each the &quot;version map&quot; is only created once below
+        // (meta: can't do that as jooq query, because the specific version number isn't stored in DB)
+<span class="nc" id="L369">        Map&lt;ObjectVersionId, I_StatusAccess&gt; resultMap = new HashMap&lt;&gt;();</span>
+<span class="nc bnc" id="L370" title="All 2 branches missed.">        for (UUID statusId : statuses) {</span>
+<span class="nc" id="L371">            Map&lt;Integer, I_StatusAccess&gt; map = getVersionMapOfStatus(domainAccess, statusId);</span>
+            // fine-grained contribution ID check
+<span class="nc" id="L373">            map.forEach((k, v) -&gt; {</span>
+<span class="nc bnc" id="L374" title="All 2 branches missed.">                if (v.getContributionId().equals(contributionId)) {</span>
+<span class="nc" id="L375">                    resultMap.put(new ObjectVersionId(statusId.toString(), node, k.toString()), v);</span>
+                }
+<span class="nc" id="L377">            });</span>
+        }
+
+<span class="nc" id="L380">        return resultMap;</span>
+    }
+
+    public static Map&lt;Integer, I_StatusAccess&gt; getVersionMapOfStatus(I_DomainAccess domainAccess, UUID statusId) {
+<span class="nc" id="L384">        Map&lt;Integer, I_StatusAccess&gt; versionMap = new HashMap&lt;&gt;();</span>
+
+        // create counter with highest version, to keep track of version number and allow check in the end
+<span class="nc" id="L387">        Integer versionCounter = getLatestVersionNumber(domainAccess, statusId);</span>
+
+        // fetch matching entry
+<span class="nc" id="L390">        StatusRecord record = domainAccess.getContext().fetchOne(STATUS, STATUS.ID.eq(statusId));</span>
+<span class="nc bnc" id="L391" title="All 2 branches missed.">        if (record != null) {</span>
+<span class="nc" id="L392">            I_StatusAccess statusAccess =</span>
+<span class="nc" id="L393">                    createStatusAccessForRetrieval(domainAccess, record, null, record.getSysTenant());</span>
+<span class="nc" id="L394">            versionMap.put(versionCounter, statusAccess);</span>
+
+<span class="nc" id="L396">            versionCounter--;</span>
+        }
+
+        // if composition was removed (i.e. from &quot;COMPOSITION&quot; table) *or* other versions are existing
+<span class="nc" id="L400">        Result&lt;StatusHistoryRecord&gt; historyRecords = domainAccess</span>
+<span class="nc" id="L401">                .getContext()</span>
+<span class="nc" id="L402">                .selectFrom(STATUS_HISTORY)</span>
+<span class="nc" id="L403">                .where(STATUS_HISTORY.ID.eq(statusId))</span>
+<span class="nc" id="L404">                .orderBy(STATUS_HISTORY.SYS_TRANSACTION.desc())</span>
+<span class="nc" id="L405">                .fetch();</span>
+
+<span class="nc bnc" id="L407" title="All 2 branches missed.">        for (StatusHistoryRecord historyRecord : historyRecords) {</span>
+<span class="nc" id="L408">            I_StatusAccess historyAccess =</span>
+<span class="nc" id="L409">                    createStatusAccessForRetrieval(domainAccess, null, historyRecord, historyRecord.getSysTenant());</span>
+<span class="nc" id="L410">            versionMap.put(versionCounter, historyAccess);</span>
+<span class="nc" id="L411">            versionCounter--;</span>
+        }
+
+<span class="nc bnc" id="L414" title="All 2 branches missed.">        if (versionCounter != 0) {</span>
+<span class="nc" id="L415">            throw new InternalServerException(&quot;Version Map generation failed&quot;);</span>
+        }
+
+<span class="nc" id="L418">        return versionMap;</span>
+    }
+
+    /**
+     * Helper to create a new {@link StatusAccess} instance from a queried statusRecord (either as {@link
+     * StatusRecord} or {@link StatusHistoryRecord}), to return to service layer.
+     *
+     * @param domainAccess  General access
+     * @param statusRecord        Queried {@link StatusRecord} which contains ID of linked EHR, audit and
+     *                      contribution. Give null if not used
+     * @param historyRecord Option: Same as statusRecord but as history input type. Give null if not used
+     * @return Resulting access object
+     */
+    private static I_StatusAccess createStatusAccessForRetrieval(
+            I_DomainAccess domainAccess,
+            StatusRecord statusRecord,
+            StatusHistoryRecord historyRecord,
+            Short sysTenant) {
+        StatusAccess statusAccess;
+<span class="nc bnc" id="L437" title="All 2 branches missed.">        if (statusRecord != null) {</span>
+<span class="nc" id="L438">            statusAccess = new StatusAccess(domainAccess, statusRecord.getEhrId(), sysTenant);</span>
+<span class="nc" id="L439">            statusAccess.setStatusRecord(statusRecord);</span>
+<span class="nc bnc" id="L440" title="All 2 branches missed.">        } else if (historyRecord != null) {</span>
+<span class="nc" id="L441">            statusAccess = new StatusAccess(domainAccess, historyRecord.getEhrId(), sysTenant);</span>
+<span class="nc" id="L442">            statusAccess.setStatusRecord(historyRecord);</span>
+<span class="nc" id="L443">        } else {</span>
+<span class="nc" id="L444">            throw new InternalServerException(&quot;Error creating version map of EHR_STATUS&quot;);</span>
+        }
+
+        // retrieve corresponding audit
+<span class="nc" id="L448">        I_AuditDetailsAccess auditAccess = new AuditDetailsAccess(domainAccess.getDataAccess(), sysTenant)</span>
+<span class="nc" id="L449">                .retrieveInstance(domainAccess.getDataAccess(), statusAccess.getAuditDetailsId());</span>
+<span class="nc" id="L450">        statusAccess.setAuditDetailsAccess(auditAccess);</span>
+
+        // retrieve corresponding contribution
+<span class="nc" id="L453">        I_ContributionAccess retContributionAccess =</span>
+<span class="nc" id="L454">                I_ContributionAccess.retrieveInstance(domainAccess, statusAccess.getContributionId());</span>
+<span class="nc" id="L455">        statusAccess.setContributionAccess(retContributionAccess);</span>
+
+<span class="nc" id="L457">        return statusAccess;</span>
+    }
+
+    @Override
+    public UUID getId() {
+<span class="nc" id="L462">        return statusRecord.getId();</span>
+    }
+
+    @Override
+    public DataAccess getDataAccess() {
+<span class="nc" id="L467">        return this;</span>
+    }
+
+    @Override
+    public void setStatusRecord(StatusRecord record) {
+<span class="nc" id="L472">        this.statusRecord = record;</span>
+<span class="nc" id="L473">    }</span>
+
+    @Override
+    public void setStatusRecord(StatusHistoryRecord input) {
+<span class="nc" id="L477">        statusRecord = StatusAccess.historyRecToNormalRec(getDataAccess(), input);</span>
+<span class="nc" id="L478">        statusRecord.setSysPeriod(null);</span>
+<span class="nc" id="L479">    }</span>
+
+    @Override
+    public StatusRecord getStatusRecord() {
+<span class="nc" id="L483">        return this.statusRecord;</span>
+    }
+
+    @Override
+    public void setAuditDetailsAccess(I_AuditDetailsAccess auditDetailsAccess) {
+<span class="nc" id="L488">        this.auditDetailsAccess = auditDetailsAccess;</span>
+<span class="nc" id="L489">    }</span>
+
+    @Override
+    public void setContributionAccess(I_ContributionAccess contributionAccess) {
+<span class="nc" id="L493">        this.contributionAccess = contributionAccess;</span>
+<span class="nc" id="L494">    }</span>
+
+    @Override
+    public I_AuditDetailsAccess getAuditDetailsAccess() {
+<span class="nc" id="L498">        return this.auditDetailsAccess;</span>
+    }
+
+    @Override
+    public UUID getAuditDetailsId() {
+<span class="nc" id="L503">        return statusRecord.getHasAudit();</span>
+    }
+
+    @Override
+    public void setContributionId(UUID contribution) {
+<span class="nc" id="L508">        this.statusRecord.setInContribution(contribution);</span>
+<span class="nc" id="L509">    }</span>
+
+    @Override
+    public UUID getContributionId() {
+<span class="nc" id="L513">        return this.statusRecord.getInContribution();</span>
+    }
+
+    @Override
+    public void setAuditAndContributionAuditValues(
+            UUID systemId, UUID committerId, String description, ContributionChangeType changeType) {
+<span class="nc bnc" id="L519" title="All 6 branches missed.">        if (committerId == null || systemId == null || changeType == null) {</span>
+<span class="nc" id="L520">            throw new IllegalArgumentException(&quot;arguments not optional&quot;);</span>
+        }
+<span class="nc" id="L522">        this.auditDetailsAccess.setCommitter(committerId);</span>
+<span class="nc" id="L523">        this.auditDetailsAccess.setSystemId(systemId);</span>
+<span class="nc" id="L524">        this.auditDetailsAccess.setChangeType(I_ConceptAccess.fetchContributionChangeType(this, changeType));</span>
+
+<span class="nc bnc" id="L526" title="All 2 branches missed.">        if (description != null) {</span>
+<span class="nc" id="L527">            this.auditDetailsAccess.setDescription(description);</span>
+        }
+
+<span class="nc" id="L530">        this.contributionAccess.setAuditDetailsValues(committerId, systemId, description, changeType);</span>
+<span class="nc" id="L531">    }</span>
+
+    /**
+     * Helper method to convert result from query on history table to a record of the normal table.
+     *
+     * @param statusHistoryRecord Given history record
+     * @return Converted normal record
+     */
+    protected static StatusRecord historyRecToNormalRec(
+            I_DomainAccess domainAccess, StatusHistoryRecord statusHistoryRecord) {
+<span class="nc" id="L541">        StatusRecord statusRecord = domainAccess.getContext().newRecord(STATUS);</span>
+<span class="nc" id="L542">        statusRecord.setId(statusHistoryRecord.getId());</span>
+<span class="nc" id="L543">        statusRecord.setEhrId(statusHistoryRecord.getEhrId());</span>
+<span class="nc" id="L544">        statusRecord.setIsQueryable(statusHistoryRecord.getIsQueryable());</span>
+<span class="nc" id="L545">        statusRecord.setIsModifiable(statusHistoryRecord.getIsModifiable());</span>
+<span class="nc" id="L546">        statusRecord.setParty(statusHistoryRecord.getParty());</span>
+<span class="nc" id="L547">        statusRecord.setOtherDetails(statusHistoryRecord.getOtherDetails());</span>
+<span class="nc" id="L548">        statusRecord.setSysTransaction(statusHistoryRecord.getSysTransaction());</span>
+<span class="nc" id="L549">        statusRecord.setSysPeriod(statusHistoryRecord.getSysPeriod());</span>
+<span class="nc" id="L550">        statusRecord.setHasAudit(statusHistoryRecord.getHasAudit());</span>
+<span class="nc" id="L551">        statusRecord.setAttestationRef(statusHistoryRecord.getAttestationRef());</span>
+<span class="nc" id="L552">        statusRecord.setInContribution(statusHistoryRecord.getInContribution());</span>
+<span class="nc" id="L553">        statusRecord.setArchetypeNodeId(statusHistoryRecord.getArchetypeNodeId());</span>
+<span class="nc" id="L554">        statusRecord.setName(statusHistoryRecord.getName());</span>
+<span class="nc" id="L555">        statusRecord.setSysTenant(statusHistoryRecord.getSysTenant());</span>
+<span class="nc" id="L556">        return statusRecord;</span>
+    }
+
+    public static Integer getLatestVersionNumber(I_DomainAccess domainAccess, UUID statusId) {
+
+<span class="nc" id="L561">        DSLContext ctx = domainAccess.getContext();</span>
+<span class="nc" id="L562">        Param&lt;UUID&gt; uuidParam = DSL.param(&quot;id&quot;, statusId);</span>
+<span class="nc" id="L563">        Table&lt;Record1&lt;Integer&gt;&gt; unionAll = ctx.select(count(STATUS.ID))</span>
+<span class="nc" id="L564">                .from(STATUS)</span>
+<span class="nc" id="L565">                .where(STATUS.ID.eq(uuidParam))</span>
+<span class="nc" id="L566">                .unionAll(ctx.select(count(STATUS_HISTORY.ID))</span>
+<span class="nc" id="L567">                        .from(STATUS_HISTORY)</span>
+<span class="nc" id="L568">                        .where(STATUS_HISTORY.ID.eq(uuidParam)))</span>
+<span class="nc" id="L569">                .asTable(&quot;version_counts&quot;);</span>
+
+<span class="nc" id="L571">        AggregateFunction&lt;BigDecimal&gt; sum = DSL.sum(unionAll.field(0, Integer.class));</span>
+
+<span class="nc" id="L573">        int version = ctx.select(sum).from(unionAll).fetchOne(sum).intValue();</span>
+
+<span class="nc" id="L575">        return version;</span>
+    }
+
+    public static boolean exists(I_DomainAccess domainAccess, UUID ehrStatusId) {
+<span class="nc" id="L579">        return domainAccess.getContext().fetchExists(STATUS, STATUS.ID.eq(ehrStatusId));</span>
+    }
+
+    @Override
+    @SuppressWarnings(&quot;rawtypes&quot;) // `result` is raw so later iterating also gets the version number
+    public int getEhrStatusVersionFromTimeStamp(Timestamp time) {
+<span class="nc" id="L585">        UUID statusUid = this.statusRecord.getId();</span>
+        // retrieve current version from status tables
+<span class="nc" id="L587">        I_StatusAccess retStatusAccess = I_StatusAccess.retrieveInstance(this.getDataAccess(), statusUid);</span>
+
+        // retrieve all other versions from status_history and sort by time
+<span class="nc" id="L590">        Result result = getDataAccess()</span>
+<span class="nc" id="L591">                .getContext()</span>
+<span class="nc" id="L592">                .selectFrom(STATUS_HISTORY)</span>
+<span class="nc" id="L593">                .where(STATUS_HISTORY.ID.eq(statusUid))</span>
+<span class="nc" id="L594">                .orderBy(STATUS_HISTORY.SYS_TRANSACTION.desc()) // latest at top, i.e. [0]</span>
+<span class="nc" id="L595">                .fetch();</span>
+
+        // see 'what version was the top version at moment T?'
+        // first: is time T after current version? then current version is result
+<span class="nc bnc" id="L599" title="All 2 branches missed.">        if (time.after(retStatusAccess.getStatusRecord().getSysTransaction())) {</span>
+<span class="nc" id="L600">            return getLatestVersionNumber(getDataAccess(), statusUid);</span>
+        }
+        // second: if not, which one of the historical versions matches?
+<span class="nc bnc" id="L603" title="All 2 branches missed.">        for (int i = 0; i &lt; result.size(); i++) {</span>
+<span class="nc bnc" id="L604" title="All 2 branches missed.">            if (result.get(i) instanceof StatusHistoryRecord) {</span>
+                // is time T after this version? then return its version number
+<span class="nc bnc" id="L606" title="All 2 branches missed.">                if (time.after(((StatusHistoryRecord) result.get(i)).getSysTransaction())) {</span>
+<span class="nc" id="L607">                    return result.size()</span>
+<span class="nc" id="L608">                            - i; // reverses iterator because order was reversed above and always get non zero</span>
+                }
+            } else {
+<span class="nc" id="L611">                throw new InternalServerException(&quot;Problem comparing timestamps of EHR_STATUS versions&quot;);</span>
+            }
+        }
+
+<span class="nc" id="L615">        throw new ObjectNotFoundException(&quot;EHR_STATUS&quot;, &quot;Could not find EHR_STATUS version matching given timestamp&quot;);</span>
+    }
+
+    @Override
+    public Timestamp getInitialTimeOfVersionedEhrStatus() {
+<span class="nc" id="L620">        Result&lt;StatusHistoryRecord&gt; result = getDataAccess()</span>
+<span class="nc" id="L621">                .getContext()</span>
+<span class="nc" id="L622">                .selectFrom(STATUS_HISTORY)</span>
+<span class="nc" id="L623">                .where(STATUS_HISTORY.EHR_ID.eq(statusRecord.getEhrId())) // ehrId from this instance</span>
+<span class="nc" id="L624">                .orderBy(STATUS_HISTORY.SYS_TRANSACTION.asc()) // oldest at top, i.e. [0]</span>
+<span class="nc" id="L625">                .fetch();</span>
+
+<span class="nc bnc" id="L627" title="All 2 branches missed.">        if (!result.isEmpty()) {</span>
+<span class="nc" id="L628">            StatusHistoryRecord statusHistoryRecord = result.get(0); // get oldest</span>
+<span class="nc" id="L629">            return statusHistoryRecord.getSysTransaction();</span>
+        }
+
+        // if haven't returned above use time from latest version (already available in this instance)
+<span class="nc" id="L633">        return statusRecord.getSysTransaction();</span>
+    }
+
+    @Override
+    public EhrStatus getStatus() {
+<span class="nc" id="L638">        EhrStatus status = new EhrStatus();</span>
+
+<span class="nc" id="L640">        status.setModifiable(getStatusRecord().getIsModifiable());</span>
+<span class="nc" id="L641">        status.setQueryable(getStatusRecord().getIsQueryable());</span>
+        // set otherDetails if available
+<span class="nc bnc" id="L643" title="All 2 branches missed.">        if (getStatusRecord().getOtherDetails() != null) {</span>
+<span class="nc" id="L644">            status.setOtherDetails(getStatusRecord().getOtherDetails());</span>
+        }
+
+        // Locatable attribute
+<span class="nc" id="L648">        status.setArchetypeNodeId(getStatusRecord().getArchetypeNodeId());</span>
+<span class="nc" id="L649">        Object name = new RecordedDvCodedText().fromDB(getStatusRecord(), STATUS.NAME);</span>
+<span class="nc bnc" id="L650" title="All 2 branches missed.">        status.setName(name instanceof DvText ? (DvText) name : (DvCodedText) name);</span>
+
+<span class="nc" id="L652">        UUID statusId = getStatusRecord().getId();</span>
+<span class="nc" id="L653">        status.setUid(new HierObjectId(statusId.toString() + &quot;::&quot;</span>
+<span class="nc" id="L654">                + getServerConfig().getNodename() + &quot;::&quot; + I_StatusAccess.getLatestVersionNumber(this, statusId)));</span>
+
+<span class="nc" id="L656">        PartySelf partySelf = (PartySelf)</span>
+<span class="nc" id="L657">                new PersistedPartyProxy(this).retrieve(getStatusRecord().getParty());</span>
+<span class="nc" id="L658">        status.setSubject(partySelf);</span>
+
+<span class="nc" id="L660">        return status;</span>
+    }
+
+    @Override
+    public void setOtherDetails(ItemStructure otherDetails) {
+<span class="nc bnc" id="L665" title="All 2 branches missed.">        if (otherDetails != null) {</span>
+<span class="nc" id="L666">            statusRecord.setOtherDetails(otherDetails);</span>
+        }
+<span class="nc" id="L668">    }</span>
+
+    @Override
+    public ItemStructure getOtherDetails() {
+<span class="nc" id="L672">        return this.statusRecord.getOtherDetails();</span>
+    }
+
+    @Override
+    public void setEhrId(UUID ehrId) {
+<span class="nc" id="L677">        this.statusRecord.setEhrId(ehrId);</span>
+<span class="nc" id="L678">    }</span>
+
+    @Override
+    public UUID getEhrId() {
+<span class="nc" id="L682">        return this.statusRecord.getEhrId();</span>
+    }
+
+    @Override
+    public Timestamp getSysTransaction() {
+<span class="nc" id="L687">        return this.statusRecord.getSysTransaction();</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.7.202105040129</span></div></body></html>

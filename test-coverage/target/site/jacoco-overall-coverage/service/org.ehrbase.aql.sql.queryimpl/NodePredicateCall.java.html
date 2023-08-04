@@ -1,0 +1,162 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../../jacoco-resources/report.gif" type="image/gif"/><title>NodePredicateCall.java</title><link rel="stylesheet" href="../../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../../index.html" class="el_report">Overall Coverage</a> &gt; <a href="../index.html" class="el_bundle">service</a> &gt; <a href="index.source.html" class="el_package">org.ehrbase.aql.sql.queryimpl</a> &gt; <span class="el_source">NodePredicateCall.java</span></div><h1>NodePredicateCall.java</h1><pre class="source lang-java linenums">/*
+ * Copyright (c) 2019 vitasystems GmbH and Hannover Medical School.
+ *
+ * This file is part of project EHRbase
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     https://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.ehrbase.aql.sql.queryimpl;
+
+import static org.ehrbase.jooq.pg.Tables.ENTRY;
+
+import java.util.ArrayList;
+import java.util.List;
+import java.util.stream.Collectors;
+import org.apache.commons.collections4.IterableUtils;
+import org.apache.commons.lang3.StringUtils;
+import org.jooq.impl.DSL;
+
+/**
+ * Created by christian on 5/9/2018.
+ * build expression to call node name resolution on jsonb
+ * The function call syntax is:
+ * ehr.aql_node_name_predicate(&lt;jsonb structure&gt;,'&lt;a node name predicate&gt;','the path of node to check for name/value predicate')
+ */
+public class NodePredicateCall {
+
+    List&lt;String&gt; itemPathArray;
+
+<span class="fc" id="L39">    public NodePredicateCall(List&lt;String&gt; itemPathArray) {</span>
+<span class="fc" id="L40">        this.itemPathArray = itemPathArray;</span>
+<span class="fc" id="L41">    }</span>
+
+    public List&lt;String&gt; resolve() {
+
+<span class="fc" id="L45">        List&lt;String&gt; resultList = new ArrayList&lt;&gt;();</span>
+<span class="fc" id="L46">        resultList.addAll(patchItemArray(itemPathArray));</span>
+
+<span class="fc bfc" id="L48" title="All 2 branches covered.">        while (resultList.contains(QueryImplConstants.AQL_NODE_NAME_PREDICATE_MARKER)) {</span>
+<span class="fc" id="L49">            resultList = resolveNodePredicateCall(resultList);</span>
+        }
+
+<span class="fc" id="L52">        return resultList;</span>
+    }
+
+    private List&lt;String&gt; resolveNodePredicateCall(List&lt;String&gt; itemPathArray) {
+
+        // check if the list contains an entry with AQL_NODE_NAME_PREDICATE_MARKER
+<span class="fc" id="L58">        long namePredicateCount =</span>
+<span class="fc" id="L59">                IterableUtils.countMatches(itemPathArray, QueryImplConstants.AQL_NODE_NAME_PREDICATE_MARKER::equals);</span>
+<span class="pc bpc" id="L60" title="1 of 2 branches missed.">        if (namePredicateCount == 0) {</span>
+<span class="nc" id="L61">            return itemPathArray;</span>
+        }
+
+<span class="fc" id="L64">        StringBuilder expression = new StringBuilder();</span>
+        // prepare the function call
+<span class="fc" id="L66">        expression.append(QueryImplConstants.AQL_NODE_NAME_PREDICATE_FUNCTION);</span>
+<span class="fc" id="L67">        expression.append(&quot;(&quot;);</span>
+        // check if the table clause is already in the sequence in a nested call to aql_node_name_predicate
+        // initial
+        int startList;
+<span class="fc bfc" id="L71" title="All 2 branches covered.">        if (!itemPathArray.get(0).startsWith(&quot;(&quot; + QueryImplConstants.AQL_NODE_NAME_PREDICATE_FUNCTION)) {</span>
+<span class="fc" id="L72">            expression.append(ENTRY.ENTRY_);</span>
+<span class="fc" id="L73">            startList = 0;</span>
+        } else {
+<span class="fc" id="L75">            expression.append(itemPathArray.get(0));</span>
+<span class="fc" id="L76">            startList = 1;</span>
+        }
+<span class="fc" id="L78">        expression.append(&quot;,&quot;);</span>
+
+<span class="fc" id="L80">        int markerPos = itemPathArray</span>
+<span class="fc" id="L81">                .subList(startList, itemPathArray.size())</span>
+<span class="fc" id="L82">                .indexOf(QueryImplConstants.AQL_NODE_NAME_PREDICATE_MARKER);</span>
+<span class="pc bpc" id="L83" title="1 of 2 branches missed.">        if (markerPos &lt; 0) { // not found</span>
+<span class="nc" id="L84">            markerPos = itemPathArray.size();</span>
+        } else {
+<span class="fc" id="L86">            markerPos += startList;</span>
+        }
+
+<span class="fc" id="L89">        expression.append(itemPathArray.get(markerPos + 1)); // node name predicate</span>
+<span class="fc" id="L90">        expression.append(&quot;,&quot;);</span>
+<span class="fc" id="L91">        expression.append(&quot;'&quot;);</span>
+        // path of node as a list
+<span class="fc" id="L93">        expression.append(itemPathArray.subList(startList, markerPos).stream().collect(Collectors.joining(&quot;,&quot;)));</span>
+<span class="fc" id="L94">        expression.append(&quot;'&quot;);</span>
+<span class="fc" id="L95">        expression.append(&quot;)&quot;);</span>
+
+        // Locate end tag (end of array or next marker)
+<span class="fc" id="L98">        List&lt;String&gt; resultList = new ArrayList&lt;&gt;();</span>
+        // check if path segments contains a name node predicate tag for next iteration
+<span class="fc bfc" id="L100" title="All 2 branches covered.">        if (namePredicateCount &gt; 1) {</span>
+            // resolve the path selection to the next marker
+<span class="fc" id="L102">            int endPos = markerPos</span>
+                    + 1
+                    + itemPathArray
+<span class="fc" id="L105">                            .subList(markerPos + 1, itemPathArray.size())</span>
+<span class="fc" id="L106">                            .indexOf(QueryImplConstants.AQL_NODE_NAME_PREDICATE_MARKER);</span>
+<span class="fc" id="L107">            appendRightPathExpression(itemPathArray, expression, markerPos, endPos, false);</span>
+            // cast as jsonb for next iteration
+            // redundant cast potentially needed for WhereBinder::hackItem
+<span class="fc" id="L110">            resultList.add(DSL.field(&quot;(&quot; + expression.toString() + &quot;)::jsonb&quot;)</span>
+<span class="fc" id="L111">                    .toString()); // insert the result in the path list</span>
+            // add the remaining part to the list for the next iteration
+<span class="fc" id="L113">            resultList.addAll(itemPathArray.subList(endPos, itemPathArray.size()));</span>
+
+<span class="fc" id="L115">        } else {</span>
+<span class="fc" id="L116">            int endPos = itemPathArray.size();</span>
+<span class="pc bpc" id="L117" title="1 of 2 branches missed.">            if (markerPos + 2 &lt; endPos) {</span>
+<span class="fc" id="L118">                appendRightPathExpression(itemPathArray, expression, markerPos, endPos, true);</span>
+            }
+<span class="fc" id="L120">            resultList.add(expression.toString());</span>
+        }
+
+<span class="fc" id="L123">        return resultList;</span>
+    }
+
+    private StringBuilder appendRightPathExpression(
+            List&lt;String&gt; itemPathArray, StringBuilder expression, int from, int to, boolean resolveAsText) {
+<span class="fc bfc" id="L128" title="All 2 branches covered.">        expression.append(resolveAsText ? &quot;#&gt;&gt;&quot; : &quot;#&gt;&quot;);</span>
+<span class="fc" id="L129">        expression.append(&quot;'&quot;);</span>
+<span class="fc" id="L130">        expression.append(&quot;{&quot;);</span>
+<span class="fc" id="L131">        expression.append(StringUtils.join(</span>
+                (itemPathArray
+<span class="fc" id="L133">                        .subList(</span>
+                                // test if the starting item is an index, then skip it as it is mutually exclusive with
+                                // node name predicate node selection
+<span class="fc bfc" id="L136" title="All 2 branches covered.">                                itemPathArray.get(from + 2).matches(&quot;[0-9]*|#&quot;) ? from + 3 : from + 2, to)</span>
+<span class="fc" id="L137">                        .toArray(String[]::new)),</span>
+                &quot;,&quot;));
+<span class="fc" id="L139">        expression.append(&quot;}&quot;);</span>
+<span class="fc" id="L140">        expression.append(&quot;'&quot;);</span>
+
+<span class="fc" id="L142">        return expression;</span>
+    }
+
+    /**
+     * remove json array marker and replace it with a dummy index '0'
+     *
+     * @return
+     */
+    private List&lt;String&gt; patchItemArray(List&lt;String&gt; itemPathArray) {
+
+<span class="fc" id="L152">        List&lt;String&gt; items = new ArrayList&lt;&gt;();</span>
+
+<span class="fc bfc" id="L154" title="All 2 branches covered.">        for (String item : itemPathArray) {</span>
+<span class="fc bfc" id="L155" title="All 2 branches covered.">            if (item.equals(QueryImplConstants.AQL_NODE_ITERATIVE_MARKER)) items.add(&quot;0&quot;);</span>
+<span class="fc" id="L156">            else items.add(item);</span>
+<span class="fc" id="L157">        }</span>
+
+<span class="fc" id="L159">        return items;</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.7.202105040129</span></div></body></html>

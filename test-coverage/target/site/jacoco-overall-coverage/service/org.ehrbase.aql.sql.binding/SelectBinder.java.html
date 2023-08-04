@@ -1,0 +1,213 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../../jacoco-resources/report.gif" type="image/gif"/><title>SelectBinder.java</title><link rel="stylesheet" href="../../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../../index.html" class="el_report">Overall Coverage</a> &gt; <a href="../index.html" class="el_bundle">service</a> &gt; <a href="index.source.html" class="el_package">org.ehrbase.aql.sql.binding</a> &gt; <span class="el_source">SelectBinder.java</span></div><h1>SelectBinder.java</h1><pre class="source lang-java linenums">/*
+ * Copyright (c) 2019 vitasystems GmbH and Hannover Medical School.
+ *
+ * This file is part of project EHRbase
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     https://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.ehrbase.aql.sql.binding;
+
+import static org.ehrbase.aql.sql.queryimpl.IQueryImpl.Clause.SELECT;
+
+import java.util.ArrayList;
+import java.util.Iterator;
+import java.util.List;
+import org.ehrbase.aql.compiler.Contains;
+import org.ehrbase.aql.compiler.Statements;
+import org.ehrbase.aql.containment.IdentifierMapper;
+import org.ehrbase.aql.definition.I_VariableDefinition;
+import org.ehrbase.aql.sql.PathResolver;
+import org.ehrbase.aql.sql.queryimpl.*;
+import org.ehrbase.dao.access.interfaces.I_DomainAccess;
+import org.ehrbase.service.IntrospectService;
+import org.ehrbase.service.KnowledgeCacheService;
+import org.jooq.Condition;
+import org.jooq.Field;
+import org.jooq.SelectQuery;
+import org.jooq.impl.DSL;
+
+/**
+ * Bind the abstract representation of a SELECT clause into a SQL expression
+ * Created by christian on 5/4/2016.
+ */
+@SuppressWarnings({&quot;java:S3776&quot;, &quot;java:S3740&quot;, &quot;java:S1452&quot;})
+public class SelectBinder extends TemplateMetaData implements ISelectBinder {
+
+    public static final String DATA = &quot;data&quot;;
+    private final JsonbEntryQuery jsonbEntryQuery;
+    private final CompositionAttributeQuery compositionAttributeQuery;
+    private final PathResolver pathResolver;
+    private final VariableDefinitions variableDefinitions;
+    private final WhereBinder whereBinder;
+    private final I_DomainAccess domainAccess;
+
+    SelectBinder(
+            I_DomainAccess domainAccess,
+            IntrospectService introspectCache,
+            PathResolver pathResolver,
+            VariableDefinitions variableDefinitions,
+            List whereClause,
+            String serverNodeId) {
+<span class="fc" id="L61">        super(introspectCache);</span>
+<span class="fc" id="L62">        this.domainAccess = domainAccess;</span>
+<span class="fc" id="L63">        this.pathResolver = pathResolver;</span>
+<span class="fc" id="L64">        this.variableDefinitions = variableDefinitions;</span>
+<span class="fc" id="L65">        this.jsonbEntryQuery = new JsonbEntryQuery(domainAccess, introspectCache, pathResolver);</span>
+<span class="fc" id="L66">        this.compositionAttributeQuery =</span>
+                new CompositionAttributeQuery(domainAccess, pathResolver, serverNodeId, introspectCache);
+<span class="fc" id="L68">        this.whereBinder = new WhereBinder(whereClause, pathResolver);</span>
+<span class="fc" id="L69">    }</span>
+
+    private SelectBinder(
+            I_DomainAccess domainAccess,
+            IntrospectService introspectCache,
+            IdentifierMapper mapper,
+            VariableDefinitions variableDefinitions,
+            List whereClause,
+            String serverNodeId) {
+<span class="fc" id="L78">        this(</span>
+                domainAccess,
+                introspectCache,
+                new PathResolver((KnowledgeCacheService) introspectCache, mapper),
+                variableDefinitions,
+                whereClause,
+                serverNodeId);
+<span class="fc" id="L85">    }</span>
+
+    public SelectBinder(
+            I_DomainAccess domainAccess,
+            IntrospectService introspectCache,
+            Contains contains,
+            Statements statements,
+            String serverNodeId) {
+<span class="fc" id="L93">        this(</span>
+                domainAccess,
+                introspectCache,
+<span class="fc" id="L96">                contains.getIdentifierMapper(),</span>
+<span class="fc" id="L97">                statements.getVariables(),</span>
+<span class="fc" id="L98">                statements.getWhereClause(),</span>
+                serverNodeId);
+<span class="fc" id="L100">    }</span>
+
+    /**
+     * bind with path resolution depending on composition
+     *
+     * @param templateId
+     * @return
+     */
+    public List&lt;MultiFields&gt; bind(String templateId) throws UnknownVariableException {
+<span class="fc" id="L109">        ObjectQuery.reset();</span>
+
+<span class="fc" id="L111">        List&lt;MultiFields&gt; multiFieldsList = new ArrayList&lt;&gt;();</span>
+
+<span class="fc bfc" id="L113" title="All 2 branches covered.">        while (variableDefinitions.hasNext()) {</span>
+<span class="fc" id="L114">            I_VariableDefinition variableDefinition = variableDefinitions.next();</span>
+            MultiFields multiFields;
+<span class="pc bpc" id="L116" title="1 of 4 branches missed.">            if (variableDefinition.isFunction() || variableDefinition.isExtension()) {</span>
+<span class="nc" id="L117">                continue;</span>
+<span class="fc bfc" id="L118" title="All 2 branches covered.">            } else if (variableDefinition.isConstant()) {</span>
+<span class="fc" id="L119">                multiFields =</span>
+<span class="fc" id="L120">                        new MultiFields(variableDefinition, new ConstantField(variableDefinition).toSql(), templateId);</span>
+
+            } else {
+<span class="fc" id="L123">                String identifier = variableDefinition.getIdentifier();</span>
+<span class="fc" id="L124">                String className = pathResolver.classNameOf(identifier);</span>
+
+<span class="fc" id="L126">                ExpressionField expressionField =</span>
+                        new ExpressionField(variableDefinition, jsonbEntryQuery, compositionAttributeQuery);
+
+<span class="fc" id="L129">                multiFields = expressionField.toSql(className, templateId, identifier, SELECT);</span>
+
+<span class="pc bpc" id="L131" title="1 of 2 branches missed.">                if (multiFields == null</span>
+<span class="pc bpc" id="L132" title="1 of 2 branches missed.">                        || multiFields.isEmpty()) { // the field cannot be resolved with containment (f.e. empty DB)</span>
+<span class="nc" id="L133">                    continue;</span>
+                }
+
+<span class="fc" id="L136">                encodeForLateral(className, templateId, variableDefinition, multiFields, multiFieldsList);</span>
+            }
+<span class="fc" id="L138">            multiFieldsList.add(multiFields);</span>
+<span class="fc" id="L139">            ObjectQuery.inc();</span>
+<span class="fc" id="L140">        }</span>
+
+<span class="fc" id="L142">        return multiFieldsList;</span>
+    }
+
+    public Condition getWhereConditions(
+            String templateId,
+            int whereCursor,
+            MultiFieldsMap multiWhereFieldsMap,
+            int selectCursor,
+            MultiFieldsMap multiSelectFieldsMap)
+            throws UnknownVariableException {
+<span class="fc" id="L152">        return whereBinder.bind(templateId, whereCursor, multiWhereFieldsMap, selectCursor, multiSelectFieldsMap);</span>
+    }
+
+    public CompositionAttributeQuery getCompositionAttributeQuery() {
+<span class="fc" id="L156">        return compositionAttributeQuery;</span>
+    }
+
+    private void encodeForLateral(
+            String className,
+            String templateId,
+            I_VariableDefinition variableDefinition,
+            MultiFields multiFields,
+            List&lt;MultiFields&gt; multiFieldsList)
+            throws UnknownVariableException {
+<span class="fc bfc" id="L166" title="All 2 branches covered.">        for (Iterator&lt;QualifiedAqlField&gt; it = multiFields.iterator(); it.hasNext(); ) {</span>
+<span class="fc" id="L167">            QualifiedAqlField qualifiedAqlField = it.next();</span>
+<span class="fc" id="L168">            Field sqlField = qualifiedAqlField.getSQLField();</span>
+<span class="fc" id="L169">            SelectQuery selectQuery = domainAccess.getContext().selectQuery();</span>
+<span class="fc" id="L170">            selectQuery.addSelect(sqlField);</span>
+<span class="fc bfc" id="L171" title="All 2 branches covered.">            if (SetReturningFunction.isUsed(selectQuery.toString())) { // what does selectQuery.toString() ?</span>
+<span class="fc" id="L172">                String alias = sqlField.getName();</span>
+<span class="fc" id="L173">                MultiFields unaliasedFields = new ExpressionField(</span>
+                                variableDefinition, jsonbEntryQuery, compositionAttributeQuery)
+<span class="fc" id="L175">                        .toSql(className, templateId, variableDefinition.getIdentifier(), IQueryImpl.Clause.WHERE);</span>
+
+<span class="fc" id="L177">                TaggedStringBuilder taggedStringBuilder = new TaggedStringBuilder();</span>
+<span class="fc" id="L178">                taggedStringBuilder.append(</span>
+<span class="fc" id="L179">                        unaliasedFields.getLastQualifiedField().getSQLField().toString());</span>
+
+                // check if this expression is already used as a lateral join for another variable
+<span class="fc" id="L182">                MultiFieldsMap.matchingLateralJoin(multiFieldsList, templateId, taggedStringBuilder.toString())</span>
+<span class="fc" id="L183">                        .ifPresentOrElse(</span>
+<span class="fc" id="L184">                                lj -&gt; LateralJoins.reuse(lj, templateId, variableDefinition),</span>
+<span class="fc" id="L185">                                () -&gt; LateralJoins.create(templateId, taggedStringBuilder, variableDefinition, SELECT));</span>
+
+                // substitute the field to use the lateral join with the same alias!
+<span class="fc" id="L188">                variableDefinition.getLastLateralJoin(templateId).setClause(SELECT);</span>
+<span class="fc" id="L189">                String sqlToLateralJoin = variableDefinition</span>
+<span class="fc" id="L190">                                .getLastLateralJoin(templateId)</span>
+<span class="fc" id="L191">                                .getTable()</span>
+<span class="fc" id="L192">                                .getName() + &quot;.&quot;</span>
+<span class="fc" id="L193">                        + variableDefinition.getLastLateralJoin(templateId).getLateralVariable();</span>
+
+<span class="fc bfc" id="L195" title="All 2 branches covered.">                if (qualifiedAqlField.hasRightMostJsonbExpression())</span>
+<span class="fc" id="L196">                    sqlToLateralJoin = sqlToLateralJoin + qualifiedAqlField.getRightMostJsonbExpression();</span>
+
+<span class="fc" id="L198">                variableDefinition.setAlias(alias);</span>
+<span class="fc" id="L199">                Field substituteField = DSL.field(sqlToLateralJoin).as(alias);</span>
+
+<span class="fc bfc" id="L201" title="All 2 branches covered.">                if (variableDefinition.getSelectType() != null</span>
+<span class="pc bpc" id="L202" title="1 of 2 branches missed.">                        &amp;&amp; !variableDefinition.getSelectType().getCastTypeName().equals(&quot;interval&quot;))</span>
+<span class="fc" id="L203">                    substituteField = DSL.field(&quot;(&quot; + sqlToLateralJoin + &quot;)::&quot;</span>
+<span class="fc" id="L204">                                    + variableDefinition.getSelectType().getCastTypeName())</span>
+<span class="fc" id="L205">                            .as(alias);</span>
+                else // default it to text so it can be interpreted
+<span class="fc" id="L207">                substituteField = DSL.field(&quot;(&quot; + sqlToLateralJoin + &quot;)::TEXT&quot;).as(alias);</span>
+<span class="fc" id="L208">                multiFields.replaceField(qualifiedAqlField, substituteField);</span>
+            }
+<span class="fc" id="L210">        }</span>
+<span class="fc" id="L211">    }</span>
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.7.202105040129</span></div></body></html>

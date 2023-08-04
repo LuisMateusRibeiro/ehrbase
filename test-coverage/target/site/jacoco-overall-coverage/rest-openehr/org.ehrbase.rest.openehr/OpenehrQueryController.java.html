@@ -1,0 +1,348 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../../jacoco-resources/report.gif" type="image/gif"/><title>OpenehrQueryController.java</title><link rel="stylesheet" href="../../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../../index.html" class="el_report">Overall Coverage</a> &gt; <a href="../index.html" class="el_bundle">rest-openehr</a> &gt; <a href="index.source.html" class="el_package">org.ehrbase.rest.openehr</a> &gt; <span class="el_source">OpenehrQueryController.java</span></div><h1>OpenehrQueryController.java</h1><pre class="source lang-java linenums">/*
+ * Copyright (c) 2019-2022 vitasystems GmbH and Hannover Medical School.
+ *
+ * This file is part of project EHRbase
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     https://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.ehrbase.rest.openehr;
+
+import static org.springframework.web.util.UriComponentsBuilder.fromPath;
+
+import java.text.MessageFormat;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.Optional;
+import java.util.Set;
+import org.apache.commons.collections4.MapUtils;
+import org.ehrbase.api.annotations.TenantAware;
+import org.ehrbase.api.audit.msg.AuditMsgBuilder;
+import org.ehrbase.api.authorization.EhrbaseAuthorization;
+import org.ehrbase.api.authorization.EhrbasePermission;
+import org.ehrbase.api.exception.InvalidApiParameterException;
+import org.ehrbase.api.exception.ObjectNotFoundException;
+import org.ehrbase.api.service.QueryService;
+import org.ehrbase.openehr.sdk.response.dto.QueryResponseData;
+import org.ehrbase.openehr.sdk.response.dto.ehrscape.QueryDefinitionResultDto;
+import org.ehrbase.openehr.sdk.response.dto.ehrscape.QueryResultDto;
+import org.ehrbase.rest.BaseController;
+import org.ehrbase.rest.openehr.specification.QueryApiSpecification;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.http.ResponseEntity;
+import org.springframework.lang.Nullable;
+import org.springframework.security.access.prepost.PostAuthorize;
+import org.springframework.util.CollectionUtils;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
+
+/**
+ * Controller for openEHR REST API QUERY resource.
+ *
+ * @author Jake Smolka
+ * @author Renaud Subiger
+ * @since 1.0
+ */
+@TenantAware
+@RestController
+@RequestMapping(path = BaseController.API_CONTEXT_PATH_WITH_VERSION + &quot;/query&quot;)
+public class OpenehrQueryController extends BaseController implements QueryApiSpecification {
+
+    private static final String EHR_ID_VALUE = &quot;ehr_id/value&quot;;
+    private static final String QUERY_PARAMETERS = &quot;query_parameters&quot;;
+
+<span class="nc" id="L72">    private final Logger logger = LoggerFactory.getLogger(getClass());</span>
+
+    private final QueryService queryService;
+
+    @Autowired(required = true)
+    @Qualifier(&quot;requestAwareAuditResultMapHolder&quot;)
+    private RequestAwareAuditResultMapHolder auditResultMapHolder;
+
+<span class="nc" id="L80">    public OpenehrQueryController(QueryService queryService) {</span>
+<span class="nc" id="L81">        this.queryService = queryService;</span>
+<span class="nc" id="L82">    }</span>
+
+    /**
+     * {@inheritDoc}
+     */
+    @EhrbaseAuthorization(permission = EhrbasePermission.EHRBASE_QUERY_SEARCH_AD_HOC)
+    @Override
+    @GetMapping(path = &quot;/aql&quot;)
+    @PostAuthorize(&quot;checkAbacPostQuery(@requestAwareAuditResultMapHolder.getAuditResultMap())&quot;)
+    public ResponseEntity&lt;QueryResponseData&gt; executeAdHocQuery(
+            @RequestParam(name = &quot;q&quot;) String query,
+            @RequestParam(name = &quot;offset&quot;, required = false) Integer offset,
+            @RequestParam(name = &quot;fetch&quot;, required = false) Integer fetch,
+            @RequestParam(name = &quot;query_parameters&quot;, required = false) Map&lt;String, Object&gt; queryParameters,
+            @RequestHeader(name = ACCEPT, required = false) String accept) {
+
+        // deal with offset and fetch
+<span class="nc bnc" id="L99" title="All 2 branches missed.">        if (fetch != null) {</span>
+<span class="nc" id="L100">            query = withFetch(query, fetch);</span>
+        }
+
+<span class="nc bnc" id="L103" title="All 2 branches missed.">        if (offset != null) {</span>
+<span class="nc" id="L104">            query = withOffset(query, offset);</span>
+        }
+
+        // Enriches request attributes with aql for later audit processing
+<span class="nc" id="L108">        createAdHocAuditLogsMsgBuilder();</span>
+
+<span class="nc" id="L110">        var body = executeQuery(query, queryParameters);</span>
+
+<span class="nc bnc" id="L112" title="All 2 branches missed.">        if (!CollectionUtils.isEmpty(body.getRows())) {</span>
+<span class="nc" id="L113">            return ResponseEntity.ok(body);</span>
+        } else {
+<span class="nc" id="L115">            return ResponseEntity.noContent().build();</span>
+        }
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    @EhrbaseAuthorization(permission = EhrbasePermission.EHRBASE_QUERY_SEARCH_AD_HOC)
+    @Override
+    @PostMapping(path = &quot;/aql&quot;)
+    @PostAuthorize(&quot;checkAbacPostQuery(@requestAwareAuditResultMapHolder.getAuditResultMap())&quot;)
+    @SuppressWarnings(&quot;unchecked&quot;)
+    public ResponseEntity&lt;QueryResponseData&gt; executeAdHocQuery(
+            @RequestBody Map&lt;String, Object&gt; queryRequest,
+            @RequestHeader(name = ACCEPT, required = false) String accept,
+            @RequestHeader(name = CONTENT_TYPE) String contentType) {
+
+<span class="nc" id="L132">        logger.debug(&quot;Got following input: {}&quot;, queryRequest);</span>
+
+<span class="nc" id="L134">        String aql = (String) queryRequest.get(&quot;q&quot;);</span>
+<span class="nc bnc" id="L135" title="All 2 branches missed.">        if (aql == null) {</span>
+<span class="nc" id="L136">            throw new InvalidApiParameterException(&quot;No aql query provided&quot;);</span>
+        }
+
+<span class="nc" id="L139">        aql = withOffsetLimit(aql, queryRequest);</span>
+        // Enriches request attributes with aql for later audit processing
+<span class="nc" id="L141">        createAdHocAuditLogsMsgBuilder();</span>
+
+<span class="nc" id="L143">        Map&lt;String, Object&gt; parameters = (Map&lt;String, Object&gt;) queryRequest.get(QUERY_PARAMETERS);</span>
+
+<span class="nc" id="L145">        var body = executeQuery(aql, parameters);</span>
+<span class="nc" id="L146">        return ResponseEntity.ok(body);</span>
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    @EhrbaseAuthorization(permission = EhrbasePermission.EHRBASE_QUERY_SEARCH)
+    @Override
+    @GetMapping(path = {&quot;/{qualified_query_name}&quot;, &quot;/{qualified_query_name}/{version}&quot;})
+    @PostAuthorize(&quot;checkAbacPostQuery(@requestAwareAuditResultMapHolder.getAuditResultMap())&quot;)
+    public ResponseEntity&lt;QueryResponseData&gt; executeStoredQuery(
+            @PathVariable(name = &quot;qualified_query_name&quot;) String qualifiedQueryName,
+            @PathVariable(name = &quot;version&quot;, required = false) String version,
+            @RequestParam(name = &quot;offset&quot;, required = false) Integer offset,
+            @RequestParam(name = &quot;fetch&quot;, required = false) Integer fetch,
+            @RequestParam(name = &quot;query_parameters&quot;, required = false) Map&lt;String, Object&gt; queryParameter,
+            @RequestHeader(name = ACCEPT, required = false) String accept) {
+
+<span class="nc" id="L164">        logger.trace(</span>
+                &quot;getStoredQuery not implemented but got following input: {} - {} - {} - {} - {}&quot;,
+                qualifiedQueryName,
+                version,
+                offset,
+                fetch,
+                queryParameter);
+
+<span class="nc" id="L172">        createAuditLogsMsgBuilder(qualifiedQueryName, version);</span>
+        // retrieve the stored query for execution
+<span class="nc" id="L174">        QueryDefinitionResultDto queryResultDto = queryService.retrieveStoredQuery(qualifiedQueryName, version);</span>
+
+<span class="nc" id="L176">        String query = queryResultDto.getQueryText();</span>
+
+        // Enriches request attributes with query name for later audit processing
+
+<span class="nc bnc" id="L180" title="All 2 branches missed.">        if (fetch != null) {</span>
+            // append LIMIT clause to aql
+<span class="nc" id="L182">            query = withFetch(query, fetch);</span>
+        }
+
+<span class="nc bnc" id="L185" title="All 2 branches missed.">        if (offset != null) {</span>
+            // append OFFSET clause to aql
+<span class="nc" id="L187">            query = withOffset(query, offset);</span>
+        }
+
+<span class="nc" id="L190">        QueryResponseData queryResponseData = invoke(query, queryParameter);</span>
+<span class="nc" id="L191">        setQueryName(queryResultDto, queryResponseData);</span>
+<span class="nc" id="L192">        AuditMsgBuilder.getInstance().setQueryId(queryResultDto.getQualifiedName());</span>
+
+<span class="nc" id="L194">        return ResponseEntity.ok(queryResponseData);</span>
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    @EhrbaseAuthorization(permission = EhrbasePermission.EHRBASE_QUERY_SEARCH)
+    @Override
+    @PostMapping(path = {&quot;/{qualified_query_name}&quot;, &quot;/{qualified_query_name}/{version}&quot;})
+    @PostAuthorize(&quot;checkAbacPostQuery(@requestAwareAuditResultMapHolder.getAuditResultMap())&quot;)
+    @SuppressWarnings(&quot;unchecked&quot;)
+    public ResponseEntity&lt;QueryResponseData&gt; executeStoredQuery(
+            @PathVariable(name = &quot;qualified_query_name&quot;) String qualifiedQueryName,
+            @PathVariable(name = &quot;version&quot;, required = false) String version,
+            @RequestHeader(name = ACCEPT, required = false) String accept,
+            @RequestHeader(name = CONTENT_TYPE) String contentType,
+            @RequestBody(required = false) Map&lt;String, Object&gt; queryRequest) {
+
+<span class="nc" id="L212">        logger.trace(&quot;postStoredQuery with the following input: {}, {}, {}&quot;, qualifiedQueryName, version, queryRequest);</span>
+
+        // Enriches request attributes with aql for later audit processing
+<span class="nc" id="L215">        createAuditLogsMsgBuilder(qualifiedQueryName, version);</span>
+
+        // retrieve the stored query for execution
+<span class="nc" id="L218">        QueryDefinitionResultDto queryResultDto = queryService.retrieveStoredQuery(qualifiedQueryName, version);</span>
+
+<span class="nc" id="L220">        String query = queryResultDto.getQueryText();</span>
+
+<span class="nc bnc" id="L222" title="All 2 branches missed.">        if (query == null) {</span>
+<span class="nc" id="L223">            var message = MessageFormat.format(&quot;Could not retrieve AQL {0}/{1}&quot;, qualifiedQueryName, version);</span>
+<span class="nc" id="L224">            throw new ObjectNotFoundException(&quot;AQL&quot;, message);</span>
+        }
+        // retrieve the parameter from body
+        // get the query and parameters if any
+<span class="nc" id="L228">        Map&lt;String, Object&gt; queryParameter = null;</span>
+
+<span class="nc bnc" id="L230" title="All 4 branches missed.">        if (queryRequest != null &amp;&amp; !queryRequest.isEmpty()) {</span>
+<span class="nc" id="L231">            queryParameter = (Map&lt;String, Object&gt;) queryRequest.get(QUERY_PARAMETERS);</span>
+
+<span class="nc" id="L233">            query = withOffsetLimit(query, queryRequest);</span>
+        }
+<span class="nc" id="L235">        QueryResponseData queryResponseData = invoke(query, queryParameter);</span>
+
+<span class="nc" id="L237">        setQueryName(queryResultDto, queryResponseData);</span>
+<span class="nc" id="L238">        AuditMsgBuilder.getInstance().setQueryId(queryResultDto.getQualifiedName());</span>
+
+<span class="nc" id="L240">        return ResponseEntity.ok(queryResponseData);</span>
+    }
+
+    private void createAuditLogsMsgBuilder(String qualifiedName, @Nullable String version) {
+<span class="nc" id="L244">        AuditMsgBuilder.getInstance()</span>
+<span class="nc" id="L245">                .setIsQueryExecuteEndpoint(true)</span>
+<span class="nc" id="L246">                .setLocation(fromPath(&quot;&quot;)</span>
+<span class="nc" id="L247">                        .pathSegment(QUERY, qualifiedName, version)</span>
+<span class="nc" id="L248">                        .build()</span>
+<span class="nc" id="L249">                        .toString());</span>
+<span class="nc" id="L250">    }</span>
+
+    private void createAdHocAuditLogsMsgBuilder() {
+<span class="nc" id="L253">        AuditMsgBuilder.getInstance().setIsQueryExecuteEndpoint(true);</span>
+<span class="nc" id="L254">    }</span>
+
+    private static void setQueryName(
+            QueryDefinitionResultDto queryDefinitionResultDto, QueryResponseData queryResponseData) {
+<span class="nc" id="L258">        queryResponseData.setName(</span>
+<span class="nc" id="L259">                queryDefinitionResultDto.getQualifiedName() + &quot;/&quot; + queryDefinitionResultDto.getVersion());</span>
+<span class="nc" id="L260">    }</span>
+
+    private QueryResponseData executeQuery(String aql, Map&lt;String, Object&gt; parameters) {
+        QueryResponseData queryResponseData;
+
+<span class="nc" id="L265">        Map&lt;String, Set&lt;Object&gt;&gt; auditResultMap = auditResultMapHolder.getAuditResultMap();</span>
+
+        // get the query and pass it to the service
+<span class="nc" id="L268">        queryResponseData = new QueryResponseData(queryService.query(aql, parameters, false, auditResultMap));</span>
+
+        // Enriches request attributes with EhrId(s) for later audit processing
+<span class="nc" id="L271">        AuditMsgBuilder.getInstance().setEhrIds(auditResultMap.get(EHR_ID_VALUE));</span>
+
+<span class="nc" id="L273">        return queryResponseData;</span>
+    }
+
+    private String withFetch(String query, String value) {
+<span class="nc" id="L277">        return withFetch(query, double2int(value));</span>
+    }
+
+    private String withFetch(String query, Integer value) {
+<span class="nc" id="L281">        return orderedLimitOffset(query, &quot;LIMIT&quot;, value);</span>
+    }
+
+    private String orderedLimitOffset(String query, String keyword, Integer value) {
+        String queryFormatted;
+
+<span class="nc bnc" id="L287" title="All 2 branches missed.">        if (query.replace(&quot; &quot;, &quot;&quot;).toUpperCase().contains(&quot;ORDERBY&quot;)) {</span>
+            // insert LIMIT before ORDER BY clause!
+<span class="nc" id="L289">            String[] strings = query.split(&quot;(?i)ORDER&quot;);</span>
+            // assemble
+<span class="nc" id="L291">            StringBuilder queryBuilder = new StringBuilder();</span>
+<span class="nc" id="L292">            queryBuilder.append(strings[0]);</span>
+<span class="nc" id="L293">            queryBuilder.append(keyword.toUpperCase());</span>
+<span class="nc" id="L294">            queryBuilder.append(&quot; &quot;);</span>
+<span class="nc" id="L295">            queryBuilder.append(value);</span>
+<span class="nc" id="L296">            queryBuilder.append(&quot; ORDER&quot;);</span>
+<span class="nc" id="L297">            queryBuilder.append(strings[1]);</span>
+<span class="nc" id="L298">            queryFormatted = queryBuilder.toString();</span>
+<span class="nc" id="L299">        } else {</span>
+<span class="nc" id="L300">            queryFormatted = query + &quot; &quot; + keyword + &quot; &quot; + value;</span>
+        }
+
+<span class="nc" id="L303">        return queryFormatted;</span>
+    }
+
+    private String withOffset(String query, String value) {
+<span class="nc" id="L307">        return withOffset(query, double2int(value));</span>
+    }
+
+    private String withOffset(String query, Integer value) {
+<span class="nc" id="L311">        return orderedLimitOffset(query, &quot;OFFSET&quot;, value);</span>
+    }
+
+    private Integer double2int(String value) {
+<span class="nc" id="L315">        return (Double.valueOf(value)).intValue();</span>
+    }
+
+    private QueryResponseData invoke(String query, Map&lt;String, Object&gt; queryParameter) {
+<span class="nc" id="L319">        Map&lt;String, Set&lt;Object&gt;&gt; auditResultMap = auditResultMapHolder.getAuditResultMap();</span>
+
+<span class="nc" id="L321">        Map&lt;String, Object&gt; parameters = Optional.ofNullable(queryParameter)</span>
+<span class="nc" id="L322">                .filter(MapUtils::isNotEmpty)</span>
+<span class="nc" id="L323">                .map(HashMap::new)</span>
+<span class="nc" id="L324">                .orElse(null);</span>
+
+<span class="nc" id="L326">        QueryResultDto resultDto = queryService.query(query, parameters, false, auditResultMap);</span>
+
+        // Enriches request attributes with EhrId(s) for later audit processing
+<span class="nc" id="L329">        AuditMsgBuilder.getInstance().setEhrIds(auditResultMap.get(EHR_ID_VALUE));</span>
+
+<span class="nc" id="L331">        return new QueryResponseData(resultDto);</span>
+    }
+
+    String withOffsetLimit(String query, Map&lt;String, Object&gt; mapped) {
+<span class="nc bnc" id="L335" title="All 2 branches missed.">        if (mapped.containsKey(&quot;fetch&quot;)) {</span>
+            // append LIMIT clause to aql
+<span class="nc" id="L337">            query = withFetch(query, mapped.get(&quot;fetch&quot;).toString());</span>
+        }
+
+<span class="nc bnc" id="L340" title="All 2 branches missed.">        if (mapped.containsKey(&quot;offset&quot;)) {</span>
+            // append OFFSET clause to aql
+<span class="nc" id="L342">            query = withOffset(query, mapped.get(&quot;offset&quot;).toString());</span>
+        }
+
+<span class="nc" id="L345">        return query;</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.7.202105040129</span></div></body></html>

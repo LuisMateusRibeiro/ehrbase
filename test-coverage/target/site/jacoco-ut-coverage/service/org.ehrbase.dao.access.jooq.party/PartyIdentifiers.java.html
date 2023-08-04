@@ -1,0 +1,165 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../../jacoco-resources/report.gif" type="image/gif"/><title>PartyIdentifiers.java</title><link rel="stylesheet" href="../../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../../index.html" class="el_report">Coverage with Unit Tests</a> &gt; <a href="../index.html" class="el_bundle">service</a> &gt; <a href="index.source.html" class="el_package">org.ehrbase.dao.access.jooq.party</a> &gt; <span class="el_source">PartyIdentifiers.java</span></div><h1>PartyIdentifiers.java</h1><pre class="source lang-java linenums">/*
+ * Copyright (c) 2020 vitasystems GmbH and Hannover Medical School.
+ *
+ * This file is part of project EHRbase
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     https://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.ehrbase.dao.access.jooq.party;
+
+import static org.ehrbase.jooq.pg.Tables.IDENTIFIER;
+
+import com.nedap.archie.rm.datavalues.DvIdentifier;
+import com.nedap.archie.rm.generic.PartyIdentified;
+import java.util.Collection;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Objects;
+import java.util.Set;
+import java.util.UUID;
+import java.util.function.BiFunction;
+import java.util.function.Function;
+import java.util.stream.Collectors;
+import org.apache.commons.lang3.tuple.Pair;
+import org.ehrbase.dao.access.interfaces.I_DomainAccess;
+import org.ehrbase.jooq.pg.tables.records.IdentifierRecord;
+import org.ehrbase.jooq.pg.tables.records.PartyIdentifiedRecord;
+
+/**
+ * Deals with identifiers attribute of PARTY_IDENTIFIED and PARTY_RELATED
+ */
+class PartyIdentifiers {
+
+    I_DomainAccess domainAccess;
+
+<span class="fc" id="L45">    PartyIdentifiers(I_DomainAccess domainAccess) {</span>
+<span class="fc" id="L46">        this.domainAccess = domainAccess;</span>
+<span class="fc" id="L47">    }</span>
+
+    /**
+     * store the identifiers respectively to a partyIdentified UUID
+     * @param partyIdentified
+     * @param partyIdentifiedUuid
+     */
+    void store(PartyIdentified partyIdentified, UUID partyIdentifiedUuid, Short sysTenant) {
+<span class="nc" id="L55">        List&lt;DvIdentifier&gt; identifierList = partyIdentified.getIdentifiers();</span>
+
+<span class="nc bnc" id="L57" title="All 2 branches missed.">        if (identifierList != null) {</span>
+<span class="nc bnc" id="L58" title="All 2 branches missed.">            for (DvIdentifier identifier : identifierList) {</span>
+<span class="nc bnc" id="L59" title="All 2 branches missed.">                if (identifier.getId() != null)</span>
+<span class="nc" id="L60">                    domainAccess</span>
+<span class="nc" id="L61">                            .getContext()</span>
+<span class="nc" id="L62">                            .insertInto(</span>
+<span class="nc" id="L63">                                    IDENTIFIER,</span>
+<span class="nc" id="L64">                                    IDENTIFIER.PARTY,</span>
+<span class="nc" id="L65">                                    IDENTIFIER.ID_VALUE,</span>
+<span class="nc" id="L66">                                    IDENTIFIER.ISSUER,</span>
+<span class="nc" id="L67">                                    IDENTIFIER.ASSIGNER,</span>
+<span class="nc" id="L68">                                    IDENTIFIER.TYPE_NAME,</span>
+<span class="nc" id="L69">                                    IDENTIFIER.SYS_TENANT)</span>
+<span class="nc" id="L70">                            .values(</span>
+<span class="nc" id="L71">                                    partyIdentifiedUuid,</span>
+<span class="nc" id="L72">                                    identifier.getId(),</span>
+<span class="nc" id="L73">                                    identifier.getIssuer(),</span>
+<span class="nc" id="L74">                                    identifier.getAssigner(),</span>
+<span class="nc" id="L75">                                    identifier.getType(),</span>
+<span class="nc" id="L76">                                    sysTenant)</span>
+<span class="nc" id="L77">                            .execute();</span>
+            }
+        }
+<span class="nc" id="L80">    }</span>
+
+<span class="fc" id="L82">    private static final BiFunction&lt;Collection&lt;IdentifierRecord&gt;, UUID, Collection&lt;IdentifierRecord&gt;&gt; allMatchingIdRec =</span>
+<span class="fc" id="L83">            (col, uuid) -&gt; col.stream()</span>
+<span class="fc" id="L84">                    .filter(irec -&gt; uuid.equals(irec.getParty()))</span>
+<span class="fc" id="L85">                    .collect(Collectors.toCollection(HashSet::new));</span>
+
+    List&lt;Pair&lt;PartyIdentifiedRecord, List&lt;DvIdentifier&gt;&gt;&gt; retrieveMultiple(
+            Collection&lt;PartyIdentifiedRecord&gt; partyIdentifiedRecords) {
+
+<span class="fc" id="L90">        Set&lt;UUID&gt; allIds =</span>
+<span class="fc" id="L91">                partyIdentifiedRecords.stream().map(pir -&gt; pir.getId()).collect(Collectors.toSet());</span>
+
+<span class="fc" id="L93">        Collection&lt;IdentifierRecord&gt; allIdRecs = domainAccess</span>
+<span class="fc" id="L94">                .getContext()</span>
+<span class="fc" id="L95">                .selectFrom(IDENTIFIER)</span>
+<span class="fc" id="L96">                .where(IDENTIFIER.PARTY.in(allIds))</span>
+<span class="fc" id="L97">                .fetch()</span>
+<span class="fc" id="L98">                .collect(Collectors.toCollection(HashSet::new));</span>
+
+<span class="fc" id="L100">        List&lt;Pair&lt;PartyIdentifiedRecord, List&lt;DvIdentifier&gt;&gt;&gt; result = partyIdentifiedRecords.stream()</span>
+<span class="fc" id="L101">                .map(pir -&gt; {</span>
+<span class="fc" id="L102">                    List&lt;DvIdentifier&gt; dvIds = allMatchingIdRec.apply(allIdRecs, pir.getId()).stream()</span>
+<span class="fc" id="L103">                            .map(record -&gt; idConvert.apply(record))</span>
+<span class="fc" id="L104">                            .collect(Collectors.toList());</span>
+<span class="fc" id="L105">                    return Pair.of(pir, dvIds);</span>
+                })
+<span class="fc" id="L107">                .collect(Collectors.toList());</span>
+
+<span class="fc" id="L109">        return result;</span>
+    }
+
+<span class="fc" id="L112">    private static final Function&lt;IdentifierRecord, DvIdentifier&gt; idConvert = record -&gt; {</span>
+<span class="fc" id="L113">        DvIdentifier identifier = new DvIdentifier();</span>
+<span class="fc" id="L114">        identifier.setIssuer(record.getIssuer());</span>
+<span class="fc" id="L115">        identifier.setAssigner(record.getAssigner());</span>
+<span class="fc" id="L116">        identifier.setId(record.getIdValue());</span>
+<span class="fc" id="L117">        identifier.setType(record.getTypeName());</span>
+<span class="fc" id="L118">        return identifier;</span>
+<span class="fc" id="L119">    };</span>
+
+    List&lt;DvIdentifier&gt; retrieve(PartyIdentifiedRecord partyIdentifiedRecord) {
+<span class="nc" id="L122">        return domainAccess.getContext().fetch(IDENTIFIER, IDENTIFIER.PARTY.eq(partyIdentifiedRecord.getId())).stream()</span>
+<span class="nc" id="L123">                .map(record -&gt; idConvert.apply(record))</span>
+<span class="nc" id="L124">                .collect(Collectors.toList());</span>
+    }
+
+    /**
+     * compare two lists of identifiers for logical equality.
+     * @param identifiersFromDB
+     * @param identifiers
+     * @return
+     */
+    public boolean compare(List&lt;DvIdentifier&gt; identifiersFromDB, List&lt;DvIdentifier&gt; identifiers) {
+
+<span class="pc bpc" id="L135" title="3 of 4 branches missed.">        if (identifiersFromDB == null &amp;&amp; identifiers == null) return true;</span>
+
+<span class="pc bpc" id="L137" title="5 of 8 branches missed.">        if ((identifiersFromDB == null &amp;&amp; identifiers != null) || (identifiersFromDB != null &amp;&amp; identifiers == null))</span>
+<span class="nc" id="L138">            return false;</span>
+
+<span class="pc bpc" id="L140" title="1 of 2 branches missed.">        if (identifiersFromDB.size() != identifiers.size()) return false;</span>
+
+<span class="fc" id="L142">        List&lt;DvIdentifier&gt; filteredList = identifiersFromDB.stream()</span>
+<span class="fc" id="L143">                .filter(identifier -&gt; identifiers.stream()</span>
+<span class="fc bfc" id="L144" title="All 2 branches covered.">                        .anyMatch(identifier1 -&gt; Objects.equals(identifier1.getType(), identifier.getType())</span>
+<span class="fc bfc" id="L145" title="All 2 branches covered.">                                &amp;&amp; Objects.equals(identifier1.getId(), identifier.getId())</span>
+<span class="pc bpc" id="L146" title="1 of 2 branches missed.">                                &amp;&amp; Objects.equals(identifier1.getAssigner(), identifier.getAssigner())</span>
+<span class="pc bpc" id="L147" title="1 of 2 branches missed.">                                &amp;&amp; Objects.equals(identifier1.getIssuer(), identifier.getIssuer())))</span>
+<span class="fc" id="L148">                .collect(Collectors.toList());</span>
+
+<span class="fc bfc" id="L150" title="All 2 branches covered.">        return filteredList.size() == identifiersFromDB.size();</span>
+    }
+
+    /**
+     * compare the list of identifiers from a record with a list passed as argument
+     * @param partyIdentifiedRecord
+     * @param identifiers
+     * @return
+     */
+    public boolean compare(PartyIdentifiedRecord partyIdentifiedRecord, List&lt;DvIdentifier&gt; identifiers) {
+<span class="nc" id="L160">        List&lt;DvIdentifier&gt; identifiersFromDB = retrieve(partyIdentifiedRecord);</span>
+
+<span class="nc" id="L162">        return compare(identifiersFromDB, identifiers);</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.7.202105040129</span></div></body></html>

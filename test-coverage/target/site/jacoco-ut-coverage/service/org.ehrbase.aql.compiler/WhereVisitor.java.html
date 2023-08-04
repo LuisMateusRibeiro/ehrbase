@@ -1,0 +1,234 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../../jacoco-resources/report.gif" type="image/gif"/><title>WhereVisitor.java</title><link rel="stylesheet" href="../../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../../index.html" class="el_report">Coverage with Unit Tests</a> &gt; <a href="../index.html" class="el_bundle">service</a> &gt; <a href="index.source.html" class="el_package">org.ehrbase.aql.compiler</a> &gt; <span class="el_source">WhereVisitor.java</span></div><h1>WhereVisitor.java</h1><pre class="source lang-java linenums">/*
+ * Copyright (c) 2019 vitasystems GmbH and Hannover Medical School.
+ *
+ * This file is part of project EHRbase
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     https://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.ehrbase.aql.compiler;
+
+import com.nedap.archie.rm.datavalues.DvCodedText;
+import java.util.ArrayList;
+import java.util.List;
+import org.antlr.v4.runtime.tree.ParseTree;
+import org.antlr.v4.runtime.tree.TerminalNodeImpl;
+import org.apache.commons.lang3.StringUtils;
+import org.ehrbase.aql.definition.VariableDefinition;
+import org.ehrbase.aql.parser.AqlBaseVisitor;
+import org.ehrbase.aql.parser.AqlParser;
+import org.ehrbase.openehr.sdk.util.functional.Try;
+import org.ehrbase.openehr.sdk.validation.ConstraintViolationException;
+import org.ehrbase.openehr.sdk.validation.terminology.ExternalTerminologyValidation;
+import org.ehrbase.openehr.sdk.validation.terminology.TerminologyParam;
+
+/**
+ * Interpret an AQL WHERE clause and set the result into a list of WHERE parts
+ * Created by christian on 5/18/2016.
+ *
+ * @param &lt;T&gt;
+ */
+<span class="pc bpc" id="L40" title="1 of 2 branches missed.">public class WhereVisitor extends AqlBaseVisitor&lt;List&lt;Object&gt;&gt; {</span>
+
+    private static final String MATCHES = &quot;MATCHES&quot;;
+    public static final String IN = &quot; IN &quot;;
+    private static final String OPEN_CURL = &quot;{&quot;;
+    private static final String OPEN_PAR = &quot;(&quot;;
+    private static final String CLOSING_CURL = &quot;}&quot;;
+    private static final String CLOSING_PAR = &quot;)&quot;;
+    private static final String COMMA = &quot;,&quot;;
+
+<span class="fc" id="L50">    private List&lt;Object&gt; whereExpression = new ArrayList&lt;&gt;();</span>
+    private ExternalTerminologyValidation tsAdapter;
+
+<span class="fc" id="L53">    public WhereVisitor(ExternalTerminologyValidation tsAdapter) {</span>
+<span class="fc" id="L54">        this.tsAdapter = tsAdapter;</span>
+<span class="fc" id="L55">    }</span>
+
+    @Override
+    public List&lt;Object&gt; visitWhere(AqlParser.WhereContext ctx) {
+<span class="fc" id="L59">        visitIdentifiedExpr(ctx.identifiedExpr());</span>
+<span class="fc" id="L60">        return whereExpression;</span>
+    }
+
+    @Override
+    public List&lt;Object&gt; visitIdentifiedExpr(AqlParser.IdentifiedExprContext context) {
+        //        List&lt;Object&gt; whereExpression = new ArrayList&lt;&gt;();
+<span class="fc bfc" id="L66" title="All 2 branches covered.">        for (ParseTree tree : context.children) {</span>
+<span class="fc bfc" id="L67" title="All 2 branches covered.">            if (tree instanceof TerminalNodeImpl) {</span>
+<span class="fc" id="L68">                String what = tree.getText().trim();</span>
+<span class="fc" id="L69">                whereExpression.add(what);</span>
+<span class="pc bpc" id="L70" title="1 of 2 branches missed.">            } else if (tree instanceof AqlParser.IdentifiedEqualityContext) {</span>
+<span class="fc" id="L71">                visitIdentifiedEquality((AqlParser.IdentifiedEqualityContext) tree);</span>
+            }
+<span class="fc" id="L73">        }</span>
+<span class="fc" id="L74">        return whereExpression;</span>
+    }
+
+    @Override
+    public List&lt;Object&gt; visitMatchesOperand(AqlParser.MatchesOperandContext context) {
+<span class="fc bfc" id="L79" title="All 2 branches covered.">        for (ParseTree tree : context.children) {</span>
+<span class="pc bpc" id="L80" title="1 of 2 branches missed.">            if (tree instanceof AqlParser.ValueListItemsContext) {</span>
+<span class="fc" id="L81">                whereExpression.addAll(visitValueListItems((AqlParser.ValueListItemsContext) tree));</span>
+<span class="nc bnc" id="L82" title="All 2 branches missed.">            } else if (tree instanceof AqlParser.IdentifiedEqualityContext) {</span>
+<span class="nc" id="L83">                visitIdentifiedEquality((AqlParser.IdentifiedEqualityContext) tree);</span>
+<span class="nc bnc" id="L84" title="All 2 branches missed.">            } else if (tree instanceof AqlParser.IdentifiedPathContext) {</span>
+<span class="nc" id="L85">                parsePathContext((AqlParser.IdentifiedPathContext) tree);</span>
+            }
+<span class="fc" id="L87">        }</span>
+<span class="fc" id="L88">        return whereExpression;</span>
+    }
+
+    private void parsePathContext(AqlParser.IdentifiedPathContext identifiedPathContext) {
+<span class="pc bpc" id="L92" title="1 of 2 branches missed.">        if (identifiedPathContext.objectPath() == null)</span>
+<span class="nc" id="L93">            throw new IllegalArgumentException(</span>
+<span class="nc" id="L94">                    &quot;WHERE variable should be a path, found:'&quot; + identifiedPathContext.getText() + &quot;'&quot;);</span>
+<span class="fc" id="L95">        String path = identifiedPathContext.objectPath().getText();</span>
+<span class="fc" id="L96">        String identifier = identifiedPathContext.IDENTIFIER().getText();</span>
+<span class="fc" id="L97">        String alias = null;</span>
+<span class="fc" id="L98">        VariableDefinition variable = new VariableDefinition(path, alias, identifier, false);</span>
+<span class="fc" id="L99">        whereExpression.add(variable);</span>
+<span class="fc" id="L100">    }</span>
+
+    @Override
+    public List&lt;Object&gt; visitValueListItems(AqlParser.ValueListItemsContext ctx) {
+<span class="fc" id="L104">        List&lt;Object&gt; operand = new ArrayList&lt;&gt;();</span>
+<span class="fc" id="L105">        int counter = 0; // to detect the last occurrence</span>
+<span class="fc bfc" id="L106" title="All 2 branches covered.">        for (ParseTree tree : ctx.children) {</span>
+<span class="fc bfc" id="L107" title="All 2 branches covered.">            if (tree instanceof AqlParser.OperandContext) {</span>
+<span class="fc" id="L108">                AqlParser.OperandContext operandContext = (AqlParser.OperandContext) tree;</span>
+<span class="fc bfc" id="L109" title="All 2 branches covered.">                if (operandContext.STRING() != null)</span>
+<span class="fc" id="L110">                    operand.add(operandContext.STRING().getText());</span>
+<span class="pc bpc" id="L111" title="1 of 2 branches missed.">                else if (operandContext.BOOLEAN() != null)</span>
+<span class="nc" id="L112">                    operand.add(operandContext.BOOLEAN().getText());</span>
+<span class="pc bpc" id="L113" title="1 of 2 branches missed.">                else if (operandContext.INTEGER() != null)</span>
+<span class="nc" id="L114">                    operand.add(operandContext.INTEGER().getText());</span>
+<span class="pc bpc" id="L115" title="1 of 2 branches missed.">                else if (operandContext.DATE() != null)</span>
+<span class="nc" id="L116">                    operand.add(operandContext.DATE().getText());</span>
+<span class="pc bpc" id="L117" title="1 of 2 branches missed.">                else if (operandContext.FLOAT() != null)</span>
+<span class="nc" id="L118">                    operand.add(operandContext.FLOAT().getText());</span>
+<span class="pc bpc" id="L119" title="1 of 2 branches missed.">                else if (operandContext.invokeOperand() != null) {</span>
+<span class="fc bfc" id="L120" title="All 2 branches covered.">                    for (Object obj : visitInvokeOperand(operandContext.invokeOperand())) {</span>
+<span class="fc" id="L121">                        operand.add(obj);</span>
+<span class="fc" id="L122">                        operand.add(&quot;,&quot;);</span>
+<span class="fc" id="L123">                    }</span>
+<span class="fc" id="L124">                    operand.remove(operand.size() - 1);</span>
+<span class="nc bnc" id="L125" title="All 2 branches missed.">                } else if (operandContext.PARAMETER() != null) operand.add(&quot;** unsupported operand: PARAMETER **&quot;);</span>
+<span class="nc" id="L126">                else operand.add(&quot;** unsupported operand: &quot; + operandContext.getText());</span>
+<span class="fc bfc" id="L127" title="All 2 branches covered.">                if (++counter &lt; ctx.children.size()) operand.add(&quot;,&quot;);</span>
+<span class="fc bfc" id="L128" title="All 2 branches covered.">            } else if (tree instanceof AqlParser.ValueListItemsContext) {</span>
+<span class="fc" id="L129">                List&lt;Object&gt; token = visitValueListItems((AqlParser.ValueListItemsContext) tree);</span>
+<span class="fc" id="L130">                operand.addAll(token);</span>
+            }
+<span class="fc" id="L132">        }</span>
+<span class="fc" id="L133">        return operand;</span>
+    }
+
+    @Override
+    public List&lt;Object&gt; visitInvokeOperand(AqlParser.InvokeOperandContext ctx) {
+<span class="fc" id="L138">        return visitChildren(ctx);</span>
+    }
+
+    @Override
+    public List&lt;Object&gt; visitInvokeExpr(AqlParser.InvokeExprContext ctx) {
+<span class="fc" id="L143">        List&lt;Object&gt; invokeExpr = new ArrayList&lt;&gt;();</span>
+<span class="pc bpc" id="L144" title="2 of 4 branches missed.">        assert (ctx.TERMINOLOGY().getText().equals(&quot;TERMINOLOGY&quot;));</span>
+<span class="pc bpc" id="L145" title="2 of 4 branches missed.">        assert (ctx.OPEN_PAR().getText().equals(&quot;(&quot;));</span>
+<span class="pc bpc" id="L146" title="2 of 4 branches missed.">        assert (ctx.CLOSE_PAR().getText().equals(&quot;)&quot;));</span>
+<span class="fc" id="L147">        List&lt;String&gt; codesList = new ArrayList&lt;&gt;();</span>
+
+<span class="fc" id="L149">        final String operation = ctx.STRING(0).getText().replace(&quot;'&quot;, &quot;&quot;);</span>
+<span class="fc" id="L150">        final String adapter = ctx.STRING(1).getText().replace(&quot;'&quot;, &quot;&quot;);</span>
+<span class="fc" id="L151">        final String parameters = ctx.STRING(2).getText().replace(&quot;'&quot;, &quot;&quot;);</span>
+
+<span class="fc" id="L153">        TerminologyParam tp = TerminologyParam.ofServiceApi(adapter);</span>
+<span class="fc" id="L154">        tp.setOperation(operation);</span>
+<span class="fc" id="L155">        tp.setParameter(parameters);</span>
+
+<span class="fc bfc" id="L157" title="All 2 branches covered.">        if (StringUtils.equals(operation, &quot;expand&quot;)) {</span>
+            try {
+<span class="fc" id="L159">                tp.useValueSet();</span>
+<span class="fc" id="L160">                List&lt;DvCodedText&gt; expansion = tsAdapter.expand(tp);</span>
+<span class="fc" id="L161">                expansion.forEach((DvCodedText dvCode) -&gt;</span>
+<span class="fc" id="L162">                        codesList.add(&quot;'&quot; + dvCode.getDefiningCode().getCodeString() + &quot;'&quot;));</span>
+<span class="fc" id="L163">                invokeExpr.addAll(codesList);</span>
+<span class="fc" id="L164">            } catch (Exception e) {</span>
+<span class="fc" id="L165">                throw new IllegalArgumentException(&quot;Terminology server operation failed:'&quot; + e.getMessage() + &quot;'&quot;);</span>
+<span class="fc" id="L166">            }</span>
+<span class="pc bpc" id="L167" title="1 of 2 branches missed.">        } else if (StringUtils.equals(operation, &quot;validate&quot;)) {</span>
+            try {
+<span class="fc" id="L169">                Try&lt;Boolean, ConstraintViolationException&gt; expansion = tsAdapter.validate(tp);</span>
+
+<span class="pc bpc" id="L171" title="1 of 2 branches missed.">                if (expansion.isSuccess()) expansion.getAsSuccess().consume((b, e) -&gt; invokeExpr.add(b));</span>
+<span class="nc" id="L172">                else expansion.getAsFailure().consume((b, e) -&gt; invokeExpr.add(Boolean.FALSE));</span>
+<span class="nc" id="L173">            } catch (Exception e) {</span>
+<span class="nc" id="L174">                throw new IllegalArgumentException(&quot;Terminology server operation failed:'&quot; + e.getMessage() + &quot;'&quot;);</span>
+<span class="fc" id="L175">            }</span>
+        }
+
+<span class="fc" id="L178">        return invokeExpr;</span>
+    }
+
+    @Override
+    public List&lt;Object&gt; visitIdentifiedEquality(AqlParser.IdentifiedEqualityContext context) {
+<span class="fc" id="L183">        boolean isMatchExpr = false;</span>
+<span class="fc bfc" id="L184" title="All 2 branches covered.">        for (ParseTree tree : context.children) {</span>
+<span class="fc bfc" id="L185" title="All 2 branches covered.">            if (tree instanceof TerminalNodeImpl) {</span>
+<span class="fc" id="L186">                String token = ((TerminalNodeImpl) tree).getSymbol().getText();</span>
+<span class="fc bfc" id="L187" title="All 2 branches covered.">                if (token.equalsIgnoreCase(MATCHES)) {</span>
+<span class="fc" id="L188">                    isMatchExpr = true;</span>
+<span class="fc" id="L189">                    whereExpression.add(IN);</span>
+<span class="pc bpc" id="L190" title="1 of 4 branches missed.">                } else if (token.equals(OPEN_CURL) &amp;&amp; isMatchExpr) whereExpression.add(OPEN_PAR);</span>
+<span class="pc bpc" id="L191" title="1 of 4 branches missed.">                else if (token.equals(CLOSING_CURL) &amp;&amp; isMatchExpr) {</span>
+                    // if the last element in expression is a comma, overwrite it with a closing parenthesis
+<span class="pc bpc" id="L193" title="1 of 2 branches missed.">                    if (whereExpression.get(whereExpression.size() - 1).equals(COMMA))</span>
+<span class="nc" id="L194">                        whereExpression.set(whereExpression.size() - 1, CLOSING_PAR);</span>
+<span class="fc" id="L195">                    else whereExpression.add(CLOSING_PAR);</span>
+<span class="fc" id="L196">                    isMatchExpr = false; // closure</span>
+<span class="fc" id="L197">                } else whereExpression.add(token);</span>
+
+<span class="fc bfc" id="L199" title="All 2 branches covered.">            } else if (tree instanceof AqlParser.IdentifiedOperandContext) {</span>
+<span class="fc" id="L200">                AqlParser.IdentifiedOperandContext operandContext = (AqlParser.IdentifiedOperandContext) tree;</span>
+                // translate/substitute operand
+<span class="fc bfc" id="L202" title="All 2 branches covered.">                for (ParseTree child : operandContext.children) {</span>
+<span class="pc bpc" id="L203" title="1 of 4 branches missed.">                    if (child instanceof AqlParser.OperandContext || child instanceof TerminalNodeImpl) {</span>
+<span class="fc" id="L204">                        whereExpression.add(child.getText());</span>
+<span class="pc bpc" id="L205" title="1 of 2 branches missed.">                    } else if (child instanceof AqlParser.IdentifiedPathContext) {</span>
+<span class="fc" id="L206">                        AqlParser.IdentifiedPathContext identifiedPathContext = (AqlParser.IdentifiedPathContext) child;</span>
+<span class="fc" id="L207">                        parsePathContext(identifiedPathContext);</span>
+                    }
+<span class="fc" id="L209">                }</span>
+<span class="pc bpc" id="L210" title="1 of 2 branches missed.">            } else if (tree instanceof AqlParser.IdentifiedEqualityContext) {</span>
+<span class="nc" id="L211">                visitIdentifiedEquality((AqlParser.IdentifiedEqualityContext) tree);</span>
+<span class="fc bfc" id="L212" title="All 2 branches covered.">            } else if (tree instanceof AqlParser.MatchesOperandContext) {</span>
+<span class="fc" id="L213">                visitMatchesOperand((AqlParser.MatchesOperandContext) tree);</span>
+<span class="pc bpc" id="L214" title="1 of 2 branches missed.">            } else if (tree instanceof AqlParser.IdentifiedPathContext) {</span>
+<span class="fc" id="L215">                parsePathContext((AqlParser.IdentifiedPathContext) tree);</span>
+<span class="nc bnc" id="L216" title="All 2 branches missed.">            } else if (tree instanceof AqlParser.IdentifiedExprContext) {</span>
+<span class="nc" id="L217">                visitIdentifiedExpr((AqlParser.IdentifiedExprContext) tree);</span>
+            }
+<span class="fc" id="L219">        }</span>
+
+<span class="fc" id="L221">        return whereExpression;</span>
+    }
+
+    List&lt;Object&gt; getWhereExpression() {
+<span class="fc" id="L225">        WhereClauseUtil whereClauseUtil = new WhereClauseUtil(whereExpression);</span>
+
+<span class="pc bpc" id="L227" title="1 of 2 branches missed.">        if (!whereClauseUtil.isBalancedBlocks())</span>
+<span class="nc" id="L228">            throw new IllegalArgumentException(</span>
+<span class="nc" id="L229">                    &quot;Unbalanced block in WHERE clause missing:'&quot; + whereClauseUtil.getUnbalanced() + &quot;'&quot;);</span>
+
+<span class="fc" id="L231">        return whereExpression;</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.7.202105040129</span></div></body></html>

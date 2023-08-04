@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../../jacoco-resources/report.gif" type="image/gif"/><title>EventContextFactory.java</title><link rel="stylesheet" href="../../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../../index.html" class="el_report">Overall Coverage</a> &gt; <a href="../index.html" class="el_bundle">service</a> &gt; <a href="index.source.html" class="el_package">org.ehrbase.dao.access.jooq</a> &gt; <span class="el_source">EventContextFactory.java</span></div><h1>EventContextFactory.java</h1><pre class="source lang-java linenums">/*
+ * Copyright (c) 2019 vitasystems GmbH and Hannover Medical School.
+ *
+ * This file is part of project EHRbase
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     https://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.ehrbase.dao.access.jooq;
+
+import com.nedap.archie.rm.composition.EventContext;
+import com.nedap.archie.rm.datatypes.CodePhrase;
+import com.nedap.archie.rm.datavalues.DvCodedText;
+import com.nedap.archie.rm.datavalues.quantity.datetime.DvDateTime;
+import com.nedap.archie.rm.generic.PartyIdentified;
+import com.nedap.archie.rm.support.identification.GenericId;
+import com.nedap.archie.rm.support.identification.HierObjectId;
+import com.nedap.archie.rm.support.identification.PartyRef;
+import com.nedap.archie.rm.support.identification.TerminologyId;
+import org.joda.time.DateTime;
+
+/**
+ * utility to build dummy or null EventContext
+ */
+<span class="nc" id="L34">public class EventContextFactory {</span>
+
+    public EventContext makeDummy() {
+<span class="nc" id="L37">        PartyRef partyRef = new PartyRef(new GenericId(&quot;123456-123&quot;, &quot;EHRBASE-SCHEME&quot;), &quot;DEMOGRAPHIC&quot;, &quot;PARTY&quot;);</span>
+<span class="nc" id="L38">        PartyIdentified healthcareFacility = new PartyIdentified(partyRef, &quot;FACILITY&quot;, null);</span>
+<span class="nc" id="L39">        DateTime timenow = DateTime.now();</span>
+<span class="nc" id="L40">        DvCodedText concept = new DvCodedText(&quot;Other Care&quot;, new CodePhrase(new TerminologyId(&quot;openehr&quot;), &quot;238&quot;));</span>
+<span class="nc" id="L41">        return new EventContext(</span>
+<span class="nc" id="L42">                healthcareFacility, new DvDateTime(timenow.toString()), null, null, &quot;TEST LAB&quot;, concept, null);</span>
+    }
+
+    public EventContext makeNull() {
+<span class="nc" id="L46">        PartyRef partyRef = new PartyRef(new HierObjectId(&quot;ref&quot;), &quot;null&quot;, &quot;null&quot;);</span>
+<span class="nc" id="L47">        PartyIdentified healthcareFacility = new PartyIdentified(partyRef, &quot;null&quot;, null);</span>
+<span class="nc" id="L48">        DvCodedText concept = new DvCodedText(&quot;Other Care&quot;, new CodePhrase(new TerminologyId(&quot;openehr&quot;), &quot;238&quot;));</span>
+<span class="nc" id="L49">        return new EventContext(</span>
+<span class="nc" id="L50">                healthcareFacility, new DvDateTime(new DateTime(0L).toString()), null, null, null, concept, null);</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.7.202105040129</span></div></body></html>

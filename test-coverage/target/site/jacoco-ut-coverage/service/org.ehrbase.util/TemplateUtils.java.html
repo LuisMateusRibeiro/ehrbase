@@ -1,0 +1,94 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../../jacoco-resources/report.gif" type="image/gif"/><title>TemplateUtils.java</title><link rel="stylesheet" href="../../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../../index.html" class="el_report">Coverage with Unit Tests</a> &gt; <a href="../index.html" class="el_bundle">service</a> &gt; <a href="index.source.html" class="el_package">org.ehrbase.util</a> &gt; <span class="el_source">TemplateUtils.java</span></div><h1>TemplateUtils.java</h1><pre class="source lang-java linenums">/*
+ * Copyright (c) 2021-2022 vitasystems GmbH and Hannover Medical School.
+ *
+ * This file is part of project EHRbase
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     https://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.ehrbase.util;
+
+import java.util.List;
+import java.util.Optional;
+import java.util.UUID;
+import org.ehrbase.openehr.sdk.webtemplate.model.WebTemplate;
+import org.ehrbase.openehr.sdk.webtemplate.parser.OPTParser;
+import org.openehr.schemas.v1.OBJECTID;
+import org.openehr.schemas.v1.OPERATIONALTEMPLATE;
+
+/**
+ * Utility class that implements basic operations for OPT template.
+ *
+ * @author Renaud Subiger
+ * @since 1.0.0
+ */
+public class TemplateUtils {
+
+<span class="fc" id="L36">    public static final List&lt;String&gt; UNSUPPORTED_RM_TYPES = List.of(&quot;ITEM_TABLE&quot;);</span>
+
+    private TemplateUtils() {}
+
+    /**
+     * Check whether the given OPT template is supported.
+     *
+     * @param template the candidate template
+     * @return &lt;code&gt;true&lt;/code&gt; if the template is supported
+     */
+    public static boolean isSupported(OPERATIONALTEMPLATE template) {
+<span class="fc" id="L47">        var webTemplate = new OPTParser(template).parse();</span>
+<span class="fc" id="L48">        return isSupported(webTemplate);</span>
+    }
+
+    /**
+     * Check whether the given WebTemplate is supported.
+     *
+     * @param template the candidate template
+     * @return &lt;code&gt;true&lt;/code&gt; if the template is supported
+     */
+    public static boolean isSupported(WebTemplate template) {
+<span class="fc" id="L58">        return template.getTree()</span>
+<span class="fc" id="L59">                .findMatching(node -&gt; UNSUPPORTED_RM_TYPES.contains(node.getRmType()))</span>
+<span class="fc" id="L60">                .isEmpty();</span>
+    }
+
+    /**
+     * Retrieves the template ID from the given OPT template.
+     *
+     * @param template the template
+     * @return template ID
+     */
+    public static String getTemplateId(OPERATIONALTEMPLATE template) {
+<span class="pc bpc" id="L70" title="1 of 2 branches missed.">        if (template == null) {</span>
+<span class="nc" id="L71">            throw new IllegalArgumentException(&quot;Template must not be null&quot;);</span>
+        }
+<span class="fc" id="L73">        return Optional.ofNullable(template.getTemplateId())</span>
+<span class="fc" id="L74">                .map(OBJECTID::getValue)</span>
+<span class="pc" id="L75">                .orElseThrow(() -&gt; new IllegalArgumentException(&quot;Template ID must not be null for the given template&quot;));</span>
+    }
+
+    /**
+     * Retrieves the template unique ID from the given OPT template.
+     *
+     * @param template the template
+     * @return template unique ID
+     */
+    public static UUID getUid(OPERATIONALTEMPLATE template) {
+<span class="pc bpc" id="L85" title="1 of 2 branches missed.">        if (template == null) {</span>
+<span class="nc" id="L86">            throw new IllegalArgumentException(&quot;Template must not be null&quot;);</span>
+        }
+<span class="fc" id="L88">        return Optional.ofNullable(template.getUid())</span>
+<span class="fc" id="L89">                .map(OBJECTID::getValue)</span>
+<span class="fc" id="L90">                .map(UUID::fromString)</span>
+<span class="pc" id="L91">                .orElseThrow(() -&gt; new IllegalArgumentException(&quot;Unique ID must not be null for the given template&quot;));</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.7.202105040129</span></div></body></html>

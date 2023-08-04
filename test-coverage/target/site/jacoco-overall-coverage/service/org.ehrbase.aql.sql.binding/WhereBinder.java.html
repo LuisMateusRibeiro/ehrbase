@@ -1,0 +1,492 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../../jacoco-resources/report.gif" type="image/gif"/><title>WhereBinder.java</title><link rel="stylesheet" href="../../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../../index.html" class="el_report">Overall Coverage</a> &gt; <a href="../index.html" class="el_bundle">service</a> &gt; <a href="index.source.html" class="el_package">org.ehrbase.aql.sql.binding</a> &gt; <span class="el_source">WhereBinder.java</span></div><h1>WhereBinder.java</h1><pre class="source lang-java linenums">/*
+ * Copyright (c) 2019 vitasystems GmbH and Hannover Medical School.
+ *
+ * This file is part of project EHRbase
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     https://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.ehrbase.aql.sql.binding;
+
+import java.util.*;
+import java.util.regex.Pattern;
+import org.apache.commons.lang3.StringUtils;
+import org.ehrbase.aql.definition.I_VariableDefinition;
+import org.ehrbase.aql.definition.LateralJoinDefinition;
+import org.ehrbase.aql.definition.LateralVariable;
+import org.ehrbase.aql.definition.VariableDefinition;
+import org.ehrbase.aql.sql.PathResolver;
+import org.ehrbase.aql.sql.queryimpl.*;
+import org.ehrbase.aql.sql.queryimpl.value_field.ISODateTime;
+import org.jooq.*;
+import org.jooq.impl.DSL;
+
+/**
+ * Bind the abstract WHERE clause parameters into a SQL expression
+ * Created by christian on 5/20/2016.
+ */
+// ignore cognitive complexity flag as this code as evolved historically and adjusted depending on use cases
+@SuppressWarnings({&quot;java:S3776&quot;, &quot;java:S135&quot;})
+public class WhereBinder {
+
+    private static final String VALUETYPE_EXPR_VALUE = &quot;/value,value&quot;;
+    public static final String EXISTS = &quot;EXISTS&quot;;
+    public static final String MATCHES = &quot;MATCHES&quot;;
+    public static final String NOT = &quot;NOT&quot;;
+    public static final String IS = &quot;IS&quot;;
+    public static final String TRUE = &quot;TRUE&quot;;
+    public static final String FALSE = &quot;FALSE&quot;;
+    public static final String NULL = &quot;NULL&quot;;
+    public static final String UNKNOWN = &quot;UNKNOWN&quot;;
+    public static final String DISTINCT = &quot;DISTINCT&quot;;
+    public static final String FROM = &quot;FROM&quot;;
+    public static final String BETWEEN = &quot;BETWEEN&quot;;
+
+    // from AQL grammar
+<span class="fc" id="L55">    private static final Set&lt;String&gt; SQL_OPERATORS = Set.of(</span>
+            &quot;=&quot;, &quot;!=&quot;, &quot;&gt;&quot;, &quot;&gt;=&quot;, &quot;&lt;&quot;, &quot;&lt;=&quot;, MATCHES, EXISTS, NOT, IS, TRUE, FALSE, NULL, UNKNOWN, DISTINCT, FROM,
+            BETWEEN, &quot;(&quot;, &quot;)&quot;, &quot;{&quot;, &quot;}&quot;);
+    /**
+     * list of subquery and operators
+     */
+<span class="fc" id="L61">    private static final Pattern SQL_CONDITIONAL_FUNCTIONAL_OPERATOR_PATTERN =</span>
+<span class="fc" id="L62">            Pattern.compile(&quot;(?i)(like|ilike|substr|in|not in)&quot;);</span>
+
+    public static final String OR = &quot;OR&quot;;
+    public static final String XOR = &quot;XOR&quot;;
+    public static final String AND = &quot;AND&quot;;
+    public static final String IN = &quot;IN&quot;;
+    public static final String ANY = &quot;ANY&quot;;
+    public static final String SOME = &quot;SOME&quot;;
+    public static final String ALL = &quot;ALL&quot;;
+
+<span class="fc" id="L72">    enum ExistsMode {</span>
+<span class="fc" id="L73">        NOT_EXISTS,</span>
+<span class="fc" id="L74">        EXISTS,</span>
+<span class="fc" id="L75">        UNSET</span>
+    }
+
+    private final List&lt;Object&gt; whereClause;
+<span class="fc" id="L79">    private boolean requiresJSQueryClosure = false;</span>
+<span class="fc" id="L80">    private boolean isFollowedBySQLConditionalOperator = false;</span>
+
+    private final WhereVariable whereVariable;
+
+<span class="fc" id="L84">    public WhereBinder(List&lt;Object&gt; whereClause, PathResolver pathResolver) {</span>
+<span class="fc" id="L85">        this.whereClause = whereClause;</span>
+<span class="fc" id="L86">        whereVariable = new WhereVariable(pathResolver);</span>
+<span class="fc" id="L87">    }</span>
+
+    private TaggedStringBuilder buildWhereCondition(
+            ExistsMode existsMode,
+            int whereCursor,
+            MultiFieldsMap multiFieldsMap,
+            int selectCursor,
+            MultiFieldsMap multiSelectFieldsMap,
+            TaggedStringBuilder taggedBuffer,
+            List&lt;Object&gt; item)
+            throws UnknownVariableException {
+<span class="nc bnc" id="L98" title="All 2 branches missed.">        for (Object part : item) {</span>
+<span class="nc bnc" id="L99" title="All 2 branches missed.">            if (part instanceof String) taggedBuffer.append((String) part);</span>
+<span class="nc bnc" id="L100" title="All 2 branches missed.">            else if (part instanceof VariableDefinition) {</span>
+                // substitute the identifier
+<span class="nc" id="L102">                TaggedStringBuilder taggedStringBuilder = whereVariable.encodeWhereVariable(</span>
+                        existsMode,
+                        isFollowedBySQLConditionalOperator,
+                        whereCursor,
+                        multiFieldsMap,
+                        selectCursor,
+                        multiSelectFieldsMap,
+                        (VariableDefinition) part,
+                        null);
+<span class="nc" id="L111">                isFollowedBySQLConditionalOperator = whereVariable.isFollowedBySQLConditionalOperator();</span>
+
+<span class="nc bnc" id="L113" title="All 2 branches missed.">                if (taggedStringBuilder != null) {</span>
+<span class="nc" id="L114">                    taggedBuffer.append(taggedStringBuilder.toString());</span>
+<span class="nc" id="L115">                    taggedBuffer.setTagField(taggedStringBuilder.getTagField());</span>
+                }
+<span class="nc bnc" id="L117" title="All 2 branches missed.">            } else if (part instanceof List) {</span>
+<span class="nc" id="L118">                TaggedStringBuilder taggedStringBuilder = buildWhereCondition(</span>
+                        existsMode,
+                        whereCursor,
+                        multiFieldsMap,
+                        selectCursor,
+                        multiSelectFieldsMap,
+                        taggedBuffer,
+                        (List) part);
+<span class="nc" id="L126">                taggedBuffer.append(taggedStringBuilder.toString());</span>
+<span class="nc" id="L127">                taggedBuffer.setTagField(taggedStringBuilder.getTagField());</span>
+            }
+<span class="nc" id="L129">        }</span>
+<span class="nc" id="L130">        return taggedBuffer;</span>
+    }
+
+    public Condition bind(
+            String templateId,
+            int whereCursor,
+            MultiFieldsMap multiWhereFieldsMap,
+            int selectCursor,
+            MultiFieldsMap multiSelectFieldsMap)
+            throws UnknownVariableException {
+
+<span class="fc" id="L141">        boolean unresolvedVariable = false;</span>
+
+<span class="fc bfc" id="L143" title="All 2 branches covered.">        if (whereClause.isEmpty()) return null;</span>
+
+<span class="fc" id="L145">        TaggedStringBuilder taggedBuffer = new TaggedStringBuilder();</span>
+
+        // work on a copy since Exist is destructive
+<span class="fc" id="L148">        List&lt;Object&gt; whereItems = new ArrayList&lt;&gt;(whereClause);</span>
+<span class="fc" id="L149">        boolean notExists = false;</span>
+<span class="fc" id="L150">        boolean inSubqueryOperator = false;</span>
+<span class="fc" id="L151">        ExistsMode inExists = ExistsMode.UNSET;</span>
+
+<span class="fc bfc" id="L153" title="All 2 branches covered.">        for (int cursor = 0; cursor &lt; whereItems.size(); cursor++) {</span>
+<span class="fc" id="L154">            Object item = whereItems.get(cursor);</span>
+<span class="fc bfc" id="L155" title="All 2 branches covered.">            if (item instanceof String) {</span>
+<span class="fc bfc" id="L156" title="All 5 branches covered.">                switch (((String) item).trim().toUpperCase()) {</span>
+                    case OR:
+                    case XOR:
+                    case AND:
+<span class="fc" id="L160">                        taggedBuffer = new WhereJsQueryExpression(</span>
+<span class="fc" id="L161">                                        taggedBuffer, requiresJSQueryClosure, isFollowedBySQLConditionalOperator)</span>
+<span class="fc" id="L162">                                .closure();</span>
+<span class="fc" id="L163">                        taggedBuffer.append(&quot; &quot; + item + &quot; &quot;);</span>
+<span class="fc" id="L164">                        break;</span>
+
+                    case NOT:
+                        // check if precedes 'EXISTS'
+<span class="pc bpc" id="L168" title="1 of 2 branches missed.">                        if (whereItems.get(cursor + 1).toString().equalsIgnoreCase(EXISTS)) {</span>
+<span class="fc" id="L169">                            notExists = true;</span>
+<span class="fc" id="L170">                            inExists = ExistsMode.NOT_EXISTS;</span>
+                        } else {
+<span class="nc" id="L172">                            taggedBuffer = new WhereJsQueryExpression(</span>
+<span class="nc" id="L173">                                            taggedBuffer, requiresJSQueryClosure, isFollowedBySQLConditionalOperator)</span>
+<span class="nc" id="L174">                                    .closure();</span>
+<span class="nc" id="L175">                            taggedBuffer.append(&quot; &quot; + item + &quot; &quot;);</span>
+                        }
+<span class="nc" id="L177">                        break;</span>
+
+                    case IN:
+                    case ANY:
+                    case SOME:
+                    case ALL:
+<span class="fc bfc" id="L183" title="All 2 branches covered.">                        if (((String) item).trim().toUpperCase().matches(&quot;ANY|SOME|ALL&quot;)) inSubqueryOperator = true;</span>
+<span class="fc" id="L184">                        taggedBuffer.append((String) item);</span>
+<span class="fc" id="L185">                        break;</span>
+
+                    case EXISTS:
+                        // add the comparison to null after the variable expression
+<span class="pc bpc" id="L189" title="1 of 2 branches missed.">                        whereItems.add(cursor + 2, notExists ? &quot;IS &quot; : &quot;IS NOT &quot;);</span>
+<span class="fc" id="L190">                        whereItems.add(cursor + 3, &quot;NULL&quot;);</span>
+<span class="fc" id="L191">                        notExists = false;</span>
+<span class="pc bpc" id="L192" title="1 of 2 branches missed.">                        if (inExists.equals(ExistsMode.UNSET)) inExists = ExistsMode.EXISTS;</span>
+                        break;
+
+                    default:
+<span class="fc" id="L196">                        ISODateTime isoDateTime = new ISODateTime(((String) item).replace(&quot;'&quot;, &quot;&quot;));</span>
+<span class="pc bpc" id="L197" title="1 of 2 branches missed.">                        if (isoDateTime.isValidDateTimeExpression()) {</span>
+<span class="nc" id="L198">                            long timestamp = isoDateTime.toTimeStamp()</span>
+                                    / 1000; // this to align with epoch_offset in the DB, ignore ms
+<span class="nc" id="L200">                            int lastValuePos = taggedBuffer.lastIndexOf(VALUETYPE_EXPR_VALUE);</span>
+<span class="nc bnc" id="L201" title="All 2 branches missed.">                            if (lastValuePos &gt; 0) {</span>
+<span class="nc" id="L202">                                taggedBuffer.replaceLast(VALUETYPE_EXPR_VALUE, &quot;/value,epoch_offset&quot;);</span>
+                            }
+<span class="nc" id="L204">                            isFollowedBySQLConditionalOperator = true;</span>
+<span class="nc" id="L205">                            item = hackItem(taggedBuffer, Long.toString(timestamp), &quot;numeric&quot;);</span>
+<span class="nc" id="L206">                            taggedBuffer.append((String) item);</span>
+<span class="nc" id="L207">                        } else {</span>
+<span class="fc" id="L208">                            item = hackItem(taggedBuffer, (String) item, null);</span>
+<span class="fc" id="L209">                            taggedBuffer.append((String) item);</span>
+                        }
+                        break;
+<span class="fc" id="L212">                }</span>
+<span class="pc bpc" id="L213" title="1 of 2 branches missed.">            } else if (item instanceof Long) {</span>
+<span class="nc" id="L214">                item = hackItem(taggedBuffer, item.toString(), null);</span>
+<span class="nc" id="L215">                taggedBuffer.append(item.toString());</span>
+<span class="pc bpc" id="L216" title="1 of 2 branches missed.">            } else if (item instanceof I_VariableDefinition) {</span>
+                // look ahead and check if followed by a sql operator
+<span class="fc" id="L218">                TaggedStringBuilder taggedStringBuilder = new TaggedStringBuilder();</span>
+<span class="fc bfc" id="L219" title="All 2 branches covered.">                if (isFollowedBySQLConditionalOperator(cursor)) {</span>
+<span class="fc" id="L220">                    TaggedStringBuilder encodedVar = whereVariable.encodeWhereVariable(</span>
+                            inExists,
+                            isFollowedBySQLConditionalOperator,
+                            whereCursor,
+                            multiWhereFieldsMap,
+                            selectCursor,
+                            multiSelectFieldsMap,
+                            (I_VariableDefinition) item,
+                            null);
+<span class="fc" id="L229">                    isFollowedBySQLConditionalOperator = whereVariable.isFollowedBySQLConditionalOperator();</span>
+<span class="fc" id="L230">                    inExists = whereVariable.inExists();</span>
+
+<span class="fc" id="L232">                    String expanded =</span>
+<span class="fc" id="L233">                            expandForLateral(templateId, encodedVar, (I_VariableDefinition) item, multiSelectFieldsMap);</span>
+
+<span class="pc bpc" id="L235" title="1 of 2 branches missed.">                    if (StringUtils.isNotBlank(expanded)) taggedStringBuilder.append(expanded);</span>
+                    else {
+<span class="nc" id="L237">                        unresolvedVariable = true;</span>
+<span class="nc" id="L238">                        break;</span>
+                    }
+<span class="fc" id="L240">                } else {</span>
+                    // if the path contains node predicate expression uses a SQL syntax instead of jsquery
+<span class="pc bpc" id="L242" title="1 of 2 branches missed.">                    if (new VariablePath(((I_VariableDefinition) item).getPath()).hasPredicate()) {</span>
+<span class="nc" id="L243">                        TaggedStringBuilder variableSQL = whereVariable.encodeWhereVariable(</span>
+                                inExists,
+                                isFollowedBySQLConditionalOperator,
+                                whereCursor,
+                                multiWhereFieldsMap,
+                                selectCursor,
+                                multiSelectFieldsMap,
+                                (I_VariableDefinition) item,
+                                null);
+<span class="nc" id="L252">                        isFollowedBySQLConditionalOperator = whereVariable.isFollowedBySQLConditionalOperator();</span>
+<span class="nc" id="L253">                        inExists = whereVariable.inExists();</span>
+
+<span class="nc" id="L255">                        String expanded = expandForLateral(</span>
+                                templateId, variableSQL, (I_VariableDefinition) item, multiSelectFieldsMap);
+<span class="nc bnc" id="L257" title="All 2 branches missed.">                        if (StringUtils.isNotBlank(expanded)) {</span>
+<span class="nc" id="L258">                            taggedStringBuilder.append(encodeForSubquery(expanded, inSubqueryOperator));</span>
+<span class="nc" id="L259">                            inSubqueryOperator = false;</span>
+                        } else {
+<span class="nc" id="L261">                            unresolvedVariable = true;</span>
+<span class="nc" id="L262">                            break;</span>
+                        }
+<span class="nc" id="L264">                        isFollowedBySQLConditionalOperator = true;</span>
+<span class="nc" id="L265">                        requiresJSQueryClosure = false;</span>
+<span class="nc" id="L266">                    } else {</span>
+                        // use select variable path used for this selectCursor if applicable!
+<span class="fc" id="L268">                        String expanded = expandForLateral(</span>
+                                templateId,
+<span class="fc" id="L270">                                whereVariable.encodeWhereVariable(</span>
+                                        inExists,
+                                        isFollowedBySQLConditionalOperator,
+                                        whereCursor,
+                                        multiWhereFieldsMap,
+                                        selectCursor,
+                                        multiSelectFieldsMap,
+                                        (I_VariableDefinition) item,
+                                        null),
+                                (I_VariableDefinition) item,
+                                multiSelectFieldsMap);
+<span class="fc" id="L281">                        isFollowedBySQLConditionalOperator = whereVariable.isFollowedBySQLConditionalOperator();</span>
+<span class="fc" id="L282">                        inExists = whereVariable.inExists();</span>
+
+<span class="pc bpc" id="L284" title="1 of 2 branches missed.">                        if (StringUtils.isNotBlank(expanded)) {</span>
+<span class="fc" id="L285">                            taggedStringBuilder.append(encodeForSubquery(expanded, inSubqueryOperator));</span>
+<span class="fc" id="L286">                            inSubqueryOperator = false;</span>
+                        } else {
+<span class="nc" id="L288">                            unresolvedVariable = true;</span>
+<span class="nc" id="L289">                            break;</span>
+                        }
+                    }
+                }
+
+<span class="fc" id="L294">                taggedBuffer.append(taggedStringBuilder.toString());</span>
+<span class="fc" id="L295">                taggedBuffer.setTagField(taggedStringBuilder.getTagField());</span>
+
+<span class="pc bnc" id="L297" title="All 2 branches missed.">            } else if (item instanceof List) {</span>
+<span class="nc" id="L298">                TaggedStringBuilder taggedStringBuilder = buildWhereCondition(</span>
+                        inExists,
+                        whereCursor,
+                        multiWhereFieldsMap,
+                        selectCursor,
+                        multiSelectFieldsMap,
+                        taggedBuffer,
+                        (List) item);
+<span class="nc" id="L306">                taggedBuffer.append(taggedStringBuilder.toString());</span>
+<span class="nc" id="L307">                taggedBuffer.setTagField(taggedStringBuilder.getTagField());</span>
+            }
+        }
+
+<span class="pc bpc" id="L311" title="1 of 2 branches missed.">        if (!unresolvedVariable) {</span>
+<span class="fc" id="L312">            taggedBuffer = new WhereJsQueryExpression(</span>
+<span class="fc" id="L313">                            taggedBuffer, requiresJSQueryClosure, isFollowedBySQLConditionalOperator)</span>
+<span class="fc" id="L314">                    .closure(); // termination</span>
+
+<span class="fc" id="L316">            return DSL.condition(taggedBuffer.toString());</span>
+<span class="nc" id="L317">        } else return DSL.falseCondition();</span>
+    }
+
+    private String encodeForSubquery(String sqlExpression, boolean inSubqueryOperator) {
+<span class="fc bfc" id="L321" title="All 2 branches covered.">        if (inSubqueryOperator) return &quot;(SELECT &quot; + sqlExpression + &quot;)&quot;;</span>
+<span class="fc" id="L322">        else return sqlExpression;</span>
+    }
+
+    // look ahead for a SQL operator
+    private boolean isFollowedBySQLConditionalOperator(int cursor) {
+<span class="fc bfc" id="L327" title="All 2 branches covered.">        if (cursor &lt; whereClause.size() - 1) {</span>
+<span class="fc" id="L328">            Object nextToken = whereClause.get(cursor + 1);</span>
+<span class="pc bpc" id="L329" title="1 of 2 branches missed.">            if (nextToken instanceof String</span>
+                    &amp;&amp; SQL_CONDITIONAL_FUNCTIONAL_OPERATOR_PATTERN
+<span class="fc" id="L331">                            .matcher(((String) nextToken).trim())</span>
+<span class="fc bfc" id="L332" title="All 2 branches covered.">                            .matches()) {</span>
+<span class="fc" id="L333">                isFollowedBySQLConditionalOperator = true;</span>
+<span class="fc" id="L334">                return true;</span>
+            }
+        }
+<span class="fc" id="L337">        isFollowedBySQLConditionalOperator = false;</span>
+<span class="fc" id="L338">        return false;</span>
+    }
+
+    // look ahead for a SQL operator
+    private String compositionNameValue(String symbol) {
+
+<span class="nc" id="L344">        String token = null;</span>
+        int lcursor; // skip the current variable
+
+<span class="nc bnc" id="L347" title="All 2 branches missed.">        for (lcursor = 0; lcursor &lt; whereClause.size() - 1; lcursor++) {</span>
+<span class="nc bnc" id="L348" title="All 2 branches missed.">            if (whereClause.get(lcursor) instanceof VariableDefinition</span>
+<span class="nc" id="L349">                    &amp;&amp; (((VariableDefinition) whereClause.get(lcursor))</span>
+<span class="nc" id="L350">                            .getIdentifier()</span>
+<span class="nc bnc" id="L351" title="All 2 branches missed.">                            .equals(symbol))</span>
+<span class="nc" id="L352">                    &amp;&amp; (((VariableDefinition) whereClause.get(lcursor))</span>
+<span class="nc" id="L353">                            .getPath()</span>
+<span class="nc bnc" id="L354" title="All 2 branches missed.">                            .equals(&quot;name/value&quot;))) {</span>
+<span class="nc" id="L355">                Object nextToken = whereClause.get(lcursor + 1); // check operator</span>
+<span class="nc bnc" id="L356" title="All 4 branches missed.">                if (nextToken instanceof String &amp;&amp; !nextToken.equals(&quot;=&quot;))</span>
+<span class="nc" id="L357">                    throw new IllegalArgumentException(&quot;name/value for CompositionAttribute must be an equality&quot;);</span>
+<span class="nc" id="L358">                nextToken = whereClause.get(lcursor + 2);</span>
+<span class="nc bnc" id="L359" title="All 2 branches missed.">                if (nextToken instanceof String) {</span>
+<span class="nc" id="L360">                    token = (String) nextToken;</span>
+<span class="nc" id="L361">                    break;</span>
+                }
+            }
+        }
+
+<span class="nc" id="L366">        return token;</span>
+    }
+
+    // do some temporary hacking for unsupported features
+    private Object hackItem(TaggedStringBuilder taggedBuffer, String item, String castAs) {
+        // this deals with post type casting required f.e. for date comparisons with epoch_offset
+<span class="pc bpc" id="L372" title="1 of 2 branches missed.">        if (castAs != null) {</span>
+<span class="nc bnc" id="L373" title="All 2 branches missed.">            if (isFollowedBySQLConditionalOperator) { // at the moment, only for epoch_offset</span>
+<span class="nc" id="L374">                int variableClosure = taggedBuffer.lastIndexOf(&quot;}'&quot;);</span>
+<span class="nc bnc" id="L375" title="All 2 branches missed.">                if (variableClosure &gt; 0) {</span>
+<span class="nc" id="L376">                    int variableInitial = taggedBuffer.lastIndexOf(&quot;\&quot;ehr\&quot;.\&quot;entry\&quot;.\&quot;entry\&quot; #&gt;&gt;&quot;);</span>
+<span class="nc bnc" id="L377" title="All 4 branches missed.">                    if (variableInitial &gt;= 0 &amp;&amp; variableInitial &lt; variableClosure) {</span>
+<span class="nc" id="L378">                        taggedBuffer.insert(variableClosure + &quot;}'&quot;.length(), &quot;)::&quot; + castAs);</span>
+<span class="nc" id="L379">                        taggedBuffer.insert(variableInitial, &quot;(&quot;);</span>
+                    }
+                }
+            }
+<span class="nc" id="L383">            return item;</span>
+        }
+
+<span class="fc bfc" id="L386" title="All 2 branches covered.">        if (SQL_OPERATORS.contains(item.toUpperCase())) return &quot; &quot; + item + &quot; &quot;;</span>
+<span class="pc bpc" id="L387" title="3 of 4 branches missed.">        if (taggedBuffer.toString().contains(JoinBinder.COMPOSITION_JOIN) &amp;&amp; item.contains(&quot;::&quot;))</span>
+<span class="nc" id="L388">            return item.split(&quot;::&quot;)[0] + &quot;'&quot;;</span>
+<span class="pc bpc" id="L389" title="3 of 4 branches missed.">        if (requiresJSQueryClosure</span>
+                &amp;&amp; !isFollowedBySQLConditionalOperator
+<span class="nc bnc" id="L391" title="All 2 branches missed.">                &amp;&amp; taggedBuffer.indexOf(&quot;#&quot;) &gt; 0</span>
+<span class="nc bnc" id="L392" title="All 2 branches missed.">                &amp;&amp; item.contains(&quot;'&quot;)) { // conventionally double quote for jsquery</span>
+<span class="nc" id="L393">            return item.replace(&quot;'&quot;, &quot;\&quot;&quot;);</span>
+        }
+<span class="fc" id="L395">        return item;</span>
+    }
+
+    private String expandForCondition(TaggedStringBuilder taggedStringBuilder) {
+
+<span class="pc bpc" id="L400" title="1 of 2 branches missed.">        if (taggedStringBuilder == null) return null;</span>
+
+        // perform the condition query wrapping depending on the dialect jsquery or sql
+        String wrapped;
+
+<span class="pc bpc" id="L405" title="2 of 3 branches missed.">        switch (taggedStringBuilder.getTagField()) {</span>
+            case JSQUERY:
+<span class="nc" id="L407">                wrapped = JsonbEntryQuery.JSQUERY_COMPOSITION_OPEN + taggedStringBuilder;</span>
+<span class="nc" id="L408">                requiresJSQueryClosure = true;</span>
+<span class="nc" id="L409">                break;</span>
+            case SQLQUERY:
+<span class="fc" id="L411">                wrapped = taggedStringBuilder.toString();</span>
+<span class="fc" id="L412">                break;</span>
+
+            default:
+<span class="nc" id="L415">                throw new IllegalArgumentException(&quot;Uninitialized tag passed in query expression&quot;);</span>
+        }
+
+<span class="fc" id="L418">        return wrapped;</span>
+    }
+
+    private String expandForLateral(
+            String templateId,
+            TaggedStringBuilder encodedVar,
+            I_VariableDefinition variableDefinition,
+            MultiFieldsMap multiSelectFieldsMap) {
+<span class="fc" id="L426">        String expanded = expandForCondition(encodedVar);</span>
+        final boolean isAlreadyCast;
+
+<span class="fc bfc" id="L429" title="All 2 branches covered.">        if (SetReturningFunction.isUsed(expanded)) {</span>
+<span class="fc" id="L430">            isAlreadyCast = false;</span>
+            // check if this variable is already defined as a lateral join from the projection (SELECT)
+<span class="fc" id="L432">            MultiFields selectFields =</span>
+<span class="fc" id="L433">                    multiSelectFieldsMap.get(variableDefinition.getIdentifier(), variableDefinition.getPath());</span>
+
+<span class="pc bpc" id="L435" title="1 of 2 branches missed.">            if (selectFields != null</span>
+<span class="nc bnc" id="L436" title="All 2 branches missed.">                    &amp;&amp; selectFields.getVariableDefinition().getLateralJoinDefinitions(templateId) != null) {</span>
+                // TODO: get the matching lateral join... not the LAST! XXX??
+<span class="nc" id="L438">                LateralJoinDefinition lateralJoinDefinition =</span>
+<span class="nc" id="L439">                        reconciliateWithAliasedTable(expanded, selectFields.getVariableDefinition(), templateId);</span>
+<span class="nc bnc" id="L440" title="All 2 branches missed.">                if (lateralJoinDefinition == null) return null;</span>
+<span class="nc" id="L441">                variableDefinition.setLateralJoinTable(templateId, lateralJoinDefinition);</span>
+                // NB: white space at the end is required since the clause is built with a string builder and space(s)
+                // is important!
+<span class="nc" id="L444">                variableDefinition.setAlias(new LateralVariable(</span>
+<span class="nc" id="L445">                                lateralJoinDefinition.getTable().getName(), lateralJoinDefinition.getLateralVariable())</span>
+<span class="nc" id="L446">                        .alias());</span>
+<span class="nc" id="L447">            } else {</span>
+                // check for an existing lateral join for this template
+<span class="fc" id="L449">                multiSelectFieldsMap</span>
+<span class="fc" id="L450">                        .matchingLateralJoin(templateId, expanded)</span>
+<span class="fc" id="L451">                        .ifPresentOrElse(</span>
+<span class="nc" id="L452">                                lj -&gt; LateralJoins.reuse(lj, templateId, variableDefinition),</span>
+<span class="fc" id="L453">                                () -&gt; LateralJoins.create(</span>
+                                        templateId, encodedVar, variableDefinition, IQueryImpl.Clause.WHERE));
+            }
+
+<span class="fc" id="L457">            expanded = variableDefinition.getAlias();</span>
+<span class="fc" id="L458">        } else {</span>
+<span class="fc" id="L459">            isAlreadyCast = true;</span>
+        }
+
+<span class="fc bfc" id="L462" title="All 2 branches covered.">        if (whereVariable.hasRightMostJsonbExpression())</span>
+<span class="fc" id="L463">            expanded = expanded + whereVariable.getRightMostJsonbExpression();</span>
+
+<span class="pc bpc" id="L465" title="3 of 4 branches missed.">        if (variableDefinition.getSelectType() != null &amp;&amp; !isAlreadyCast) {</span>
+<span class="nc" id="L466">            expanded =</span>
+<span class="nc" id="L467">                    &quot;(&quot; + expanded + &quot;)::&quot; + variableDefinition.getSelectType().getCastTypeName() + &quot; &quot;;</span>
+        }
+
+<span class="fc" id="L470">        return expanded;</span>
+    }
+
+    private LateralJoinDefinition reconciliateWithAliasedTable(
+            String expanded, I_VariableDefinition variableDefinition, String templateId) {
+
+<span class="nc" id="L476">        Set&lt;LateralJoinDefinition&gt; definedLateralJoins = variableDefinition.getLateralJoinDefinitions(templateId);</span>
+
+<span class="nc bnc" id="L478" title="All 2 branches missed.">        for (LateralJoinDefinition lateralJoinDefinition : definedLateralJoins) {</span>
+<span class="nc" id="L479">            if (lateralJoinDefinition</span>
+<span class="nc" id="L480">                    .getSqlExpression()</span>
+<span class="nc" id="L481">                    .replace(&quot;\n&quot;, &quot;&quot;)</span>
+<span class="nc" id="L482">                    .replace(&quot; &quot;, &quot;&quot;)</span>
+<span class="nc bnc" id="L483" title="All 2 branches missed.">                    .contains(expanded.substring(0, expanded.length() - 1)</span>
+<span class="nc" id="L484">                            .substring(1)</span>
+<span class="nc" id="L485">                            .replace(&quot;\n&quot;, &quot;&quot;)</span>
+<span class="nc" id="L486">                            .replace(&quot; &quot;, &quot;&quot;))) return lateralJoinDefinition;</span>
+<span class="nc" id="L487">        }</span>
+
+<span class="nc" id="L489">        return null;</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.7.202105040129</span></div></body></html>

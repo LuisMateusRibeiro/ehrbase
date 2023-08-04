@@ -1,0 +1,106 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../../jacoco-resources/report.gif" type="image/gif"/><title>ContainmentSet.java</title><link rel="stylesheet" href="../../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../../index.html" class="el_report">Overall Coverage</a> &gt; <a href="../index.html" class="el_bundle">service</a> &gt; <a href="index.source.html" class="el_package">org.ehrbase.aql.containment</a> &gt; <span class="el_source">ContainmentSet.java</span></div><h1>ContainmentSet.java</h1><pre class="source lang-java linenums">/*
+ * Copyright (c) 2019 vitasystems GmbH and Hannover Medical School.
+ *
+ * This file is part of project EHRbase
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     https://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.ehrbase.aql.containment;
+
+import java.util.List;
+import org.apache.commons.collections4.set.ListOrderedSet;
+
+/**
+ * Define the set of containments for a CONTAINS clause
+ * &lt;p&gt;
+ * Containment sets are associated with Set (boolean) operators and their relation with an enclosing set
+ * (inclusion). This structure define the set operations required at the query layer implementation. For
+ * example, in an SQL context, this will define set operation like: INTERSECT, UNION, EXCEPT.
+ * &lt;/p&gt;
+ * Created by christian on 4/12/2016.
+ */
+public class ContainmentSet {
+
+    private int serial; // for debugging purpose only
+    private Containment enclosing;
+    private ContainmentSet parentSet;
+<span class="fc" id="L37">    private ListOrderedSet&lt;Object&gt; containmentList = new ListOrderedSet&lt;&gt;();</span>
+
+<span class="fc" id="L39">    public ContainmentSet(int serial, Containment enclosing) {</span>
+<span class="fc" id="L40">        this.serial = serial;</span>
+<span class="fc" id="L41">        this.enclosing = enclosing;</span>
+<span class="fc" id="L42">    }</span>
+
+    public void add(Containment containment) {
+<span class="fc" id="L45">        containmentList.add(containment);</span>
+<span class="fc" id="L46">    }</span>
+
+    public void addAll(List&lt;Containment&gt; containments) {
+<span class="fc" id="L49">        containmentList.addAll(containments);</span>
+<span class="fc" id="L50">    }</span>
+
+    public void add(String operator) {
+<span class="nc" id="L53">        containmentList.add(new ContainOperator(operator));</span>
+<span class="nc" id="L54">    }</span>
+
+    public String toString() {
+<span class="nc" id="L57">        StringBuilder sb = new StringBuilder();</span>
+
+<span class="nc" id="L59">        sb.append(serial + &quot;|&quot;);</span>
+
+<span class="nc bnc" id="L61" title="All 2 branches missed.">        if (!containmentList.isEmpty()) {</span>
+<span class="nc" id="L62">            boolean comma = false;</span>
+<span class="nc bnc" id="L63" title="All 2 branches missed.">            for (Object item : containmentList) {</span>
+<span class="nc bnc" id="L64" title="All 2 branches missed.">                if (comma) sb.append(&quot;,&quot;);</span>
+
+<span class="nc" id="L66">                comma = true;</span>
+
+<span class="nc bnc" id="L68" title="All 2 branches missed.">                if (item instanceof Containment) sb.append(item);</span>
+<span class="nc bnc" id="L69" title="All 2 branches missed.">                else if (item instanceof ContainOperator) {</span>
+<span class="nc" id="L70">                    sb.append(((ContainOperator) item).getOperator());</span>
+<span class="nc bnc" id="L71" title="All 2 branches missed.">                } else if (item instanceof String) {</span>
+<span class="nc" id="L72">                    sb.append(item);</span>
+<span class="nc" id="L73">                } else sb.append(&quot;-- Unhandled Item Type --&quot;);</span>
+<span class="nc" id="L74">            }</span>
+<span class="nc" id="L75">        } else sb.append(&quot;--EMPTY SET--&quot;);</span>
+
+<span class="nc bnc" id="L77" title="All 2 branches missed.">        if (parentSet != null) sb.append(&quot;&lt;&lt;&lt;IN PARENT#&quot; + parentSet.serial);</span>
+<span class="nc" id="L78">        else sb.append(&quot;&lt;&lt;&lt; ROOT&quot;);</span>
+<span class="nc" id="L79">        return sb.toString();</span>
+    }
+
+    public int size() {
+<span class="nc" id="L83">        return containmentList.size();</span>
+    }
+
+    public boolean isEmpty() {
+<span class="nc bnc" id="L87" title="All 6 branches missed.">        return (containmentList.isEmpty() &amp;&amp; enclosing.getSymbol() == null &amp;&amp; enclosing.getClassName() == null);</span>
+    }
+
+    public void setParentSet(ContainmentSet parentSet) {
+<span class="nc" id="L91">        this.parentSet = parentSet;</span>
+<span class="nc" id="L92">    }</span>
+
+    public ListOrderedSet&lt;Object&gt; getContainmentList() {
+<span class="fc" id="L95">        return containmentList;</span>
+    }
+
+    public ContainmentSet getParentSet() {
+<span class="nc" id="L99">        return parentSet;</span>
+    }
+
+    public Containment getEnclosing() {
+<span class="nc" id="L103">        return enclosing;</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.7.202105040129</span></div></body></html>

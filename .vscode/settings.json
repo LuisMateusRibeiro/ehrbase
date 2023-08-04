@@ -1,0 +1,4 @@
+{
+    "appService.preDeployTask": "package:server",
+    "appService.deploySubpath": "target/server-0.29.0-SNAPSHOT.pom"
+}

@@ -1,0 +1,585 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../../jacoco-resources/report.gif" type="image/gif"/><title>EhrFolderRepository.java</title><link rel="stylesheet" href="../../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../../index.html" class="el_report">Coverage with Unit Tests</a> &gt; <a href="../index.html" class="el_bundle">service</a> &gt; <a href="index.source.html" class="el_package">org.ehrbase.repository</a> &gt; <span class="el_source">EhrFolderRepository.java</span></div><h1>EhrFolderRepository.java</h1><pre class="source lang-java linenums"><span class="nc" id="L1">/*</span>
+ * Copyright (c) 2023 vitasystems GmbH and Hannover Medical School.
+ *
+ * This file is part of project EHRbase
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     https://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.ehrbase.repository;
+
+import static org.ehrbase.jooq.pg.tables.EhrFolder.EHR_FOLDER;
+import static org.ehrbase.jooq.pg.tables.EhrFolderHistory.EHR_FOLDER_HISTORY;
+
+import com.nedap.archie.rm.directory.Folder;
+import com.nedap.archie.rm.support.identification.ObjectId;
+import com.nedap.archie.rm.support.identification.ObjectRef;
+import com.nedap.archie.rm.support.identification.ObjectVersionId;
+import java.time.OffsetDateTime;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Optional;
+import java.util.UUID;
+import java.util.function.Function;
+import java.util.stream.Collectors;
+import java.util.stream.IntStream;
+import javax.annotation.Nullable;
+import org.apache.commons.lang3.tuple.Triple;
+import org.ehrbase.api.definitions.ServerConfig;
+import org.ehrbase.api.exception.PreconditionFailedException;
+import org.ehrbase.api.service.TenantService;
+import org.ehrbase.jooq.pg.enums.ContributionChangeType;
+import org.ehrbase.jooq.pg.enums.ContributionDataType;
+import org.ehrbase.jooq.pg.tables.records.EhrFolderHistoryRecord;
+import org.ehrbase.jooq.pg.tables.records.EhrFolderRecord;
+import org.ehrbase.openehr.sdk.serialisation.jsonencoding.CanonicalJson;
+import org.jooq.DSLContext;
+import org.jooq.DeleteConditionStep;
+import org.jooq.Field;
+import org.jooq.JSONB;
+import org.jooq.Record;
+import org.jooq.Result;
+import org.jooq.SelectConditionStep;
+import org.jooq.SelectJoinStep;
+import org.jooq.impl.DSL;
+import org.springframework.stereotype.Repository;
+import org.springframework.transaction.annotation.Transactional;
+
+/**
+ * Handles DB-Access to {@link org.ehrbase.jooq.pg.tables.EhrFolder} and {@link org.ehrbase.jooq.pg.tables.EhrFolderHistory}
+ *
+ * @author Stefan Spiska
+ */
+@Repository
+public class EhrFolderRepository {
+
+    public static final String NOT_MATCH_LATEST_VERSION = &quot;If-Match version_uid does not match latest version.&quot;;
+    private final DSLContext context;
+
+    private final TenantService tenantService;
+
+    private final ContributionRepository contributionRepository;
+
+    private final ServerConfig serverConfig;
+
+<span class="nc" id="L77">    public EhrFolderRepository(</span>
+            DSLContext context,
+            TenantService tenantService,
+            ContributionRepository contributionRepository,
+            ServerConfig serverConfig) {
+<span class="nc" id="L82">        this.context = context;</span>
+<span class="nc" id="L83">        this.tenantService = tenantService;</span>
+<span class="nc" id="L84">        this.contributionRepository = contributionRepository;</span>
+<span class="nc" id="L85">        this.serverConfig = serverConfig;</span>
+<span class="nc" id="L86">    }</span>
+
+    /**
+     * Create a new Folder in the DB
+     *
+     * @param folderRecordList
+     * @param contributionId   If &lt;code&gt;null&lt;/code&gt; default contribution will be created {@link ContributionRepository#createDefault(UUID, ContributionDataType, ContributionChangeType)}
+     * @param auditId          If &lt;code&gt;null&lt;/code&gt; default audit will be created {@link ContributionRepository#createDefaultAudit(ContributionChangeType)}
+     */
+    @Transactional
+    public void commit(List&lt;EhrFolderRecord&gt; folderRecordList, @Nullable UUID contributionId, @Nullable UUID auditId) {
+<span class="nc" id="L97">        storeHead(folderRecordList, OffsetDateTime.now(), contributionId, ContributionChangeType.creation, auditId);</span>
+<span class="nc" id="L98">    }</span>
+
+    private void storeHead(
+            List&lt;EhrFolderRecord&gt; folderRecordList,
+            OffsetDateTime sysPeriodLower,
+            UUID contributionId,
+            ContributionChangeType contributionChangeType,
+            UUID auditId) {
+
+<span class="nc" id="L107">        UUID finalContributionId = Optional.ofNullable(contributionId)</span>
+<span class="nc" id="L108">                .orElseGet(() -&gt; contributionRepository.createDefault(</span>
+<span class="nc" id="L109">                        folderRecordList.get(0).getEhrId(), ContributionDataType.folder, contributionChangeType));</span>
+
+<span class="nc" id="L111">        UUID finalAuditId = Optional.ofNullable(auditId)</span>
+<span class="nc" id="L112">                .orElseGet(() -&gt; contributionRepository.createDefaultAudit(ContributionChangeType.creation));</span>
+
+<span class="nc" id="L114">        Short sysTenant = tenantService.getCurrentSysTenant();</span>
+
+<span class="nc" id="L116">        folderRecordList.forEach(r -&gt; {</span>
+<span class="nc" id="L117">            r.setSysPeriodLower(sysPeriodLower);</span>
+<span class="nc" id="L118">            r.setSysTenant(sysTenant);</span>
+<span class="nc" id="L119">            r.setContributionId(finalContributionId);</span>
+<span class="nc" id="L120">            r.setAuditId(finalAuditId);</span>
+<span class="nc" id="L121">        });</span>
+
+<span class="nc" id="L123">        RepositoryHelper.executeBulkInsert(context, folderRecordList, EHR_FOLDER);</span>
+<span class="nc" id="L124">    }</span>
+
+    /**
+     * Update a Folder in the DB
+     *
+     * @param folderRecordList
+     * @param contributionId   If &lt;code&gt;null&lt;/code&gt; default contribution will be created {@link ContributionRepository#createDefault(UUID, ContributionDataType, ContributionChangeType)}
+     * @param auditId          If &lt;code&gt;null&lt;/code&gt; default audit will be created {@link ContributionRepository#createDefaultAudit(ContributionChangeType)}
+     */
+    @Transactional
+    public void update(List&lt;EhrFolderRecord&gt; folderRecordList, UUID contributionId, UUID auditId) {
+
+<span class="nc" id="L136">        EhrFolderRecord rootFolder = findRoot(folderRecordList);</span>
+<span class="nc" id="L137">        UUID ehrId = rootFolder.getEhrId();</span>
+<span class="nc" id="L138">        int ehrFoldersIdx = rootFolder.getEhrFoldersIdx();</span>
+<span class="nc" id="L139">        Result&lt;EhrFolderRecord&gt; oldHead = getFolderHead(ehrId, ehrFoldersIdx);</span>
+
+        boolean isDeleted;
+        int oldVersion;
+        OffsetDateTime now;
+        EhrFolderHistoryRecord delRecord;
+        UUID rootId;
+<span class="nc bnc" id="L146" title="All 2 branches missed.">        if (oldHead.isEmpty()) {</span>
+<span class="nc" id="L147">            Optional&lt;EhrFolderHistoryRecord&gt; history = getLatestHistoryRoot(ehrId, ehrFoldersIdx);</span>
+
+<span class="nc" id="L149">            isDeleted = history.map(x -&gt; x.getSysDeleted())</span>
+<span class="nc" id="L150">                    .filter(deleted -&gt; deleted)</span>
+<span class="nc" id="L151">                    .isPresent();</span>
+<span class="nc bnc" id="L152" title="All 2 branches missed.">            if (!isDeleted) {</span>
+<span class="nc" id="L153">                throw new PreconditionFailedException(NOT_MATCH_LATEST_VERSION);</span>
+            }
+<span class="nc" id="L155">            delRecord = history.get();</span>
+<span class="nc" id="L156">            oldVersion = delRecord.getSysVersion();</span>
+<span class="nc" id="L157">            now = createCurrentTime(delRecord.getSysPeriodLower());</span>
+<span class="nc" id="L158">            rootId = delRecord.getId();</span>
+
+<span class="nc" id="L160">        } else {</span>
+<span class="nc" id="L161">            isDeleted = false;</span>
+<span class="nc" id="L162">            delRecord = null;</span>
+<span class="nc" id="L163">            EhrFolderRecord root = findRoot(oldHead);</span>
+<span class="nc" id="L164">            oldVersion = root.getSysVersion();</span>
+<span class="nc" id="L165">            now = createCurrentTime(root.getSysPeriodLower());</span>
+<span class="nc" id="L166">            rootId = root.getId();</span>
+        }
+
+        // versions not consecutive
+<span class="nc bnc" id="L170" title="All 2 branches missed.">        if (oldVersion + 1 != rootFolder.getSysVersion()) {</span>
+<span class="nc" id="L171">            throw new PreconditionFailedException(NOT_MATCH_LATEST_VERSION);</span>
+        }
+
+        // root ids do not match
+<span class="nc bnc" id="L175" title="All 2 branches missed.">        if (!rootId.equals(rootFolder.getId())) {</span>
+<span class="nc" id="L176">            throw new PreconditionFailedException(NOT_MATCH_LATEST_VERSION);</span>
+        }
+
+<span class="nc bnc" id="L179" title="All 2 branches missed.">        if (isDeleted) {</span>
+            // update delete record period
+<span class="nc" id="L181">            delRecord.setSysPeriodUpper(now);</span>
+<span class="nc" id="L182">            int updateCount = context.executeUpdate(delRecord);</span>
+<span class="nc bnc" id="L183" title="All 2 branches missed.">            if (updateCount != 1) {</span>
+                // concurrent modification
+<span class="nc" id="L185">                throw new PreconditionFailedException(NOT_MATCH_LATEST_VERSION);</span>
+            }
+
+        } else {
+            // move to history
+<span class="nc" id="L190">            List&lt;EhrFolderHistoryRecord&gt; historyRecords =</span>
+<span class="nc" id="L191">                    oldHead.stream().map(r -&gt; toHistory(r, now)).toList();</span>
+
+<span class="nc" id="L193">            RepositoryHelper.executeBulkInsert(context, historyRecords, EHR_FOLDER_HISTORY);</span>
+
+<span class="nc" id="L195">            int deleteCount = context.deleteFrom(EHR_FOLDER)</span>
+<span class="nc" id="L196">                    .where(EHR_FOLDER.EHR_ID.eq(ehrId))</span>
+<span class="nc" id="L197">                    .and(EHR_FOLDER.SYS_VERSION.eq(oldVersion))</span>
+<span class="nc" id="L198">                    .execute();</span>
+
+<span class="nc bnc" id="L200" title="All 2 branches missed.">            if (deleteCount == 0) {</span>
+                // concurrent modification
+<span class="nc" id="L202">                throw new PreconditionFailedException(NOT_MATCH_LATEST_VERSION);</span>
+            }
+        }
+
+        // store new head
+<span class="nc" id="L207">        storeHead(folderRecordList, now, contributionId, ContributionChangeType.modification, auditId);</span>
+<span class="nc" id="L208">    }</span>
+
+    private static EhrFolderRecord findRoot(List&lt;EhrFolderRecord&gt; folderRecordList) {
+<span class="nc" id="L211">        return folderRecordList.stream()</span>
+<span class="nc bnc" id="L212" title="All 2 branches missed.">                .filter(r -&gt; r.getPath().length == 1)</span>
+<span class="nc" id="L213">                .findAny()</span>
+<span class="nc" id="L214">                .orElseThrow();</span>
+    }
+
+    private static EhrFolderHistoryRecord toHistory(EhrFolderRecord ehrFolderRecord, OffsetDateTime sysPeriodUpper) {
+<span class="nc" id="L218">        EhrFolderHistoryRecord historyRecord = ehrFolderRecord.into(EHR_FOLDER_HISTORY);</span>
+<span class="nc" id="L219">        historyRecord.setSysPeriodUpper(sysPeriodUpper);</span>
+<span class="nc" id="L220">        historyRecord.setSysDeleted(false);</span>
+
+<span class="nc" id="L222">        return historyRecord;</span>
+    }
+
+    /**
+     * Determines the current time.
+     *
+     * @param lowerBound For proper version intervals the value is guaranteed to be at least 1 microsecond after lowerBound
+     * @return
+     */
+    private static OffsetDateTime createCurrentTime(OffsetDateTime lowerBound) {
+<span class="nc" id="L232">        OffsetDateTime now = OffsetDateTime.now();</span>
+        // sysPeriodUpper must be after sysPeriodLower for proper intervals
+<span class="nc bnc" id="L234" title="All 2 branches missed.">        if (now.isAfter(lowerBound)) {</span>
+<span class="nc" id="L235">            return now;</span>
+        }
+        // Add one microsecond, so the interval is valid.
+        // Resolution of postgres timestamps is 1 microsecond
+        // https://www.postgresql.org/docs/14/datatype-datetime.html#DATATYPE-DATETIME-TABLE
+<span class="nc" id="L240">        return lowerBound.plusNanos(1_000);</span>
+    }
+
+    public List&lt;EhrFolderRecord&gt; fromHistory(List&lt;EhrFolderHistoryRecord&gt; historyRecords) {
+<span class="nc" id="L244">        return historyRecords.stream().map(this::fromHistory).toList();</span>
+    }
+
+    private EhrFolderRecord fromHistory(EhrFolderHistoryRecord historyRecord) {
+<span class="nc" id="L248">        return historyRecord.into(EHR_FOLDER);</span>
+    }
+
+    /**
+     * Get the all folders of the latest active (not deleted) Version from the DB for a given Ehr.
+     *
+     * @param ehrId
+     * @param ehrFoldersIdx
+     * @return
+     */
+    public Result&lt;EhrFolderRecord&gt; getFolderHead(UUID ehrId, int ehrFoldersIdx) {
+<span class="nc" id="L259">        return context.selectFrom(EHR_FOLDER)</span>
+<span class="nc" id="L260">                .where(EHR_FOLDER.EHR_ID.eq(ehrId), EHR_FOLDER.EHR_FOLDERS_IDX.eq(ehrFoldersIdx))</span>
+<span class="nc" id="L261">                .fetch();</span>
+    }
+
+    /**
+     * Get the latest root folder from the History in the DB for a given Ehr.
+     *
+     * @param ehrid
+     * @return
+     */
+    public Optional&lt;EhrFolderHistoryRecord&gt; getLatestHistoryRoot(UUID ehrid, int ehrFoldersIdx) {
+<span class="nc" id="L271">        return context.selectFrom(EHR_FOLDER_HISTORY)</span>
+<span class="nc" id="L272">                .where(</span>
+<span class="nc" id="L273">                        EHR_FOLDER_HISTORY.EHR_ID.eq(ehrid),</span>
+<span class="nc" id="L274">                        EHR_FOLDER_HISTORY.EHR_FOLDERS_IDX.eq(ehrFoldersIdx),</span>
+<span class="nc" id="L275">                        EHR_FOLDER_HISTORY.ROW_NUM.eq(0))</span>
+<span class="nc" id="L276">                .orderBy(EHR_FOLDER_HISTORY.SYS_VERSION.desc())</span>
+<span class="nc" id="L277">                .limit(1)</span>
+<span class="nc" id="L278">                .fetchOptional();</span>
+    }
+
+    /**
+     * Delete a  Folder in the DB
+     *
+     * @param ehrId
+     * @param rootFolderId
+     * @param version        Version to be deleted. Must match latest.
+     * @param ehrFoldersIdx
+     * @param contributionId If &lt;code&gt;null&lt;/code&gt; default contribution will be created {@link ContributionRepository#createDefault(UUID, ContributionDataType, ContributionChangeType)}
+     * @param auditId        If &lt;code&gt;null&lt;/code&gt; default audit will be created {@link ContributionRepository#createDefaultAudit(ContributionChangeType)}
+     */
+    @Transactional
+    public void delete(
+            UUID ehrId, UUID rootFolderId, int version, int ehrFoldersIdx, UUID contributionId, UUID auditId) {
+
+<span class="nc" id="L295">        Result&lt;EhrFolderRecord&gt; headFolders = getFolderHead(ehrId, ehrFoldersIdx);</span>
+<span class="nc bnc" id="L296" title="All 2 branches missed.">        if (headFolders.isEmpty()) {</span>
+<span class="nc" id="L297">            throw new PreconditionFailedException(NOT_MATCH_LATEST_VERSION);</span>
+        }
+
+<span class="nc" id="L300">        EhrFolderRecord headRoot = findRoot(headFolders);</span>
+<span class="nc bnc" id="L301" title="All 4 branches missed.">        if (headRoot.getSysVersion() != version || !headRoot.getId().equals(rootFolderId)) {</span>
+<span class="nc" id="L302">            throw new PreconditionFailedException(NOT_MATCH_LATEST_VERSION);</span>
+        }
+
+        // timestamp for sysPeriod
+<span class="nc" id="L306">        OffsetDateTime now = createCurrentTime(headRoot.getSysPeriodLower());</span>
+
+<span class="nc" id="L308">        List&lt;EhrFolderHistoryRecord&gt; historyRecords =</span>
+<span class="nc" id="L309">                headFolders.stream().map(r -&gt; toHistory(r, now)).toList();</span>
+
+        // copy head to history
+<span class="nc" id="L312">        RepositoryHelper.executeBulkInsert(context, historyRecords, EHR_FOLDER_HISTORY);</span>
+
+<span class="nc bnc" id="L314" title="All 2 branches missed.">        if (contributionId == null) {</span>
+<span class="nc" id="L315">            contributionId = contributionRepository.createDefault(</span>
+<span class="nc" id="L316">                    ehrId, ContributionDataType.folder, ContributionChangeType.deleted);</span>
+        }
+
+<span class="nc bnc" id="L319" title="All 2 branches missed.">        if (auditId == null) {</span>
+<span class="nc" id="L320">            auditId = contributionRepository.createDefaultAudit(ContributionChangeType.creation);</span>
+        }
+
+        // add delete entry to history
+<span class="nc" id="L324">        EhrFolderHistoryRecord delRecord = headRoot.into(EHR_FOLDER_HISTORY);</span>
+<span class="nc" id="L325">        delRecord.setSysVersion(version + 1);</span>
+<span class="nc" id="L326">        delRecord.setSysPeriodUpper(null);</span>
+<span class="nc" id="L327">        delRecord.setSysPeriodLower(now);</span>
+<span class="nc" id="L328">        delRecord.setSysDeleted(true);</span>
+<span class="nc" id="L329">        delRecord.setContributionId(contributionId);</span>
+<span class="nc" id="L330">        delRecord.setAuditId(auditId);</span>
+        // reset unused fields
+<span class="nc" id="L332">        delRecord.setArchetypeNodeId(null);</span>
+<span class="nc" id="L333">        delRecord.setItems(null);</span>
+<span class="nc" id="L334">        delRecord.setFields(null);</span>
+
+<span class="nc" id="L336">        context.executeInsert(delRecord);</span>
+
+        // delete from head
+<span class="nc" id="L339">        int deleteCount = context.deleteFrom(EHR_FOLDER)</span>
+<span class="nc" id="L340">                .where(</span>
+<span class="nc" id="L341">                        EHR_FOLDER.EHR_ID.eq(ehrId),</span>
+<span class="nc" id="L342">                        EHR_FOLDER.EHR_FOLDERS_IDX.eq(ehrFoldersIdx),</span>
+<span class="nc" id="L343">                        EHR_FOLDER.SYS_VERSION.eq(version))</span>
+<span class="nc" id="L344">                .execute();</span>
+
+<span class="nc bnc" id="L346" title="All 2 branches missed.">        if (deleteCount == 0) {</span>
+            // concurrent modification
+<span class="nc" id="L348">            throw new PreconditionFailedException(NOT_MATCH_LATEST_VERSION);</span>
+        }
+<span class="nc" id="L350">    }</span>
+
+    public Result&lt;EhrFolderHistoryRecord&gt; getByVersion(UUID ehrId, int version) {
+
+<span class="nc" id="L354">        SelectConditionStep&lt;Record&gt; headQuery =</span>
+<span class="nc" id="L355">                headQuery(context).where(EHR_FOLDER.EHR_ID.eq(ehrId), EHR_FOLDER.SYS_VERSION.eq(version));</span>
+
+<span class="nc" id="L357">        Field&lt;?&gt;[] fields = convertToEhrFolderHistoryFields(headQuery.fields());</span>
+
+<span class="nc" id="L359">        SelectConditionStep&lt;Record&gt; historyQuery = context.select(fields)</span>
+<span class="nc" id="L360">                .from(EHR_FOLDER_HISTORY)</span>
+<span class="nc" id="L361">                .where(</span>
+<span class="nc" id="L362">                        EHR_FOLDER_HISTORY.EHR_ID.eq(ehrId),</span>
+<span class="nc" id="L363">                        EHR_FOLDER_HISTORY.SYS_VERSION.eq(version),</span>
+<span class="nc" id="L364">                        EHR_FOLDER_HISTORY.SYS_DELETED.isFalse());</span>
+
+<span class="nc" id="L366">        return headQuery.unionAll(historyQuery).fetch().into(EHR_FOLDER_HISTORY);</span>
+    }
+
+    /**
+     * Converts an array of JOOQ {@link Field}s to an array of JOOQ {@link Field}s of type {@code EHR_FOLDER_HISTORY},
+     * applying a given {@link Function} to each field.
+     *
+     * @param fields the array of JOOQ {@link Field}s to be converted
+     * @return an array of JOOQ {@link Field}s of type {@code EHR_FOLDER_HISTORY}
+     * */
+    public Field&lt;?&gt;[] convertToEhrFolderHistoryFields(Field&lt;?&gt;[] fields) {
+<span class="nc" id="L377">        return Arrays.stream(fields).map(EHR_FOLDER_HISTORY::field).toArray(Field[]::new);</span>
+    }
+
+    private static SelectJoinStep&lt;Record&gt; headQuery(DSLContext context) {
+<span class="nc" id="L381">        return context.select(EHR_FOLDER.fields())</span>
+<span class="nc" id="L382">                .select(</span>
+<span class="nc" id="L383">                        DSL.field(&quot;null&quot;).as(EHR_FOLDER_HISTORY.SYS_PERIOD_UPPER.getName()),</span>
+<span class="nc" id="L384">                        DSL.field(&quot;false&quot;).as(EHR_FOLDER_HISTORY.SYS_DELETED.getName()))</span>
+<span class="nc" id="L385">                .from(EHR_FOLDER);</span>
+    }
+
+    public Result&lt;EhrFolderHistoryRecord&gt; getByTime(UUID ehrId, OffsetDateTime time) {
+
+<span class="nc" id="L390">        SelectConditionStep&lt;Record&gt; headQuery =</span>
+<span class="nc" id="L391">                headQuery(context).where(EHR_FOLDER.EHR_ID.eq(ehrId), EHR_FOLDER.SYS_PERIOD_LOWER.lessOrEqual(time));</span>
+
+<span class="nc" id="L393">        Field&lt;?&gt;[] fields = convertToEhrFolderHistoryFields(headQuery.fields());</span>
+
+<span class="nc" id="L395">        SelectConditionStep&lt;Record&gt; historyQuery = context.select(fields)</span>
+<span class="nc" id="L396">                .from(EHR_FOLDER_HISTORY)</span>
+<span class="nc" id="L397">                .where(</span>
+<span class="nc" id="L398">                        EHR_FOLDER_HISTORY.EHR_ID.eq(ehrId),</span>
+<span class="nc" id="L399">                        EHR_FOLDER_HISTORY.SYS_PERIOD_LOWER.lessOrEqual(time),</span>
+<span class="nc" id="L400">                        EHR_FOLDER_HISTORY</span>
+<span class="nc" id="L401">                                .SYS_PERIOD_UPPER</span>
+<span class="nc" id="L402">                                .greaterThan(time)</span>
+<span class="nc" id="L403">                                .or(EHR_FOLDER_HISTORY.SYS_PERIOD_UPPER.isNull()),</span>
+<span class="nc" id="L404">                        EHR_FOLDER_HISTORY.SYS_DELETED.isFalse());</span>
+
+<span class="nc" id="L406">        return headQuery.unionAll(historyQuery).fetch().into(EHR_FOLDER_HISTORY);</span>
+    }
+
+    public Folder from(List&lt;EhrFolderRecord&gt; ehrFolderRecords) {
+
+<span class="nc" id="L411">        Map&lt;List&lt;String&gt;, EhrFolderRecord&gt; byPathMap = ehrFolderRecords.stream()</span>
+<span class="nc" id="L412">                .collect(Collectors.toMap(</span>
+<span class="nc" id="L413">                        ehrFolderRecord -&gt;</span>
+<span class="nc" id="L414">                                Arrays.stream(ehrFolderRecord.getPath()).toList(),</span>
+<span class="nc" id="L415">                        Function.identity()));</span>
+
+<span class="nc" id="L417">        return from(</span>
+<span class="nc bnc" id="L418" title="All 2 branches missed.">                byPathMap.keySet().stream().filter(l -&gt; l.size() == 1).findAny().orElseThrow(), byPathMap);</span>
+    }
+
+    private static Folder from(List&lt;String&gt; path, Map&lt;List&lt;String&gt;, EhrFolderRecord&gt; byPathMap) {
+
+<span class="nc" id="L423">        Folder folder =</span>
+<span class="nc" id="L424">                new CanonicalJson().unmarshal(byPathMap.get(path).getFields().data(), Folder.class);</span>
+
+<span class="nc bnc" id="L426" title="All 2 branches missed.">        byPathMap.keySet().stream().filter(l -&gt; l.size() == path.size() + 1).forEach(nextPath -&gt; {</span>
+<span class="nc" id="L427">            Folder subFolder = from(</span>
+<span class="nc" id="L428">                    nextPath,</span>
+<span class="nc" id="L429">                    byPathMap.entrySet().stream()</span>
+<span class="nc bnc" id="L430" title="All 2 branches missed.">                            .filter(e -&gt; e.getKey().size() &gt;= nextPath.size()</span>
+<span class="nc bnc" id="L431" title="All 2 branches missed.">                                    &amp;&amp; e.getKey().subList(0, nextPath.size()).equals(nextPath))</span>
+<span class="nc" id="L432">                            .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue)));</span>
+
+<span class="nc" id="L434">            folder.addFolder(subFolder);</span>
+<span class="nc" id="L435">        });</span>
+
+<span class="nc" id="L437">        return folder;</span>
+    }
+
+    public boolean hasDirectory(UUID ehrId) {
+<span class="nc" id="L441">        var headQuery = context.selectOne()</span>
+<span class="nc" id="L442">                .from(EHR_FOLDER)</span>
+<span class="nc" id="L443">                .where(EHR_FOLDER.EHR_ID.eq(ehrId), EHR_FOLDER.EHR_FOLDERS_IDX.eq(1));</span>
+<span class="nc" id="L444">        var historyQuery = context.selectOne()</span>
+<span class="nc" id="L445">                .from(EHR_FOLDER_HISTORY)</span>
+<span class="nc" id="L446">                .where(EHR_FOLDER_HISTORY.EHR_ID.eq(ehrId), EHR_FOLDER_HISTORY.EHR_FOLDERS_IDX.eq(1));</span>
+<span class="nc" id="L447">        return context.fetchExists(headQuery.unionAll(historyQuery));</span>
+    }
+
+    public List&lt;EhrFolderRecord&gt; toRecord(UUID ehrId, Folder folder) {
+
+<span class="nc" id="L452">        List&lt;Triple&lt;List&lt;String&gt;, List&lt;Integer&gt;, Folder&gt;&gt; flatten = flatten(folder);</span>
+<span class="nc" id="L453">        List&lt;EhrFolderRecord&gt; ehrFolderRecords = IntStream.range(0, flatten.size())</span>
+<span class="nc" id="L454">                .mapToObj(i -&gt; toRecord(i, flatten.get(i), ehrId))</span>
+<span class="nc" id="L455">                .toList();</span>
+
+<span class="nc bnc" id="L457" title="All 2 branches missed.">        if (folder.getUid() instanceof ObjectVersionId objectVersionId) {</span>
+<span class="nc" id="L458">            ehrFolderRecords.forEach(r -&gt; r.setSysVersion(</span>
+<span class="nc" id="L459">                    Integer.valueOf(objectVersionId.getVersionTreeId().getValue())));</span>
+        }
+
+<span class="nc" id="L462">        return ehrFolderRecords;</span>
+    }
+
+    private EhrFolderRecord toRecord(int rowNum, Triple&lt;List&lt;String&gt;, List&lt;Integer&gt;, Folder&gt; flattened, UUID ehrId) {
+
+<span class="nc" id="L467">        EhrFolderRecord folder2Record = context.newRecord(EHR_FOLDER);</span>
+
+<span class="nc" id="L469">        folder2Record.setEhrId(ehrId);</span>
+        // For now there is only one Folder hierarchy per ehr.
+<span class="nc" id="L471">        folder2Record.setEhrFoldersIdx(1);</span>
+<span class="nc" id="L472">        folder2Record.setRowNum(rowNum);</span>
+
+<span class="nc" id="L474">        List&lt;String&gt; path = flattened.getLeft();</span>
+<span class="nc" id="L475">        folder2Record.setPath(path.toArray(String[]::new));</span>
+
+<span class="nc" id="L477">        Folder folder = flattened.getRight();</span>
+<span class="nc" id="L478">        folder2Record.setId(UUID.fromString(folder.getUid().getRoot().getValue()));</span>
+<span class="nc" id="L479">        folder2Record.setArchetypeNodeId(folder.getArchetypeNodeId());</span>
+
+<span class="nc" id="L481">        folder2Record.setItems(findItems(folder));</span>
+
+<span class="nc" id="L483">        List&lt;Integer&gt; indexList = flattened.getMiddle();</span>
+        // Add index for root
+<span class="nc" id="L485">        indexList.add(0, 0);</span>
+<span class="nc" id="L486">        folder2Record.setHierarchyIdx(encodeIndex(indexList, false));</span>
+<span class="nc" id="L487">        folder2Record.setHierarchyIdxCap(encodeIndex(indexList, true));</span>
+<span class="nc" id="L488">        folder2Record.setHierarchyIdxLen(indexList.size());</span>
+
+        // Exclude folders from JSON record
+<span class="nc" id="L491">        folder.setFolders(null);</span>
+<span class="nc" id="L492">        folder2Record.setFields(JSONB.valueOf(new CanonicalJson().marshal(folder)));</span>
+
+<span class="nc" id="L494">        return folder2Record;</span>
+    }
+
+    private static String encodeIndex(List&lt;Integer&gt; index, boolean addCap) {
+<span class="nc bnc" id="L498" title="All 2 branches missed.">        return index.stream().map(Objects::toString).collect(Collectors.joining(&quot;,&quot;, &quot;&quot;, addCap ? &quot;,~&quot; : &quot;,&quot;));</span>
+    }
+
+    private UUID[] findItems(Folder folder) {
+<span class="nc" id="L502">        UUID[] value = null;</span>
+<span class="nc bnc" id="L503" title="All 2 branches missed.">        if (folder.getItems() != null) {</span>
+
+<span class="nc" id="L505">            value = folder.getItems().stream()</span>
+<span class="nc" id="L506">                    .map(ObjectRef::getId)</span>
+<span class="nc" id="L507">                    .map(ObjectId::getValue)</span>
+<span class="nc" id="L508">                    .map(UUID::fromString)</span>
+<span class="nc" id="L509">                    .toArray(UUID[]::new);</span>
+        }
+
+<span class="nc" id="L512">        return value;</span>
+    }
+
+    /**
+     * For each folder in the hierarchy a triple (name path, index path, Folder) is added to the list
+     * @param folder
+     * @return
+     */
+    private static List&lt;Triple&lt;List&lt;String&gt;, List&lt;Integer&gt;, Folder&gt;&gt; flatten(Folder folder) {
+
+        // List of Triple&lt;name path, index path, Folder&gt;
+<span class="nc" id="L523">        List&lt;Triple&lt;List&lt;String&gt;, List&lt;Integer&gt;, Folder&gt;&gt; flattened = new ArrayList&lt;&gt;();</span>
+
+        {
+            // add a root entry for this path
+<span class="nc" id="L527">            List&lt;String&gt; namePath = new ArrayList&lt;&gt;();</span>
+<span class="nc" id="L528">            namePath.add(folder.getNameAsString());</span>
+<span class="nc" id="L529">            List&lt;Integer&gt; indexPath = new ArrayList&lt;&gt;();</span>
+<span class="nc" id="L530">            flattened.add(Triple.of(namePath, indexPath, folder));</span>
+        }
+
+<span class="nc bnc" id="L533" title="All 2 branches missed.">        if (folder.getFolders() != null) {</span>
+
+<span class="nc" id="L535">            IntStream.range(0, folder.getFolders().size())</span>
+                    // for each subfolder: flatten &amp; prefix each entry with the path of this folder
+<span class="nc" id="L537">                    .forEach(i -&gt; flatten(folder.getFolders().get(i)).forEach(p -&gt; {</span>
+<span class="nc" id="L538">                        List&lt;String&gt; namePath = new ArrayList&lt;&gt;();</span>
+<span class="nc" id="L539">                        namePath.add(folder.getNameAsString());</span>
+<span class="nc" id="L540">                        namePath.addAll(p.getLeft());</span>
+<span class="nc" id="L541">                        List&lt;Integer&gt; indexPath = p.getMiddle();</span>
+<span class="nc" id="L542">                        indexPath.add(0, i);</span>
+<span class="nc" id="L543">                        flattened.add(Triple.of(namePath, indexPath, p.getRight()));</span>
+<span class="nc" id="L544">                    }));</span>
+        }
+
+<span class="nc" id="L547">        return flattened;</span>
+    }
+
+    @Transactional
+    public void adminDelete(UUID ehrId, Integer ehrFoldersIdx) {
+<span class="nc" id="L552">        context.deleteFrom(EHR_FOLDER).where(EHR_FOLDER.EHR_ID.eq(ehrId)).execute();</span>
+<span class="nc" id="L553">        DeleteConditionStep&lt;EhrFolderHistoryRecord&gt; deleteQuery =</span>
+<span class="nc" id="L554">                context.deleteFrom(EHR_FOLDER_HISTORY).where(EHR_FOLDER_HISTORY.EHR_ID.eq(ehrId));</span>
+
+<span class="nc bnc" id="L556" title="All 2 branches missed.">        if (ehrFoldersIdx != null) {</span>
+<span class="nc" id="L557">            deleteQuery = deleteQuery.and(EHR_FOLDER_HISTORY.EHR_FOLDERS_IDX.eq(ehrFoldersIdx));</span>
+        }
+
+<span class="nc" id="L560">        deleteQuery.execute();</span>
+<span class="nc" id="L561">    }</span>
+
+    public List&lt;ObjectVersionId&gt; findForContribution(UUID ehrId, UUID contributionId) {
+
+<span class="nc" id="L565">        var headQuery = context.select(EHR_FOLDER.ID, EHR_FOLDER.SYS_VERSION)</span>
+<span class="nc" id="L566">                .from(EHR_FOLDER)</span>
+<span class="nc" id="L567">                .where(</span>
+<span class="nc" id="L568">                        EHR_FOLDER.EHR_ID.eq(ehrId),</span>
+<span class="nc" id="L569">                        EHR_FOLDER.ROW_NUM.eq(0),</span>
+<span class="nc" id="L570">                        EHR_FOLDER.EHR_FOLDERS_IDX.eq(1),</span>
+<span class="nc" id="L571">                        EHR_FOLDER.CONTRIBUTION_ID.eq(contributionId));</span>
+<span class="nc" id="L572">        var historyQuery = context.select(EHR_FOLDER_HISTORY.ID, EHR_FOLDER_HISTORY.SYS_VERSION)</span>
+<span class="nc" id="L573">                .from(EHR_FOLDER_HISTORY)</span>
+<span class="nc" id="L574">                .where(</span>
+<span class="nc" id="L575">                        EHR_FOLDER_HISTORY.EHR_ID.eq(ehrId),</span>
+<span class="nc" id="L576">                        EHR_FOLDER_HISTORY.ROW_NUM.eq(0),</span>
+<span class="nc" id="L577">                        EHR_FOLDER_HISTORY.EHR_FOLDERS_IDX.eq(1),</span>
+<span class="nc" id="L578">                        EHR_FOLDER_HISTORY.CONTRIBUTION_ID.eq(contributionId));</span>
+<span class="nc" id="L579">        return headQuery.unionAll(historyQuery).stream()</span>
+<span class="nc" id="L580">                .map(r -&gt; new ObjectVersionId(</span>
+<span class="nc" id="L581">                        r.value1().toString() + &quot;::&quot; + serverConfig.getNodename() + &quot;::&quot; + r.value2()))</span>
+<span class="nc" id="L582">                .toList();</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.7.202105040129</span></div></body></html>

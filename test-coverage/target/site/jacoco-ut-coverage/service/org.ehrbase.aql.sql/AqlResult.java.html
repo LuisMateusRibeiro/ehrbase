@@ -1,0 +1,76 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../../jacoco-resources/report.gif" type="image/gif"/><title>AqlResult.java</title><link rel="stylesheet" href="../../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../../index.html" class="el_report">Coverage with Unit Tests</a> &gt; <a href="../index.html" class="el_bundle">service</a> &gt; <a href="index.source.html" class="el_package">org.ehrbase.aql.sql</a> &gt; <span class="el_source">AqlResult.java</span></div><h1>AqlResult.java</h1><pre class="source lang-java linenums">/*
+ * Copyright (c) 2019 vitasystems GmbH and Hannover Medical School.
+ *
+ * This file is part of project EHRbase
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     https://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.ehrbase.aql.sql;
+
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import org.jooq.Record;
+import org.jooq.Result;
+
+/**
+ * Wrapper calls for a query result
+ */
+public class AqlResult {
+    private final Result&lt;Record&gt; records;
+    private final List&lt;List&lt;String&gt;&gt; explain;
+    private Map&lt;String, String&gt; aqlColumns;
+<span class="fc" id="L34">    private Map&lt;String, Set&lt;Object&gt;&gt; auditResultMap = new HashMap&lt;&gt;();</span>
+
+<span class="fc" id="L36">    AqlResult(Result&lt;Record&gt; records, List&lt;List&lt;String&gt;&gt; explain) {</span>
+<span class="fc" id="L37">        this.records = records;</span>
+<span class="fc" id="L38">        this.explain = explain;</span>
+<span class="fc" id="L39">    }</span>
+
+    public Result&lt;Record&gt; getRecords() {
+<span class="nc" id="L42">        return records;</span>
+    }
+
+    public List&lt;List&lt;String&gt;&gt; getExplain() {
+<span class="nc" id="L46">        return explain;</span>
+    }
+
+    public Map&lt;String, String&gt; getVariables() {
+<span class="fc" id="L50">        return aqlColumns;</span>
+    }
+
+    public void setVariables(Map&lt;String, String&gt; variables) {
+<span class="fc" id="L54">        aqlColumns = variables;</span>
+<span class="fc" id="L55">    }</span>
+
+    public void setAuditResultMap(Map&lt;String, Set&lt;Object&gt;&gt; auditResultMap) {
+<span class="nc" id="L58">        this.auditResultMap = auditResultMap;</span>
+<span class="nc" id="L59">    }</span>
+
+    public Map&lt;String, Set&lt;Object&gt;&gt; getAuditResultMap() {
+<span class="nc" id="L62">        return auditResultMap;</span>
+    }
+
+    public boolean variablesContains(String fieldName) {
+<span class="fc bfc" id="L66" title="All 2 branches covered.">        if (aqlColumns.containsKey(fieldName)) return true;</span>
+
+        // else iterate on values
+<span class="pc bpc" id="L69" title="1 of 2 branches missed.">        for (String value : aqlColumns.values()) {</span>
+<span class="fc bfc" id="L70" title="All 2 branches covered.">            if (value.equals(fieldName)) return true;</span>
+        }
+
+<span class="nc" id="L73">        return false;</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.7.202105040129</span></div></body></html>

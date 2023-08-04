@@ -1,0 +1,94 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../../jacoco-resources/report.gif" type="image/gif"/><title>PathResolver.java</title><link rel="stylesheet" href="../../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../../index.html" class="el_report">Overall Coverage</a> &gt; <a href="../index.html" class="el_bundle">service</a> &gt; <a href="index.source.html" class="el_package">org.ehrbase.aql.sql</a> &gt; <span class="el_source">PathResolver.java</span></div><h1>PathResolver.java</h1><pre class="source lang-java linenums">/*
+ * Copyright (c) 2019 vitasystems GmbH and Hannover Medical School.
+ *
+ * This file is part of project EHRbase
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     https://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.ehrbase.aql.sql;
+
+import static org.ehrbase.aql.sql.QueryProcessor.NIL_TEMPLATE;
+
+import java.util.Set;
+import java.util.TreeSet;
+import org.ehrbase.aql.containment.Containment;
+import org.ehrbase.aql.containment.IdentifierMapper;
+import org.ehrbase.aql.containment.Templates;
+import org.ehrbase.service.KnowledgeCacheService;
+
+/**
+ * Resolve the path corresponding to a symbol in a given context
+ * NB. Path are resolved using WebTemplates
+ * Created by christian on 5/3/2016.
+ */
+public class PathResolver {
+
+    private final IdentifierMapper mapper;
+    private final KnowledgeCacheService knowledgeCache;
+
+<span class="fc" id="L39">    public PathResolver(KnowledgeCacheService knowledgeCache, IdentifierMapper mapper) {</span>
+<span class="fc" id="L40">        this.knowledgeCache = knowledgeCache;</span>
+<span class="fc" id="L41">        this.mapper = mapper;</span>
+<span class="fc" id="L42">    }</span>
+
+    public Set&lt;String&gt; pathOf(String templateId, String identifier) {
+        Set&lt;String&gt; result;
+
+<span class="pc bpc" id="L47" title="1 of 2 branches missed.">        if (!getMapper().hasPathExpression()</span>
+<span class="fc bfc" id="L48" title="All 2 branches covered.">                &amp;&amp; getMapper().getClassName(identifier).equals(&quot;COMPOSITION&quot;)) {</span>
+            // assemble a fake path for composition
+<span class="fc" id="L50">            StringBuilder stringBuilder = new StringBuilder();</span>
+<span class="fc" id="L51">            Containment containment = (Containment) getMapper().getContainer(identifier);</span>
+<span class="fc" id="L52">            stringBuilder.append(&quot;/composition[&quot;);</span>
+<span class="fc" id="L53">            stringBuilder.append(containment.getArchetypeId());</span>
+<span class="fc" id="L54">            stringBuilder.append(&quot;]&quot;);</span>
+<span class="fc" id="L55">            result = new TreeSet&lt;&gt;();</span>
+<span class="fc" id="L56">            result.add(stringBuilder.toString());</span>
+<span class="fc" id="L57">        } else result = getMapper().getPath(templateId, identifier);</span>
+
+<span class="fc" id="L59">        return result;</span>
+    }
+
+    public String entryRoot(String templateId) {
+<span class="fc" id="L63">        Containment root = getMapper().getRootContainment();</span>
+<span class="fc" id="L64">        String result = null;</span>
+<span class="pc bpc" id="L65" title="1 of 4 branches missed.">        if (!templateId.equals(NIL_TEMPLATE) &amp;&amp; root != null) {</span>
+<span class="fc" id="L66">            StringBuilder stringBuilder = new StringBuilder();</span>
+<span class="fc" id="L67">            stringBuilder.append(&quot;/composition[&quot;);</span>
+<span class="fc bfc" id="L68" title="All 2 branches covered.">            if (root.getArchetypeId().isEmpty()) {</span>
+                // resolve the archetype node id according to the template
+<span class="fc" id="L70">                stringBuilder.append(new Templates(knowledgeCache).rootArchetypeNodeId(templateId));</span>
+<span class="fc" id="L71">            } else stringBuilder.append(root.getArchetypeId());</span>
+<span class="fc" id="L72">            stringBuilder.append(&quot;]&quot;);</span>
+<span class="fc" id="L73">            result = stringBuilder.toString();</span>
+        }
+<span class="fc" id="L75">        return result;</span>
+    }
+
+    public boolean hasPathExpression() {
+<span class="fc" id="L79">        return getMapper().hasPathExpression();</span>
+    }
+
+    public String rootOf(String identifier) {
+<span class="nc" id="L83">        return getMapper().getArchetypeId(identifier);</span>
+    }
+
+    public String classNameOf(String identifier) {
+<span class="fc" id="L87">        return getMapper().getClassName(identifier);</span>
+    }
+
+    public IdentifierMapper getMapper() {
+<span class="fc" id="L91">        return mapper;</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.7.202105040129</span></div></body></html>

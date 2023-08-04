@@ -1,0 +1,95 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../../jacoco-resources/report.gif" type="image/gif"/><title>SwaggerConfiguration.java</title><link rel="stylesheet" href="../../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../../index.html" class="el_report">Coverage with Unit Tests</a> &gt; <a href="../index.html" class="el_bundle">application</a> &gt; <a href="index.source.html" class="el_package">org.ehrbase.application.config</a> &gt; <span class="el_source">SwaggerConfiguration.java</span></div><h1>SwaggerConfiguration.java</h1><pre class="source lang-java linenums">/*
+ * Copyright (c) 2022 vitasystems GmbH and Hannover Medical School.
+ *
+ * This file is part of project EHRbase
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     https://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.ehrbase.application.config;
+
+import io.swagger.v3.oas.models.ExternalDocumentation;
+import io.swagger.v3.oas.models.OpenAPI;
+import io.swagger.v3.oas.models.info.Info;
+import io.swagger.v3.oas.models.info.License;
+import org.springdoc.core.GroupedOpenApi;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+
+@Configuration
+<span class="nc" id="L29">public class SwaggerConfiguration {</span>
+
+    @Bean
+    public GroupedOpenApi openEhrApi() {
+<span class="nc" id="L33">        return GroupedOpenApi.builder()</span>
+<span class="nc" id="L34">                .group(&quot;1. openEHR API&quot;)</span>
+<span class="nc" id="L35">                .pathsToMatch(&quot;/rest/openehr/**&quot;)</span>
+<span class="nc" id="L36">                .build();</span>
+    }
+
+    @Bean
+    public GroupedOpenApi ehrScapeApi() {
+<span class="nc" id="L41">        return GroupedOpenApi.builder()</span>
+<span class="nc" id="L42">                .group(&quot;2. EhrScape API&quot;)</span>
+<span class="nc" id="L43">                .pathsToMatch(&quot;/rest/ecis/**&quot;)</span>
+<span class="nc" id="L44">                .build();</span>
+    }
+
+    @Bean
+    public GroupedOpenApi statusApi() {
+<span class="nc" id="L49">        return GroupedOpenApi.builder()</span>
+<span class="nc" id="L50">                .group(&quot;3. EHRbase Status Endpoint&quot;)</span>
+<span class="nc" id="L51">                .pathsToMatch(&quot;/rest/status&quot;)</span>
+<span class="nc" id="L52">                .build();</span>
+    }
+
+    @Bean
+    public GroupedOpenApi adminApi() {
+<span class="nc" id="L57">        return GroupedOpenApi.builder()</span>
+<span class="nc" id="L58">                .group(&quot;4. EHRbase Admin API&quot;)</span>
+<span class="nc" id="L59">                .pathsToMatch(&quot;/rest/admin/**&quot;)</span>
+<span class="nc" id="L60">                .build();</span>
+    }
+
+    @Bean
+    public GroupedOpenApi actuatorApi() {
+<span class="nc" id="L65">        return GroupedOpenApi.builder()</span>
+<span class="nc" id="L66">                .group(&quot;5. Management API&quot;)</span>
+<span class="nc" id="L67">                .pathsToMatch(&quot;/management/**&quot;)</span>
+<span class="nc" id="L68">                .build();</span>
+    }
+
+    @Bean
+    public OpenAPI ehrBaseOpenAPI() {
+<span class="nc" id="L73">        return new OpenAPI()</span>
+<span class="nc" id="L74">                .info(new Info()</span>
+<span class="nc" id="L75">                        .title(&quot;EHRbase API&quot;)</span>
+<span class="nc" id="L76">                        .description(</span>
+                                &quot;EHRbase implements the [official openEHR REST API](https://specifications.openehr.org/releases/ITS-REST/latest/) and &quot;
+                                        + &quot;a subset of the [EhrScape API](https://www.ehrscape.com/). &quot;
+                                        + &quot;Additionally, EHRbase provides a custom `status` heartbeat endpoint, &quot;
+                                        + &quot;an [Admin API](https://ehrbase.readthedocs.io/en/latest/03_development/07_admin/index.html) (if activated) &quot;
+                                        + &quot;and a [Status and Metrics API](https://ehrbase.readthedocs.io/en/latest/03_development/08_status_and_metrics/index.html?highlight=status) (if activated) &quot;
+                                        + &quot;for monitoring and maintenance. &quot;
+                                        + &quot;Please select the definition in the top right.&quot;
+                                        + &quot; &quot;
+                                        + &quot;Note: The openEHR REST API and the EhrScape API are documented in their official documentation, not here. Please refer to their separate documentation.&quot;)
+<span class="nc" id="L86">                        .version(&quot;v1&quot;)</span>
+<span class="nc" id="L87">                        .license(new License()</span>
+<span class="nc" id="L88">                                .name(&quot;Apache 2.0&quot;)</span>
+<span class="nc" id="L89">                                .url(&quot;https://github.com/ehrbase/ehrbase/blob/develop/LICENSE.md&quot;)))</span>
+<span class="nc" id="L90">                .externalDocs(new ExternalDocumentation()</span>
+<span class="nc" id="L91">                        .description(&quot;EHRbase Documentation&quot;)</span>
+<span class="nc" id="L92">                        .url(&quot;https://ehrbase.readthedocs.io/&quot;));</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.7.202105040129</span></div></body></html>

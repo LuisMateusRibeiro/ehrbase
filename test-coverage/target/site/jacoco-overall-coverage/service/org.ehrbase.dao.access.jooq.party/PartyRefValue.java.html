@@ -1,0 +1,88 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../../jacoco-resources/report.gif" type="image/gif"/><title>PartyRefValue.java</title><link rel="stylesheet" href="../../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../../index.html" class="el_report">Overall Coverage</a> &gt; <a href="../index.html" class="el_bundle">service</a> &gt; <a href="index.source.html" class="el_package">org.ehrbase.dao.access.jooq.party</a> &gt; <span class="el_source">PartyRefValue.java</span></div><h1>PartyRefValue.java</h1><pre class="source lang-java linenums">/*
+ * Copyright (c) 2020 vitasystems GmbH and Hannover Medical School.
+ *
+ * This file is part of project EHRbase
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     https://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.ehrbase.dao.access.jooq.party;
+
+import com.nedap.archie.rm.generic.PartyProxy;
+import com.nedap.archie.rm.support.identification.GenericId;
+import com.nedap.archie.rm.support.identification.ObjectId;
+import com.nedap.archie.rm.support.identification.PartyRef;
+import java.util.Optional;
+import org.ehrbase.jooq.pg.enums.PartyRefIdType;
+
+/**
+ * handles party_ref attribute of a party proxy
+ */
+public class PartyRefValue {
+
+    private final PartyProxy partyProxy;
+
+<span class="nc" id="L34">    private String namespace = null;</span>
+<span class="nc" id="L35">    private String value = null;</span>
+<span class="nc" id="L36">    private String scheme = null;</span>
+<span class="nc" id="L37">    private String type = null;</span>
+<span class="nc" id="L38">    private PartyRefIdType objectIdType = PartyRefIdType.undefined;</span>
+
+<span class="nc" id="L40">    public PartyRefValue(PartyProxy partyProxy) {</span>
+<span class="nc" id="L41">        this.partyProxy = partyProxy;</span>
+<span class="nc" id="L42">    }</span>
+
+    /**
+     * extract the attributes of party_ref
+     *
+     * @return
+     */
+    public PartyRefValue attributes() {
+
+<span class="nc bnc" id="L51" title="All 2 branches missed.">        if (partyProxy.getExternalRef() != null) { // PartySelf f.e.</span>
+
+<span class="nc" id="L53">            PartyRef partyRef = partyProxy.getExternalRef();</span>
+
+<span class="nc" id="L55">            namespace = partyRef.getNamespace();</span>
+<span class="nc" id="L56">            ObjectId objectId = partyRef.getId();</span>
+<span class="nc" id="L57">            value = Optional.ofNullable(objectId).map(ObjectId::getValue).orElse(null);</span>
+<span class="nc bnc" id="L58" title="All 2 branches missed.">            if (objectId instanceof GenericId genericId) {</span>
+<span class="nc" id="L59">                scheme = (genericId).getScheme();</span>
+            }
+<span class="nc" id="L61">            type = partyRef.getType();</span>
+<span class="nc" id="L62">            objectIdType = PartyRefIdType.valueOf(new PersistedObjectId().objectIdClassSnakeCase(partyRef));</span>
+        }
+
+<span class="nc" id="L65">        return this;</span>
+    }
+
+    public String getNamespace() {
+<span class="nc" id="L69">        return namespace;</span>
+    }
+
+    public String getValue() {
+<span class="nc" id="L73">        return value;</span>
+    }
+
+    public String getScheme() {
+<span class="nc" id="L77">        return scheme;</span>
+    }
+
+    public String getType() {
+<span class="nc" id="L81">        return type;</span>
+    }
+
+    public PartyRefIdType getObjectIdType() {
+<span class="nc" id="L85">        return objectIdType;</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.7.202105040129</span></div></body></html>

@@ -1,0 +1,135 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../../jacoco-resources/report.gif" type="image/gif"/><title>TemplateController.java</title><link rel="stylesheet" href="../../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../../index.html" class="el_report">Coverage with Unit Tests</a> &gt; <a href="../index.html" class="el_bundle">rest-ehr-scape</a> &gt; <a href="index.source.html" class="el_package">org.ehrbase.rest.ehrscape.controller</a> &gt; <span class="el_source">TemplateController.java</span></div><h1>TemplateController.java</h1><pre class="source lang-java linenums">/*
+ * Copyright (c) 2019 vitasystems GmbH and Hannover Medical School.
+ *
+ * This file is part of project EHRbase
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     https://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.ehrbase.rest.ehrscape.controller;
+
+import static org.ehrbase.rest.ehrscape.controller.BaseController.API_ECIS_CONTEXT_PATH_WITH_VERSION;
+import static org.ehrbase.rest.ehrscape.controller.BaseController.TEMPLATE;
+
+import com.nedap.archie.rm.composition.Composition;
+import java.io.ByteArrayInputStream;
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.util.Objects;
+import org.apache.xmlbeans.XmlException;
+import org.ehrbase.api.annotations.TenantAware;
+import org.ehrbase.api.authorization.EhrbaseAuthorization;
+import org.ehrbase.api.authorization.EhrbasePermission;
+import org.ehrbase.api.exception.InvalidApiParameterException;
+import org.ehrbase.api.service.CompositionService;
+import org.ehrbase.api.service.TemplateService;
+import org.ehrbase.openehr.sdk.response.dto.ehrscape.CompositionDto;
+import org.ehrbase.openehr.sdk.response.dto.ehrscape.CompositionFormat;
+import org.ehrbase.openehr.sdk.response.dto.ehrscape.StructuredString;
+import org.ehrbase.openehr.sdk.webtemplate.filter.Filter;
+import org.ehrbase.rest.ehrscape.responsedata.Action;
+import org.ehrbase.rest.ehrscape.responsedata.Meta;
+import org.ehrbase.rest.ehrscape.responsedata.RestHref;
+import org.ehrbase.rest.ehrscape.responsedata.TemplateResponseData;
+import org.ehrbase.rest.ehrscape.responsedata.TemplatesResponseData;
+import org.openehr.schemas.v1.TemplateDocument;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
+
+@TenantAware
+@RestController
+@RequestMapping(
+        path = API_ECIS_CONTEXT_PATH_WITH_VERSION + &quot;/&quot; + TEMPLATE,
+        produces = {MediaType.APPLICATION_JSON_VALUE, MediaType.APPLICATION_XML_VALUE})
+public class TemplateController extends BaseController {
+
+    private final TemplateService templateService;
+    private final CompositionService compositionService;
+
+    @Autowired
+<span class="nc" id="L67">    public TemplateController(TemplateService templateService, CompositionService compositionService) {</span>
+<span class="nc" id="L68">        this.templateService = Objects.requireNonNull(templateService);</span>
+<span class="nc" id="L69">        this.compositionService = Objects.requireNonNull(compositionService);</span>
+<span class="nc" id="L70">    }</span>
+
+    @EhrbaseAuthorization(permission = EhrbasePermission.EHRBASE_TEMPLATE_READ)
+    @GetMapping()
+    public ResponseEntity&lt;TemplatesResponseData&gt; getTemplate() {
+<span class="nc" id="L75">        TemplatesResponseData responseData = new TemplatesResponseData();</span>
+<span class="nc" id="L76">        responseData.setAction(Action.LIST);</span>
+<span class="nc" id="L77">        responseData.setTemplates(templateService.getAllTemplates());</span>
+<span class="nc" id="L78">        return ResponseEntity.ok(responseData);</span>
+    }
+
+    @EhrbaseAuthorization(permission = EhrbasePermission.EHRBASE_TEMPLATE_CREATE)
+    @PostMapping()
+    public ResponseEntity&lt;TemplatesResponseData&gt; createTemplate(@RequestBody() String content) {
+
+        TemplateDocument document;
+        try {
+<span class="nc" id="L87">            document =</span>
+<span class="nc" id="L88">                    TemplateDocument.Factory.parse(new ByteArrayInputStream(content.getBytes(StandardCharsets.UTF_8)));</span>
+<span class="nc" id="L89">        } catch (XmlException | IOException e) {</span>
+<span class="nc" id="L90">            throw new InvalidApiParameterException(e.getMessage());</span>
+<span class="nc" id="L91">        }</span>
+
+<span class="nc" id="L93">        templateService.create(document.getTemplate());</span>
+<span class="nc" id="L94">        TemplatesResponseData responseData = new TemplatesResponseData();</span>
+<span class="nc" id="L95">        responseData.setAction(Action.LIST);</span>
+<span class="nc" id="L96">        responseData.setTemplates(templateService.getAllTemplates());</span>
+<span class="nc" id="L97">        return ResponseEntity.ok(responseData);</span>
+    }
+
+    @EhrbaseAuthorization(permission = EhrbasePermission.EHRBASE_TEMPLATE_EXAMPLE)
+    @GetMapping(path = &quot;/{templateId}/example&quot;)
+    public ResponseEntity&lt;String&gt; getTemplateExample(
+            @PathVariable(value = &quot;templateId&quot;) String templateId,
+            @RequestParam(value = &quot;format&quot;, defaultValue = &quot;FLAT&quot;) CompositionFormat format) {
+
+<span class="nc bnc" id="L106" title="All 6 branches missed.">        if ((format == CompositionFormat.RAW</span>
+                || format == CompositionFormat.EXPANDED
+                || format == CompositionFormat.ECISFLAT)) {
+<span class="nc" id="L109">            throw new InvalidApiParameterException(String.format(&quot;Format %s not supported&quot;, format));</span>
+        }
+
+<span class="nc" id="L112">        Composition composition = templateService.buildExample(templateId);</span>
+<span class="nc" id="L113">        CompositionDto compositionDto = new CompositionDto(composition, templateId, null, null);</span>
+<span class="nc" id="L114">        StructuredString serialized = compositionService.serialize(compositionDto, format);</span>
+
+        MediaType contentType =
+<span class="nc bnc" id="L117" title="All 2 branches missed.">                format == CompositionFormat.XML ? MediaType.APPLICATION_XML : MediaType.APPLICATION_JSON;</span>
+<span class="nc" id="L118">        return ResponseEntity.ok().contentType(contentType).body(serialized.getValue());</span>
+    }
+
+    @EhrbaseAuthorization(permission = EhrbasePermission.EHRBASE_TEMPLATE_READ)
+    @GetMapping(path = &quot;/{templateId}&quot;)
+    public ResponseEntity&lt;TemplateResponseData&gt; getTemplate(@PathVariable(value = &quot;templateId&quot;) String templateId) {
+<span class="nc" id="L124">        TemplateResponseData responseData = new TemplateResponseData();</span>
+<span class="nc" id="L125">        responseData.setWebTemplate(new Filter().filter(templateService.findTemplate(templateId)));</span>
+<span class="nc" id="L126">        responseData.setAction(Action.RETRIEVE);</span>
+<span class="nc" id="L127">        RestHref url = new RestHref();</span>
+<span class="nc" id="L128">        url.setUrl(createLocationUri(TEMPLATE, templateId));</span>
+<span class="nc" id="L129">        Meta meta = new Meta();</span>
+<span class="nc" id="L130">        meta.setHref(url);</span>
+<span class="nc" id="L131">        responseData.setMeta(meta);</span>
+<span class="nc" id="L132">        return ResponseEntity.ok(responseData);</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.7.202105040129</span></div></body></html>

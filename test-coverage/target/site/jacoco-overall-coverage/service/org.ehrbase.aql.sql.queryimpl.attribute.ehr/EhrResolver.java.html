@@ -1,0 +1,86 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../../jacoco-resources/report.gif" type="image/gif"/><title>EhrResolver.java</title><link rel="stylesheet" href="../../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../../index.html" class="el_report">Overall Coverage</a> &gt; <a href="../index.html" class="el_bundle">service</a> &gt; <a href="index.source.html" class="el_package">org.ehrbase.aql.sql.queryimpl.attribute.ehr</a> &gt; <span class="el_source">EhrResolver.java</span></div><h1>EhrResolver.java</h1><pre class="source lang-java linenums">/*
+ * Copyright (c) 2019 vitasystems GmbH and Hannover Medical School.
+ *
+ * This file is part of project EHRbase
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     https://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.ehrbase.aql.sql.queryimpl.attribute.ehr;
+
+import static org.ehrbase.jooq.pg.Tables.EHR_;
+
+import org.ehrbase.aql.sql.binding.JoinBinder;
+import org.ehrbase.aql.sql.queryimpl.attribute.AttributePath;
+import org.ehrbase.aql.sql.queryimpl.attribute.AttributeResolver;
+import org.ehrbase.aql.sql.queryimpl.attribute.FieldResolutionContext;
+import org.ehrbase.aql.sql.queryimpl.attribute.JoinSetup;
+import org.ehrbase.aql.sql.queryimpl.attribute.ehr.ehrstatus.StatusResolver;
+import org.ehrbase.aql.sql.queryimpl.attribute.system.SystemResolver;
+import org.ehrbase.aql.sql.queryimpl.value_field.GenericJsonField;
+import org.jooq.Field;
+
+@SuppressWarnings({&quot;java:S3776&quot;, &quot;java:S3740&quot;, &quot;java:S1452&quot;})
+public class EhrResolver extends AttributeResolver {
+
+    public static final String EHR_STATUS = &quot;ehr_status&quot;;
+    public static final String SYSTEM_ID = &quot;system_id&quot;;
+
+    public EhrResolver(FieldResolutionContext fieldResolutionContext, JoinSetup joinSetup) {
+<span class="fc" id="L39">        super(fieldResolutionContext, joinSetup);</span>
+<span class="fc" id="L40">    }</span>
+
+    public Field&lt;?&gt; sqlField(String path) {
+
+<span class="fc bfc" id="L44" title="All 2 branches covered.">        if (path.startsWith(EHR_STATUS)) {</span>
+<span class="fc" id="L45">            return new StatusResolver(fieldResolutionContext, joinSetup)</span>
+<span class="fc" id="L46">                    .sqlField(new AttributePath(EHR_STATUS).redux(path));</span>
+<span class="pc bpc" id="L47" title="1 of 2 branches missed.">        } else if (path.startsWith(SYSTEM_ID))</span>
+<span class="nc" id="L48">            return new SystemResolver(fieldResolutionContext, joinSetup)</span>
+<span class="nc" id="L49">                    .sqlField(new AttributePath(SYSTEM_ID).redux(path));</span>
+
+<span class="fc" id="L51">        joinSetup.setJoinEhr(true);</span>
+
+<span class="pc bpc" id="L53" title="2 of 5 branches missed.">        switch (path) {</span>
+            case &quot;ehr_id&quot;:
+<span class="nc" id="L55">                return new GenericJsonField(fieldResolutionContext, joinSetup)</span>
+<span class="nc" id="L56">                        .hierObjectId(JoinBinder.ehrRecordTable.field(EHR_.ID));</span>
+            case &quot;ehr_id/value&quot;:
+<span class="fc" id="L58">                return new EhrIdValue(fieldResolutionContext, joinSetup)</span>
+<span class="fc" id="L59">                        .forTableField(NULL_FIELD)</span>
+<span class="fc" id="L60">                        .sqlField();</span>
+            case &quot;time_created&quot;:
+<span class="fc" id="L62">                return new GenericJsonField(fieldResolutionContext, joinSetup)</span>
+<span class="fc" id="L63">                        .dvDateTime(</span>
+<span class="fc" id="L64">                                JoinBinder.ehrRecordTable.field(EHR_.DATE_CREATED),</span>
+<span class="fc" id="L65">                                JoinBinder.ehrRecordTable.field(EHR_.DATE_CREATED_TZID));</span>
+            case &quot;time_created/value&quot;:
+<span class="nc" id="L67">                return new GenericJsonField(fieldResolutionContext, joinSetup)</span>
+<span class="nc" id="L68">                        .forJsonPath(&quot;value&quot;)</span>
+<span class="nc" id="L69">                        .dvDateTime(</span>
+<span class="nc" id="L70">                                JoinBinder.ehrRecordTable.field(EHR_.DATE_CREATED),</span>
+<span class="nc" id="L71">                                JoinBinder.ehrRecordTable.field(EHR_.DATE_CREATED_TZID));</span>
+            default:
+<span class="fc" id="L73">                return new FullEhrJson(fieldResolutionContext, joinSetup)</span>
+<span class="fc" id="L74">                        .forJsonPath(path)</span>
+<span class="fc" id="L75">                        .sqlField();</span>
+        }
+    }
+
+    public static boolean isEhrAttribute(String path) {
+<span class="fc bfc" id="L80" title="All 2 branches covered.">        if (path == null) return false;</span>
+
+<span class="fc bfc" id="L82" title="All 4 branches covered.">        if (path.startsWith(EHR_STATUS) || path.startsWith(SYSTEM_ID)) return true;</span>
+<span class="fc" id="L83">        else return path.matches(&quot;ehr_id|ehr_id/value|time_created|time_created/value&quot;);</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.7.202105040129</span></div></body></html>

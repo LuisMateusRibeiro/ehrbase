@@ -1,0 +1,247 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../../jacoco-resources/report.gif" type="image/gif"/><title>OpenehrContributionController.java</title><link rel="stylesheet" href="../../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../../index.html" class="el_report">Overall Coverage</a> &gt; <a href="../index.html" class="el_bundle">rest-openehr</a> &gt; <a href="index.source.html" class="el_package">org.ehrbase.rest.openehr</a> &gt; <span class="el_source">OpenehrContributionController.java</span></div><h1>OpenehrContributionController.java</h1><pre class="source lang-java linenums">/*
+ * Copyright (c) 2019 vitasystems GmbH and Hannover Medical School.
+ *
+ * This file is part of project EHRbase
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     https://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.ehrbase.rest.openehr;
+
+import static org.apache.commons.lang3.StringUtils.EMPTY;
+import static org.springframework.web.util.UriComponentsBuilder.fromPath;
+
+import com.nedap.archie.rm.support.identification.HierObjectId;
+import com.nedap.archie.rm.support.identification.ObjectRef;
+import com.nedap.archie.rm.support.identification.ObjectVersionId;
+import java.net.URI;
+import java.util.Arrays;
+import java.util.LinkedList;
+import java.util.List;
+import java.util.Objects;
+import java.util.Optional;
+import java.util.UUID;
+import java.util.function.Supplier;
+import org.ehrbase.api.annotations.TenantAware;
+import org.ehrbase.api.audit.msg.AuditMsgBuilder;
+import org.ehrbase.api.authorization.EhrbaseAuthorization;
+import org.ehrbase.api.authorization.EhrbasePermission;
+import org.ehrbase.api.exception.NotAcceptableException;
+import org.ehrbase.api.service.ContributionService;
+import org.ehrbase.openehr.sdk.response.dto.ContributionResponseData;
+import org.ehrbase.openehr.sdk.response.dto.ehrscape.CompositionFormat;
+import org.ehrbase.openehr.sdk.response.dto.ehrscape.ContributionDto;
+import org.ehrbase.rest.BaseController;
+import org.ehrbase.rest.openehr.specification.ContributionApiSpecification;
+import org.ehrbase.rest.util.InternalResponse;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.ResponseStatus;
+import org.springframework.web.bind.annotation.RestController;
+
+@TenantAware
+@RestController
+@RequestMapping(
+        path = BaseController.API_CONTEXT_PATH_WITH_VERSION + &quot;/ehr&quot;,
+        produces = {MediaType.APPLICATION_JSON_VALUE, MediaType.APPLICATION_XML_VALUE})
+public class OpenehrContributionController extends BaseController implements ContributionApiSpecification {
+
+    private final ContributionService contributionService;
+
+    @Autowired
+<span class="nc" id="L71">    public OpenehrContributionController(ContributionService contributionService) {</span>
+<span class="nc" id="L72">        this.contributionService = Objects.requireNonNull(contributionService);</span>
+<span class="nc" id="L73">    }</span>
+
+    @EhrbaseAuthorization(permission = EhrbasePermission.EHRBASE_CONTRIBUTION_CREATE)
+    @PostMapping(
+            value = &quot;/{ehr_id}/contribution&quot;,
+            consumes = {&quot;application/xml&quot;, &quot;application/json&quot;})
+    // checkAbacPre /-Post attributes (type, subject, payload, content type)
+    @PreAuthorize(&quot;checkAbacPre(@openehrContributionController.CONTRIBUTION, &quot;
+            + &quot;@ehrService.getSubjectExtRef(#ehrIdString), #contribution, #contentType)&quot;)
+    @ResponseStatus(
+            value = HttpStatus.CREATED) // overwrites default 200, fixes the wrong listing of 200 in swagger-ui (EHR-56)
+    @Override
+    public ResponseEntity createContribution(
+            @RequestHeader(value = &quot;openEHR-VERSION&quot;, required = false) String openehrVersion,
+            @RequestHeader(value = &quot;openEHR-AUDIT_DETAILS&quot;, required = false) String openehrAuditDetails,
+            @RequestHeader(value = CONTENT_TYPE) String contentType,
+            @RequestHeader(value = HttpHeaders.ACCEPT, required = false) String accept,
+            @RequestHeader(value = PREFER, required = false) String prefer,
+            @PathVariable(value = &quot;ehr_id&quot;) String ehrIdString,
+            @RequestBody String contribution) {
+<span class="nc" id="L93">        UUID ehrId = getEhrUuid(ehrIdString);</span>
+
+<span class="nc" id="L95">        UUID contributionId =</span>
+<span class="nc" id="L96">                contributionService.commitContribution(ehrId, contribution, extractCompositionFormat(contentType));</span>
+
+<span class="nc" id="L98">        URI uri = createLocationUri(EHR, ehrId.toString(), CONTRIBUTION, contributionId.toString());</span>
+
+<span class="nc" id="L100">        List&lt;String&gt; headerList = Arrays.asList(</span>
+                LOCATION,
+                ETAG); // whatever is required by REST spec - CONTENT_TYPE only needed for 201, so handled separately
+
+        Optional&lt;InternalResponse&lt;ContributionResponseData&gt;&gt;
+                respData; // variable to overload with more specific object if requested
+
+<span class="nc bnc" id="L107" title="All 2 branches missed.">        if (Optional.ofNullable(prefer)</span>
+<span class="nc" id="L108">                .map(i -&gt; i.equals(RETURN_REPRESENTATION))</span>
+<span class="nc" id="L109">                .orElse(false)) { // null safe way to test prefer header</span>
+<span class="nc" id="L110">            respData = buildContributionResponseData(</span>
+                    contributionId,
+                    ehrId,
+                    accept,
+                    uri,
+                    headerList,
+<span class="nc" id="L116">                    () -&gt; new ContributionResponseData(null, null, null));</span>
+        } else { // &quot;minimal&quot; is default fallback
+<span class="nc" id="L118">            respData = buildContributionResponseData(contributionId, ehrId, accept, uri, headerList, () -&gt; null);</span>
+        }
+
+<span class="nc" id="L121">        createAuditLogsMsgBuilder(ehrId, contributionId);</span>
+
+        // returns 201 with body + headers, 204 only with headers or 500 error depending on what processing above yields
+<span class="nc" id="L124">        return respData.map(i -&gt; Optional.ofNullable(i.getResponseData())</span>
+<span class="nc" id="L125">                        .map(j -&gt; ResponseEntity.created(uri)</span>
+<span class="nc" id="L126">                                .headers(i.getHeaders())</span>
+<span class="nc" id="L127">                                .body(j))</span>
+                        // when the body is empty
+<span class="nc" id="L129">                        .orElse(ResponseEntity.noContent()</span>
+<span class="nc" id="L130">                                .headers(i.getHeaders())</span>
+<span class="nc" id="L131">                                .build()))</span>
+                // when no response could be created at all
+<span class="nc" id="L133">                .orElse(ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build());</span>
+    }
+
+    @EhrbaseAuthorization(permission = EhrbasePermission.EHRBASE_CONTRIBUTION_READ)
+    @GetMapping(value = &quot;/{ehr_id}/contribution/{contribution_uid}&quot;)
+    @Override
+    public ResponseEntity getContribution(
+            @RequestHeader(value = &quot;openEHR-VERSION&quot;, required = false) String openehrVersion,
+            @RequestHeader(value = &quot;openEHR-AUDIT_DETAILS&quot;, required = false) String openehrAuditDetails,
+            @RequestHeader(value = HttpHeaders.ACCEPT, required = false) String accept,
+            @PathVariable(value = &quot;ehr_id&quot;) String ehrIdString,
+            @PathVariable(value = &quot;contribution_uid&quot;) String contributionUidString) {
+
+<span class="nc" id="L146">        UUID ehrId = getEhrUuid(ehrIdString);</span>
+<span class="nc" id="L147">        UUID contributionUid = getContributionVersionedObjectUidString(contributionUidString);</span>
+
+<span class="nc" id="L149">        URI uri = createLocationUri(EHR, ehrId.toString(), CONTRIBUTION, contributionUid.toString());</span>
+
+<span class="nc" id="L151">        List&lt;String&gt; headerList = Arrays.asList(</span>
+                LOCATION, ETAG, LAST_MODIFIED); // whatever is required by REST spec - CONTENT_TYPE handled separately
+
+        Optional&lt;InternalResponse&lt;ContributionResponseData&gt;&gt;
+                respData; // variable to overload with more specific object if requested
+
+        // building full / representation response
+<span class="nc" id="L158">        respData = buildContributionResponseData(</span>
+<span class="nc" id="L159">                contributionUid, ehrId, accept, uri, headerList, () -&gt; new ContributionResponseData(null, null, null));</span>
+
+<span class="nc" id="L161">        createAuditLogsMsgBuilder(ehrId, contributionUid);</span>
+
+        // returns 200 with body + headers or 500 in case of unexpected error
+<span class="nc" id="L164">        return respData.map(i -&gt; Optional.ofNullable(i.getResponseData())</span>
+<span class="nc" id="L165">                        .map(j -&gt; ResponseEntity.ok().headers(i.getHeaders()).body(j))</span>
+                        // when response is empty, throw error
+<span class="nc" id="L167">                        .orElse(ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)</span>
+<span class="nc" id="L168">                                .build()))</span>
+                // when no response could be created at all, throw error, too
+<span class="nc" id="L170">                .orElse(ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build());</span>
+    }
+
+    private &lt;T extends ContributionResponseData&gt; Optional&lt;InternalResponse&lt;T&gt;&gt; buildContributionResponseData(
+            UUID contributionId, UUID ehrId, String accept, URI uri, List&lt;String&gt; headerList, Supplier&lt;T&gt; factory) {
+        // create either CompositionResponseData or null (means no body, only headers incl. link to resource), via
+        // lambda request
+<span class="nc" id="L177">        T minimalOrRepresentation = factory.get();</span>
+
+        // do minimal scope steps
+        // create and supplement headers with data depending on which headers are requested
+<span class="nc" id="L181">        HttpHeaders respHeaders = new HttpHeaders();</span>
+<span class="nc bnc" id="L182" title="All 2 branches missed.">        for (String header : headerList) {</span>
+<span class="nc bnc" id="L183" title="All 4 branches missed.">            switch (header) {</span>
+                case LOCATION:
+<span class="nc" id="L185">                    respHeaders.setLocation(uri);</span>
+<span class="nc" id="L186">                    break;</span>
+                case ETAG:
+<span class="nc" id="L188">                    respHeaders.setETag(&quot;\&quot;&quot; + contributionId + &quot;\&quot;&quot;);</span>
+<span class="nc" id="L189">                    break;</span>
+                case LAST_MODIFIED:
+                    // TODO should be VERSION.commit_audit.time_committed.value which is not implemented yet - mock for
+                    // now
+<span class="nc" id="L193">                    respHeaders.setLastModified(123124442);</span>
+<span class="nc" id="L194">                    break;</span>
+                default:
+                    // Ignore header
+            }
+<span class="nc" id="L198">        }</span>
+
+        // if response data objects was created as &quot;representation&quot; do all task from wider scope, too
+<span class="nc bnc" id="L201" title="All 2 branches missed.">        if (minimalOrRepresentation != null) {</span>
+            // when this &quot;if&quot; is true the following casting can be executed and data manipulated by reference (handled
+            // by temporary variable)
+<span class="nc" id="L204">            ContributionResponseData objByReference = minimalOrRepresentation;</span>
+
+            // retrieve contribution
+<span class="nc" id="L207">            Optional&lt;ContributionDto&gt; contribution = contributionService.getContribution(ehrId, contributionId);</span>
+
+            // set all response field according to retrieved contribution
+<span class="nc" id="L210">            objByReference.setUid(new HierObjectId(contributionId.toString()));</span>
+<span class="nc" id="L211">            List&lt;ObjectRef&lt;ObjectVersionId&gt;&gt; refs = new LinkedList&lt;&gt;();</span>
+<span class="nc" id="L212">            contribution</span>
+<span class="nc" id="L213">                    .get()</span>
+<span class="nc" id="L214">                    .getObjectReferences()</span>
+<span class="nc" id="L215">                    .forEach((id, type) -&gt; refs.add(new ObjectRef&lt;&gt;(new ObjectVersionId(id), &quot;local&quot;, type)));</span>
+<span class="nc" id="L216">            objByReference.setVersions(refs);</span>
+<span class="nc" id="L217">            objByReference.setAudit(contribution.get().getAuditDetails());</span>
+
+<span class="nc" id="L219">            CompositionFormat format = extractCompositionFormat(accept);</span>
+
+            // finally set last header
+<span class="nc bnc" id="L222" title="All 2 branches missed.">            if (format.equals(CompositionFormat.XML)) {</span>
+<span class="nc" id="L223">                respHeaders.setContentType(MediaType.APPLICATION_XML);</span>
+<span class="nc bnc" id="L224" title="All 2 branches missed.">            } else if (format.equals(CompositionFormat.JSON)</span>
+<span class="nc bnc" id="L225" title="All 2 branches missed.">                    || format.equals(CompositionFormat.FLAT)</span>
+<span class="nc bnc" id="L226" title="All 2 branches missed.">                    || format.equals(CompositionFormat.ECISFLAT)</span>
+<span class="nc bnc" id="L227" title="All 2 branches missed.">                    || format.equals(CompositionFormat.RAW)) {</span>
+<span class="nc" id="L228">                respHeaders.setContentType(MediaType.APPLICATION_JSON);</span>
+            } else {
+<span class="nc" id="L230">                throw new NotAcceptableException(&quot;Wrong Accept header in request&quot;);</span>
+            }
+        } // else continue with returning but without additional data from above, e.g. body
+
+<span class="nc" id="L234">        return Optional.of(new InternalResponse&lt;&gt;(minimalOrRepresentation, respHeaders));</span>
+    }
+
+    private void createAuditLogsMsgBuilder(UUID ehrId, UUID contributionId) {
+<span class="nc" id="L238">        AuditMsgBuilder.getInstance()</span>
+<span class="nc" id="L239">                .setEhrIds(ehrId)</span>
+<span class="nc" id="L240">                .setContributionId(contributionId.toString())</span>
+<span class="nc" id="L241">                .setLocation(fromPath(EMPTY)</span>
+<span class="nc" id="L242">                        .pathSegment(EHR, ehrId.toString(), CONTRIBUTION, contributionId.toString())</span>
+<span class="nc" id="L243">                        .build()</span>
+<span class="nc" id="L244">                        .toString());</span>
+<span class="nc" id="L245">    }</span>
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.7.202105040129</span></div></body></html>

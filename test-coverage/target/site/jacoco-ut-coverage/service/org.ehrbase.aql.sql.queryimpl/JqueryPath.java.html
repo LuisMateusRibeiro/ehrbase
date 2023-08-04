@@ -1,0 +1,130 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../../jacoco-resources/report.gif" type="image/gif"/><title>JqueryPath.java</title><link rel="stylesheet" href="../../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../../index.html" class="el_report">Coverage with Unit Tests</a> &gt; <a href="../index.html" class="el_bundle">service</a> &gt; <a href="index.source.html" class="el_package">org.ehrbase.aql.sql.queryimpl</a> &gt; <span class="el_source">JqueryPath.java</span></div><h1>JqueryPath.java</h1><pre class="source lang-java linenums">/*
+ * Copyright (c) 2020 vitasystems GmbH and Hannover Medical School.
+ *
+ * This file is part of project EHRbase
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     https://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.ehrbase.aql.sql.queryimpl;
+
+import static org.ehrbase.aql.sql.queryimpl.JsonbEntryQuery.*;
+import static org.ehrbase.aql.sql.queryimpl.attribute.eventcontext.EventContextResolver.OTHER_CONTEXT;
+
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
+import java.util.regex.Pattern;
+import org.ehrbase.aql.sql.queryimpl.value_field.NodePredicate;
+import org.ehrbase.ehr.util.LocatableHelper;
+
+public final class JqueryPath {
+
+    private final JsonbEntryQuery.PATH_PART pathPart;
+    private final String path;
+    private final String defaultIndex;
+
+<span class="fc" id="L36">    private static final String[] listIdentifier = {TAG_CONTENT, TAG_ITEMS, TAG_ACTIVITIES, TAG_EVENTS};</span>
+
+<span class="fc" id="L38">    private static final Pattern INDEX_PATTERN = Pattern.compile(&quot;[0-9]*|#&quot;);</span>
+
+<span class="fc" id="L40">    public JqueryPath(JsonbEntryQuery.PATH_PART pathPart, String path, String defaultIndex) {</span>
+<span class="fc" id="L41">        this.pathPart = pathPart;</span>
+<span class="fc" id="L42">        this.path = path;</span>
+<span class="fc" id="L43">        this.defaultIndex = defaultIndex;</span>
+<span class="fc" id="L44">    }</span>
+
+    public List&lt;String&gt; evaluate() {
+<span class="fc" id="L47">        return evaluate(pathPart, path, defaultIndex);</span>
+    }
+
+    public static List&lt;String&gt; evaluate(JsonbEntryQuery.PATH_PART pathPart, String path, String defaultIndex) {
+
+        // CHC 160607: this offset (1 or 0) was required due to a bug in generating the containment table
+        // from a PL/pgSQL script. this is no more required
+
+<span class="fc bfc" id="L55" title="All 2 branches covered.">        if (path == null) { // partial path</span>
+<span class="fc" id="L56">            return new ArrayList&lt;&gt;();</span>
+        }
+
+<span class="fc" id="L59">        int offset = 0;</span>
+<span class="fc" id="L60">        List&lt;String&gt; segments = LocatableHelper.dividePathIntoSegments(path);</span>
+<span class="fc" id="L61">        List&lt;String&gt; jqueryPath = new ArrayList&lt;&gt;();</span>
+<span class="fc bfc" id="L62" title="All 2 branches covered.">        for (int i = offset; i &lt; segments.size(); i++) {</span>
+<span class="fc" id="L63">            String nodeId = segments.get(i);</span>
+<span class="fc bfc" id="L64" title="All 2 branches covered.">            if (!nodeId.equals(OTHER_CONTEXT.substring(1))) {</span>
+<span class="fc" id="L65">                nodeId = &quot;/&quot; + nodeId;</span>
+            }
+
+<span class="fc" id="L68">            encodeTreeMapNodeId(jqueryPath, nodeId);</span>
+
+<span class="fc" id="L70">            NodePredicate nodePredicate = new NodePredicate(nodeId);</span>
+            //
+<span class="fc bfc" id="L72" title="All 2 branches covered.">            if (nodePredicate.hasPredicate()) {</span>
+                // do the formatting to allow name/value node predicate processing
+<span class="fc" id="L74">                jqueryPath = new NodeNameValuePredicate(nodePredicate).path(jqueryPath, nodeId);</span>
+            } else {
+<span class="fc" id="L76">                nodeId = nodePredicate.removeNameValuePredicate();</span>
+<span class="fc" id="L77">                jqueryPath.add(nodeId);</span>
+            }
+
+<span class="fc bfc" id="L80" title="All 2 branches covered.">            if (isList(nodeId)) {</span>
+<span class="fc" id="L81">                jqueryPath.add(defaultIndex);</span>
+            }
+        }
+
+<span class="fc bfc" id="L85" title="All 2 branches covered.">        if (pathPart.equals(JsonbEntryQuery.PATH_PART.VARIABLE_PATH_PART)) {</span>
+<span class="fc" id="L86">            StringBuilder stringBuilder = new StringBuilder();</span>
+<span class="fc bfc" id="L87" title="All 2 branches covered.">            for (int i = jqueryPath.size() - 1; i &gt;= 0; i--) {</span>
+<span class="fc bfc" id="L88" title="All 2 branches covered.">                if (INDEX_PATTERN.matcher(jqueryPath.get(i)).matches()</span>
+<span class="pc bpc" id="L89" title="1 of 2 branches missed.">                        || jqueryPath.get(i).contains(&quot;[&quot;)</span>
+<span class="pc bpc" id="L90" title="1 of 2 branches missed.">                        || jqueryPath.get(i).startsWith(&quot;'&quot;)) break;</span>
+<span class="fc" id="L91">                String item = jqueryPath.remove(i);</span>
+<span class="fc" id="L92">                stringBuilder.insert(0, item);</span>
+            }
+<span class="fc" id="L94">            String nodeId = EntryAttributeMapper.map(stringBuilder.toString());</span>
+<span class="fc bfc" id="L95" title="All 2 branches covered.">            if (nodeId != null) {</span>
+<span class="pc bpc" id="L96" title="1 of 2 branches missed.">                if (defaultIndex.equals(&quot;#&quot;)) { // jsquery</span>
+<span class="nc bnc" id="L97" title="All 2 branches missed.">                    if (nodeId.contains(&quot;,&quot;)) {</span>
+<span class="nc" id="L98">                        String[] parts = nodeId.split(&quot;,&quot;);</span>
+<span class="nc" id="L99">                        jqueryPath.addAll(Arrays.asList(parts));</span>
+<span class="nc" id="L100">                    } else {</span>
+<span class="nc" id="L101">                        jqueryPath.add(nodeId);</span>
+                    }
+                } else {
+<span class="fc" id="L104">                    jqueryPath.add(nodeId);</span>
+                }
+            }
+        }
+
+<span class="fc" id="L109">        return jqueryPath;</span>
+    }
+
+    // deals with special tree based entities
+    // this is required to encode structure like events of events
+    // the same is applicable to activities. These are in fact pseudo arrays.
+    private static void encodeTreeMapNodeId(List&lt;String&gt; jqueryPath, String nodeId) {
+<span class="fc bfc" id="L116" title="All 2 branches covered.">        if (nodeId.startsWith(TAG_EVENTS)) {</span>
+            // this is an exception since events are represented in an event tree
+<span class="fc" id="L118">            jqueryPath.add(TAG_EVENTS);</span>
+<span class="pc bpc" id="L119" title="1 of 2 branches missed.">        } else if (nodeId.startsWith(TAG_ACTIVITIES)) {</span>
+<span class="nc" id="L120">            jqueryPath.add(TAG_ACTIVITIES);</span>
+        }
+<span class="fc" id="L122">    }</span>
+
+    private static boolean isList(String predicate) {
+<span class="pc bpc" id="L125" title="1 of 2 branches missed.">        if (predicate.equals(TAG_ACTIVITIES)) return false;</span>
+<span class="fc bfc" id="L126" title="All 4 branches covered.">        for (String identifier : listIdentifier) if (predicate.startsWith(identifier)) return true;</span>
+<span class="fc" id="L127">        return false;</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.7.202105040129</span></div></body></html>

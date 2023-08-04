@@ -1,0 +1,70 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../../jacoco-resources/report.gif" type="image/gif"/><title>FieldConstantHandler.java</title><link rel="stylesheet" href="../../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../../index.html" class="el_report">Coverage with Unit Tests</a> &gt; <a href="../index.html" class="el_bundle">service</a> &gt; <a href="index.source.html" class="el_package">org.ehrbase.aql.sql.binding</a> &gt; <span class="el_source">FieldConstantHandler.java</span></div><h1>FieldConstantHandler.java</h1><pre class="source lang-java linenums">/*
+ * Copyright (c) 2020 vitasystems GmbH and Hannover Medical School.
+ *
+ * This file is part of project EHRbase
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     https://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.ehrbase.aql.sql.binding;
+
+import static org.ehrbase.aql.sql.queryimpl.attribute.GenericJsonPath.OTHER_CONTEXT;
+
+import java.util.List;
+import org.ehrbase.aql.definition.I_VariableDefinition;
+import org.ehrbase.aql.sql.queryimpl.DefaultColumnId;
+import org.ehrbase.ehr.util.LocatableHelper;
+import org.ehrbase.jooq.dbencoding.wrappers.json.I_DvTypeAdapter;
+import org.jooq.Field;
+import org.jooq.impl.DSL;
+
+public class FieldConstantHandler {
+    private final I_VariableDefinition variableDefinition;
+
+<span class="fc" id="L33">    public FieldConstantHandler(I_VariableDefinition variableDefinition) {</span>
+<span class="fc" id="L34">        this.variableDefinition = variableDefinition;</span>
+<span class="fc" id="L35">    }</span>
+
+    public boolean isConstant() {
+        // split path in segments
+<span class="fc bfc" id="L39" title="All 2 branches covered.">        if (variableDefinition.getPath() == null</span>
+<span class="fc bfc" id="L40" title="All 2 branches covered.">                || variableDefinition.getPath().toUpperCase().startsWith(&quot;EHR_STATUS&quot;)) return false;</span>
+
+<span class="fc" id="L42">        List&lt;String&gt; segments = LocatableHelper.dividePathIntoSegments(variableDefinition.getPath());</span>
+
+<span class="pc bpc" id="L44" title="1 of 4 branches missed.">        if (segments.size() &gt;= 2 &amp;&amp; segments.get(segments.size() - 1).equals(I_DvTypeAdapter.ARCHETYPE_NODE_ID))</span>
+<span class="nc" id="L45">            return true;</span>
+
+<span class="fc" id="L47">        return false;</span>
+    }
+
+    public Field&lt;?&gt; field() {
+<span class="nc" id="L51">        List&lt;String&gt; segments = LocatableHelper.dividePathIntoSegments(variableDefinition.getPath());</span>
+
+<span class="nc bnc" id="L53" title="All 2 branches missed.">        if (segments.get(segments.size() - 1).equals(I_DvTypeAdapter.ARCHETYPE_NODE_ID))</span>
+<span class="nc" id="L54">            return DSL.field(DSL.val(implicitArchetypeNodeId(segments.get(segments.size() - 2))))</span>
+<span class="nc" id="L55">                    .as(alias());</span>
+<span class="nc" id="L56">        return null;</span>
+    }
+
+    private String implicitArchetypeNodeId(String nodeId) {
+<span class="nc bnc" id="L60" title="All 2 branches missed.">        if (nodeId.equals(OTHER_CONTEXT)) return &quot;at0001&quot;;</span>
+<span class="nc" id="L61">        return nodeId.substring(nodeId.indexOf(&quot;[&quot;) + 1, nodeId.lastIndexOf(&quot;]&quot;));</span>
+    }
+
+    String alias() {
+<span class="nc" id="L65">        String alias = variableDefinition.getAlias();</span>
+<span class="nc bnc" id="L66" title="All 2 branches missed.">        if (alias == null) alias = DefaultColumnId.value(variableDefinition);</span>
+<span class="nc" id="L67">        return alias;</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.7.202105040129</span></div></body></html>

@@ -1,0 +1,95 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../../jacoco-resources/report.gif" type="image/gif"/><title>GenericRmType.java</title><link rel="stylesheet" href="../../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../../index.html" class="el_report">Coverage with Unit Tests</a> &gt; <a href="../index.html" class="el_bundle">jooq-pg</a> &gt; <a href="index.source.html" class="el_package">org.ehrbase.jooq.dbencoding.wrappers.json.writer.translator_db2raw</a> &gt; <span class="el_source">GenericRmType.java</span></div><h1>GenericRmType.java</h1><pre class="source lang-java linenums">/*
+ * Copyright (c) 2020 vitasystems GmbH and Hannover Medical School.
+ *
+ * This file is part of project EHRbase
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     https://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.ehrbase.jooq.dbencoding.wrappers.json.writer.translator_db2raw;
+
+import com.google.gson.internal.LinkedTreeMap;
+import java.util.Map;
+import org.ehrbase.jooq.dbencoding.wrappers.json.I_DvTypeAdapter;
+
+/**
+ * Deals with specialization of DataValues (f.e. DV_INTERVAL&lt;DV_QUANTITY&gt;)
+ */
+public class GenericRmType {
+
+    private String type;
+
+<span class="fc" id="L31">    public GenericRmType(String type) {</span>
+<span class="fc" id="L32">        this.type = type;</span>
+<span class="fc" id="L33">    }</span>
+
+    /**
+     * check if type is specialized
+     *
+     * @return true if the type is specialized
+     */
+    public boolean isSpecialized() {
+<span class="pc bpc" id="L41" title="1 of 4 branches missed.">        return type.contains(&quot;&lt;&quot;) &amp;&amp; type.contains(&quot;&gt;&quot;);</span>
+    }
+
+    /**
+     * identify main RmType (f.e. DV_INTERVAL)
+     *
+     * @return the main type
+     */
+    public String mainType() {
+<span class="nc bnc" id="L50" title="All 2 branches missed.">        if (!isSpecialized()) return type;</span>
+<span class="nc" id="L51">        return type.substring(0, type.indexOf(&quot;&lt;&quot;));</span>
+    }
+
+    /**
+     * identify the RmType used to specialized the type
+     * f.e. DV_QUANTITY in DV_INTERVAL&lt;DV_QUANTITY&gt;
+     *
+     * @return the specialized type or null
+     */
+    public String specializedWith() {
+<span class="pc bpc" id="L61" title="1 of 2 branches missed.">        if (!isSpecialized()) return null;</span>
+
+<span class="fc" id="L63">        return type.substring(type.indexOf(&quot;&lt;&quot;) + 1, type.indexOf(&quot;&gt;&quot;));</span>
+    }
+
+    /**
+     * add the type in each datavalues for this instance.
+     * F.e. add the _type for lower and upper in an interval
+     *
+     * @param valueMap the built valueMap for canonical json encoding
+     * @return the updated valueMap
+     */
+    @SuppressWarnings(&quot;java:S2864&quot;)
+    LinkedTreeMap&lt;String, Object&gt; inferSpecialization(LinkedTreeMap&lt;String, Object&gt; valueMap) {
+
+<span class="pc bpc" id="L76" title="1 of 2 branches missed.">        if (!isSpecialized()) // do nothing</span>
+<span class="nc" id="L77">        return valueMap;</span>
+
+<span class="fc bfc" id="L79" title="All 2 branches covered.">        for (String key : valueMap.keySet()) {</span>
+<span class="fc" id="L80">            Object entry = valueMap.get(key);</span>
+            // entry is either a Map or an Array
+<span class="fc bfc" id="L82" title="All 2 branches covered.">            if (entry instanceof Map) {</span>
+                // add the type
+<span class="fc" id="L84">                ((Map&lt;String, Object&gt;) entry).put(I_DvTypeAdapter.TAG_CLASS_RAW_JSON, specializedWith());</span>
+            }
+<span class="fc" id="L86">        }</span>
+
+        // remove the specialization for canonical rendering
+<span class="fc" id="L89">        String valueType = (String) valueMap.get(I_DvTypeAdapter.TAG_CLASS_RAW_JSON);</span>
+<span class="fc" id="L90">        valueMap.put(I_DvTypeAdapter.TAG_CLASS_RAW_JSON, valueType.split(&quot;&lt;&quot;)[0]);</span>
+
+<span class="fc" id="L92">        return valueMap;</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.7.202105040129</span></div></body></html>

@@ -1,0 +1,4 @@
+-------------------------------------------------------------------------------
+Test set: org.ehrbase.jooq.dbencoding.conformance.DbConformanceTest
+-------------------------------------------------------------------------------
+Tests run: 34, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 24.75 s -- in org.ehrbase.jooq.dbencoding.conformance.DbConformanceTest

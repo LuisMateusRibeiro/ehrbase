@@ -1,0 +1,125 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../../jacoco-resources/report.gif" type="image/gif"/><title>FromEhrDefinition.java</title><link rel="stylesheet" href="../../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../../index.html" class="el_report">Overall Coverage</a> &gt; <a href="../index.html" class="el_bundle">service</a> &gt; <a href="index.source.html" class="el_package">org.ehrbase.aql.definition</a> &gt; <span class="el_source">FromEhrDefinition.java</span></div><h1>FromEhrDefinition.java</h1><pre class="source lang-java linenums">/*
+ * Copyright (c) 2016-2022 vitasystems GmbH and Hannover Medical School.
+ *
+ * This file is part of project EHRbase
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     https://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.ehrbase.aql.definition;
+
+import java.util.ArrayList;
+import java.util.List;
+
+/**
+ * Contains the parameters of an element in a FROM clause
+ * &lt;p&gt;
+ * The FROM clause is generally associated to an EHR definition
+ * &lt;/p&gt;
+ *
+ * @author Christian Chevalley
+ * @since 1.0
+ */
+<span class="fc" id="L32">public class FromEhrDefinition implements I_FromEntityDefinition {</span>
+
+    public static class EhrPredicate {
+        String field;
+        String value;
+        String identifier;
+        String operator;
+
+<span class="fc" id="L40">        public EhrPredicate(String field, String value, String operator) {</span>
+<span class="fc" id="L41">            this.field = field;</span>
+<span class="fc" id="L42">            this.value = value;</span>
+<span class="fc" id="L43">            this.operator = operator;</span>
+<span class="fc" id="L44">        }</span>
+
+<span class="fc" id="L46">        public EhrPredicate(String identifier) {</span>
+<span class="fc" id="L47">            this.identifier = identifier;</span>
+<span class="fc" id="L48">        }</span>
+
+        public void setIdentifier(String identifier) {
+<span class="fc" id="L51">            this.identifier = identifier;</span>
+<span class="fc" id="L52">        }</span>
+
+        public String getIdentifier() {
+<span class="fc" id="L55">            return identifier;</span>
+        }
+
+        public String getField() {
+<span class="fc" id="L59">            return field;</span>
+        }
+
+        public String getValue() {
+<span class="fc" id="L63">            return value;</span>
+        }
+
+        public String getOperator() {
+<span class="fc" id="L67">            return operator;</span>
+        }
+
+        public String toString() {
+<span class="nc" id="L71">            return &quot;EHR::&quot; + getIdentifier() + &quot;::&quot; + getIdentifier() + &quot;::&quot; + getValue();</span>
+        }
+
+        public boolean isVoid() {
+<span class="pc bpc" id="L75" title="2 of 6 branches missed.">            return field == null &amp;&amp; value == null &amp;&amp; operator == null;</span>
+        }
+    }
+
+<span class="fc" id="L79">    private boolean isEHR = false;</span>
+
+    private String identifier;
+
+<span class="fc" id="L83">    private final List&lt;EhrPredicate&gt; fromEhrPredicates = new ArrayList&lt;&gt;();</span>
+
+    @Override
+    public void add(String identifier, String value, String operator) {
+<span class="fc" id="L87">        fromEhrPredicates.add(new EhrPredicate(identifier, value, operator));</span>
+<span class="fc" id="L88">    }</span>
+
+    public void setIsEHR(boolean isEHR) {
+<span class="fc" id="L91">        this.isEHR = isEHR;</span>
+<span class="fc" id="L92">    }</span>
+
+    public void setIdentifier(String identifier) {
+<span class="fc" id="L95">        this.identifier = identifier;</span>
+<span class="fc" id="L96">    }</span>
+
+    public boolean isEHR() {
+<span class="nc" id="L99">        return isEHR;</span>
+    }
+
+    public String getIdentifier() {
+<span class="nc" id="L103">        return identifier;</span>
+    }
+
+    /**
+     * Assumes ehr_id/value has been given.
+     *
+     * @return the string representation of FROM clause
+     */
+    public String toString() {
+
+<span class="nc" id="L113">        StringBuilder builder = new StringBuilder();</span>
+
+<span class="nc bnc" id="L115" title="All 2 branches missed.">        for (EhrPredicate predicate : fromEhrPredicates) {</span>
+<span class="nc" id="L116">            builder.append(predicate).append(&quot; &quot;);</span>
+        }
+<span class="nc" id="L118">        return builder.toString();</span>
+    }
+
+    public List&lt;EhrPredicate&gt; getEhrPredicates() {
+<span class="fc" id="L122">        return fromEhrPredicates;</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.7.202105040129</span></div></body></html>

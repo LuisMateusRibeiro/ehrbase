@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../../jacoco-resources/report.gif" type="image/gif"/><title>CompositionAttribute.java</title><link rel="stylesheet" href="../../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../../index.html" class="el_report">Coverage with Unit Tests</a> &gt; <a href="../index.html" class="el_bundle">service</a> &gt; <a href="index.source.html" class="el_package">org.ehrbase.aql.sql.binding</a> &gt; <span class="el_source">CompositionAttribute.java</span></div><h1>CompositionAttribute.java</h1><pre class="source lang-java linenums">/*
+ * Copyright (c) 2019 vitasystems GmbH and Hannover Medical School.
+ *
+ * This file is part of project EHRbase
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     https://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.ehrbase.aql.sql.binding;
+
+import org.ehrbase.aql.definition.I_VariableDefinition;
+import org.ehrbase.aql.sql.queryimpl.*;
+
+/**
+ * convert a select or where AQL field into its SQL equivalent for a composition attribute.
+ * This applies to standard attributes f.e. c/name/value etc.
+ */
+@SuppressWarnings({&quot;java:S1452&quot;, &quot;java:S3740&quot;})
+public class CompositionAttribute {
+
+    private final CompositionAttributeQuery compositionAttributeQuery;
+    private final JsonbEntryQuery jsonbEntryQuery;
+    private final IQueryImpl.Clause clause;
+
+    public CompositionAttribute(
+            CompositionAttributeQuery compositionAttributeQuery,
+            JsonbEntryQuery jsonbEntryQuery,
+<span class="fc" id="L37">            IQueryImpl.Clause clause) {</span>
+<span class="fc" id="L38">        this.compositionAttributeQuery = compositionAttributeQuery;</span>
+<span class="fc" id="L39">        this.jsonbEntryQuery = jsonbEntryQuery;</span>
+<span class="fc" id="L40">        this.clause = clause;</span>
+<span class="fc" id="L41">    }</span>
+
+    public MultiFields toSql(I_VariableDefinition variableDefinition, String templateId, String identifier)
+            throws UnknownVariableException {
+        MultiFields qualifiedAqlFields;
+
+<span class="fc bfc" id="L47" title="All 4 branches covered.">        if (variableDefinition.getPath() != null &amp;&amp; variableDefinition.getPath().startsWith(&quot;content&quot;)) {</span>
+<span class="fc" id="L48">            qualifiedAqlFields = jsonbEntryQuery.makeField(templateId, identifier, variableDefinition, clause);</span>
+<span class="pc bpc" id="L49" title="1 of 2 branches missed.">            if (qualifiedAqlFields != null) qualifiedAqlFields.setUseEntryTable(true);</span>
+        } else {
+<span class="fc" id="L51">            qualifiedAqlFields =</span>
+<span class="fc" id="L52">                    compositionAttributeQuery.makeField(templateId, identifier, variableDefinition, clause);</span>
+        }
+<span class="fc" id="L54">        return qualifiedAqlFields;</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.7.202105040129</span></div></body></html>

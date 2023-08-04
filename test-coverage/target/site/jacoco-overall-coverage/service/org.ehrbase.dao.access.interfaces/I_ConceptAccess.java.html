@@ -1,0 +1,142 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../../jacoco-resources/report.gif" type="image/gif"/><title>I_ConceptAccess.java</title><link rel="stylesheet" href="../../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../../index.html" class="el_report">Overall Coverage</a> &gt; <a href="../index.html" class="el_bundle">service</a> &gt; <a href="index.source.html" class="el_package">org.ehrbase.dao.access.interfaces</a> &gt; <span class="el_source">I_ConceptAccess.java</span></div><h1>I_ConceptAccess.java</h1><pre class="source lang-java linenums">/*
+ * Copyright (c) 2019 vitasystems GmbH and Hannover Medical School.
+ *
+ * This file is part of project EHRbase
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     https://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.ehrbase.dao.access.interfaces;
+
+import static org.ehrbase.jooq.pg.Tables.CONCEPT;
+
+import com.nedap.archie.rm.datatypes.CodePhrase;
+import com.nedap.archie.rm.datavalues.DvCodedText;
+import com.nedap.archie.rm.support.identification.TerminologyId;
+import java.util.UUID;
+import org.ehrbase.ehr.knowledge.I_KnowledgeCache;
+import org.ehrbase.jooq.pg.tables.records.ConceptRecord;
+import org.jooq.Condition;
+import org.jooq.Field;
+
+/**
+ * access layer to Concepts
+ * ETHERCIS Project ehrservice
+ * Created by Christian Chevalley on 4/27/2015.
+ */
+public interface I_ConceptAccess {
+
+<span class="nc" id="L38">    enum ContributionChangeType {</span>
+<span class="nc" id="L39">        CREATION(249),</span>
+<span class="nc" id="L40">        AMENDMENT(250),</span>
+<span class="nc" id="L41">        MODIFICATION(251),</span>
+<span class="nc" id="L42">        SYNTHESIS(252),</span>
+<span class="nc" id="L43">        UNKNOWN(253),</span>
+<span class="nc" id="L44">        DELETED(523);</span>
+        final int code;
+
+<span class="nc" id="L47">        ContributionChangeType(int code) {</span>
+<span class="nc" id="L48">            this.code = code;</span>
+<span class="nc" id="L49">        }</span>
+
+        public int getCode() {
+<span class="nc" id="L52">            return code;</span>
+        }
+    }
+
+    /**
+     * retrieve a concept
+     *
+     * @param domainAccess SQL context
+     * @param conceptId    integer code
+     * @param language     language code ('en', 'fr' etc.)
+     * @return the record {@link UUID} or null if not found
+     */
+    static UUID fetchConcept(I_DomainAccess domainAccess, Integer conceptId, String language) {
+<span class="nc" id="L65">        return getConceptByConceptId(domainAccess, conceptId, language).getId();</span>
+    }
+
+    static DvCodedText fetchConceptText(I_DomainAccess domainAccess, UUID uuid) {
+<span class="nc" id="L69">        ConceptRecord conceptRecord = domainAccess.getContext().fetchAny(CONCEPT, CONCEPT.ID.eq(uuid));</span>
+<span class="nc" id="L70">        I_KnowledgeCache.ConceptValue concept = getConceptByUuid(domainAccess, uuid);</span>
+<span class="nc" id="L71">        return new DvCodedText(</span>
+<span class="nc" id="L72">                concept.getDescription(),</span>
+<span class="nc" id="L73">                new CodePhrase(new TerminologyId(&quot;openehr&quot;), Integer.toString(concept.getConceptId())));</span>
+    }
+
+    static String fetchConceptLiteral(I_DomainAccess domainAccess, Integer conceptId, String language) {
+<span class="nc" id="L77">        return getConceptByConceptId(domainAccess, conceptId, language).getDescription();</span>
+    }
+
+    static String fetchConceptLiteral(I_DomainAccess domainAccess, UUID uuid) {
+<span class="nc" id="L81">        return getConceptByUuid(domainAccess, uuid).getDescription();</span>
+    }
+
+    /**
+     * retrieve a concept
+     *
+     * @param domainAccess  SQL context
+     * @param changeTypeStr String representation of change type
+     * @return the record {@link UUID}
+     * @throws IllegalArgumentException when the given change type can't be found
+     */
+    static UUID fetchContributionChangeType(I_DomainAccess domainAccess, String changeTypeStr) {
+<span class="nc" id="L93">        ContributionChangeType contributionChangeType = ContributionChangeType.valueOf(changeTypeStr.toUpperCase());</span>
+<span class="nc" id="L94">        return fetchContributionChangeType(domainAccess, contributionChangeType);</span>
+    }
+
+    static UUID fetchContributionChangeType(
+            I_DomainAccess domainAccess, ContributionChangeType contributionChangeType) {
+<span class="nc bnc" id="L99" title="All 2 branches missed.">        if (contributionChangeType == null) return null;</span>
+<span class="nc" id="L100">        int code = contributionChangeType.getCode();</span>
+
+<span class="nc" id="L102">        return getConceptByConceptId(domainAccess, code, &quot;en&quot;).getId();</span>
+    }
+
+    private static I_KnowledgeCache.ConceptValue getConceptByConceptId(
+            I_DomainAccess domainAccess, int code, String language) {
+<span class="nc" id="L107">        return domainAccess</span>
+<span class="nc" id="L108">                .getKnowledgeManager()</span>
+<span class="nc" id="L109">                .getConceptByConceptId(</span>
+<span class="nc" id="L110">                        code, language, (c, l) -&gt; loadConcept(domainAccess, CONCEPT.CONCEPTID, c, language));</span>
+    }
+
+    private static I_KnowledgeCache.ConceptValue getConceptByUuid(I_DomainAccess domainAccess, UUID uuid) {
+<span class="nc" id="L114">        return domainAccess</span>
+<span class="nc" id="L115">                .getKnowledgeManager()</span>
+<span class="nc" id="L116">                .getConceptById(uuid, u -&gt; loadConcept(domainAccess, CONCEPT.ID, u, null));</span>
+    }
+
+    private static I_KnowledgeCache.ConceptValue getConceptByDescription(
+            I_DomainAccess domainAccess, String description, String language) {
+<span class="nc" id="L121">        return domainAccess</span>
+<span class="nc" id="L122">                .getKnowledgeManager()</span>
+<span class="nc" id="L123">                .getConceptByDescription(</span>
+<span class="nc" id="L124">                        description, language, (d, l) -&gt; loadConcept(domainAccess, CONCEPT.DESCRIPTION, d, language));</span>
+    }
+
+    private static &lt;T&gt; I_KnowledgeCache.ConceptValue loadConcept(
+            I_DomainAccess domainAccess, Field&lt;T&gt; field, T value, String language) {
+
+<span class="nc" id="L130">        Condition condition = field.eq(value);</span>
+<span class="nc bnc" id="L131" title="All 2 branches missed.">        if (language != null) {</span>
+<span class="nc" id="L132">            condition = condition.and(CONCEPT.LANGUAGE.equal(language));</span>
+        }
+<span class="nc" id="L134">        return domainAccess</span>
+<span class="nc" id="L135">                .getContext()</span>
+<span class="nc" id="L136">                .fetchOptional(CONCEPT, condition)</span>
+<span class="nc" id="L137">                .map(r -&gt; new I_KnowledgeCache.ConceptValue(</span>
+<span class="nc" id="L138">                        r.getId(), r.getConceptid(), r.getDescription(), r.getLanguage()))</span>
+<span class="nc" id="L139">                .orElseThrow();</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.7.202105040129</span></div></body></html>

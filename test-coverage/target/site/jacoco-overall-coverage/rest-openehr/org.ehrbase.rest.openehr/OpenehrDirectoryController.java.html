@@ -1,0 +1,300 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../../jacoco-resources/report.gif" type="image/gif"/><title>OpenehrDirectoryController.java</title><link rel="stylesheet" href="../../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../../index.html" class="el_report">Overall Coverage</a> &gt; <a href="../index.html" class="el_bundle">rest-openehr</a> &gt; <a href="index.source.html" class="el_package">org.ehrbase.rest.openehr</a> &gt; <span class="el_source">OpenehrDirectoryController.java</span></div><h1>OpenehrDirectoryController.java</h1><pre class="source lang-java linenums">/*
+ * Copyright (c) 2019-2022 vitasystems GmbH and Hannover Medical School.
+ *
+ * This file is part of project EHRbase
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     https://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.ehrbase.rest.openehr;
+
+import static org.apache.commons.lang3.StringUtils.unwrap;
+import static org.springframework.web.util.UriComponentsBuilder.fromPath;
+
+import com.nedap.archie.rm.directory.Folder;
+import com.nedap.archie.rm.support.identification.ObjectVersionId;
+import java.nio.file.InvalidPathException;
+import java.nio.file.Paths;
+import java.time.OffsetDateTime;
+import java.util.Optional;
+import java.util.UUID;
+import org.apache.commons.lang3.StringUtils;
+import org.ehrbase.api.annotations.TenantAware;
+import org.ehrbase.api.audit.msg.AuditMsgBuilder;
+import org.ehrbase.api.authorization.EhrbaseAuthorization;
+import org.ehrbase.api.authorization.EhrbasePermission;
+import org.ehrbase.api.exception.InvalidApiParameterException;
+import org.ehrbase.api.exception.ObjectNotFoundException;
+import org.ehrbase.api.service.DirectoryService;
+import org.ehrbase.openehr.sdk.response.dto.DirectoryResponseData;
+import org.ehrbase.rest.BaseController;
+import org.ehrbase.rest.openehr.specification.DirectoryApiSpecification;
+import org.joda.time.DateTime;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpMethod;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
+
+/**
+ * Controller for openEHR /directory endpoints
+ *
+ * @author Jake Smolka
+ * @author Luis Marco-Ruiz
+ * @author Renaud Subiger
+ * @since 1.0
+ */
+@TenantAware
+@RestController
+@RequestMapping(path = BaseController.API_CONTEXT_PATH_WITH_VERSION + &quot;/ehr&quot;)
+public class OpenehrDirectoryController extends BaseController implements DirectoryApiSpecification {
+
+    private final DirectoryService directoryService;
+
+<span class="nc" id="L73">    public OpenehrDirectoryController(DirectoryService directoryService) {</span>
+<span class="nc" id="L74">        this.directoryService = directoryService;</span>
+<span class="nc" id="L75">    }</span>
+
+    /**
+     * {@inheritDoc}
+     */
+    @EhrbaseAuthorization(permission = EhrbasePermission.EHRBASE_DIRECTORY_CREATE)
+    @Override
+    @PostMapping(path = &quot;/{ehr_id}/directory&quot;)
+    public ResponseEntity&lt;DirectoryResponseData&gt; createDirectory(
+            @PathVariable(name = &quot;ehr_id&quot;) UUID ehrId,
+            @RequestHeader(name = OPENEHR_VERSION, required = false) String openEhrVersion,
+            @RequestHeader(name = OPENEHR_AUDIT_DETAILS, required = false) String openEhrAuditDetails,
+            @RequestHeader(name = HttpHeaders.CONTENT_TYPE) String contentType,
+            @RequestHeader(name = HttpHeaders.ACCEPT, defaultValue = MediaType.APPLICATION_JSON_VALUE) String accept,
+            @RequestHeader(name = PREFER, defaultValue = RETURN_MINIMAL) String prefer,
+            @RequestBody Folder folder) {
+
+<span class="nc" id="L92">        var createdFolder = directoryService.create(ehrId, folder);</span>
+
+<span class="nc" id="L94">        return createDirectoryResponse(HttpMethod.POST, prefer, accept, createdFolder, ehrId);</span>
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    @EhrbaseAuthorization(permission = EhrbasePermission.EHRBASE_DIRECTORY_UPDATE)
+    @Override
+    @PutMapping(path = &quot;/{ehr_id}/directory&quot;)
+    public ResponseEntity&lt;DirectoryResponseData&gt; updateDirectory(
+            @PathVariable(name = &quot;ehr_id&quot;) UUID ehrId,
+            @RequestHeader(name = HttpHeaders.IF_MATCH) ObjectVersionId folderId,
+            @RequestHeader(name = HttpHeaders.CONTENT_TYPE) String contentType,
+            @RequestHeader(name = HttpHeaders.ACCEPT, defaultValue = MediaType.APPLICATION_JSON_VALUE) String accept,
+            @RequestHeader(name = PREFER, defaultValue = RETURN_MINIMAL) String prefer,
+            @RequestHeader(name = OPENEHR_VERSION, required = false) String openEhrVersion,
+            @RequestHeader(name = OPENEHR_AUDIT_DETAILS, required = false) String openEhrAuditDetails,
+            @RequestBody Folder folder) {
+
+<span class="nc" id="L113">        folderId.setValue(unwrap(folderId.getValue(), '&quot;'));</span>
+
+        // Update folder and get new version
+<span class="nc" id="L116">        Folder updatedFolder = directoryService.update(ehrId, folder, folderId);</span>
+
+<span class="nc" id="L118">        return createDirectoryResponse(HttpMethod.PUT, prefer, accept, updatedFolder, ehrId);</span>
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    @EhrbaseAuthorization(permission = EhrbasePermission.EHRBASE_DIRECTORY_DELETE)
+    @Override
+    @DeleteMapping(path = &quot;/{ehr_id}/directory&quot;)
+    public ResponseEntity&lt;DirectoryResponseData&gt; deleteDirectory(
+            @PathVariable(name = &quot;ehr_id&quot;) UUID ehrId,
+            @RequestHeader(name = OPENEHR_VERSION, required = false) String openEhrVersion,
+            @RequestHeader(name = OPENEHR_AUDIT_DETAILS, required = false) String openEhrAuditDetails,
+            @RequestHeader(name = HttpHeaders.ACCEPT, defaultValue = MediaType.APPLICATION_JSON_VALUE) String accept,
+            @RequestHeader(name = HttpHeaders.IF_MATCH) ObjectVersionId folderId) {
+
+<span class="nc" id="L134">        folderId.setValue(unwrap(folderId.getValue(), '&quot;'));</span>
+
+<span class="nc" id="L136">        directoryService.delete(ehrId, folderId);</span>
+<span class="nc" id="L137">        createAuditLogsMsgBuilder(ehrId.toString(), folderId.toString());</span>
+
+<span class="nc" id="L139">        return createDirectoryResponse(HttpMethod.DELETE, null, accept, null, ehrId);</span>
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    @EhrbaseAuthorization(permission = EhrbasePermission.EHRBASE_DIRECTORY_READ)
+    @Override
+    @GetMapping(path = &quot;/{ehr_id}/directory/{version_uid}&quot;)
+    public ResponseEntity&lt;DirectoryResponseData&gt; getFolderInDirectory(
+            @PathVariable(name = &quot;ehr_id&quot;) UUID ehrId,
+            @PathVariable(name = &quot;version_uid&quot;) ObjectVersionId versionUid,
+            @RequestParam(name = &quot;path&quot;, required = false) String path,
+            @RequestHeader(name = HttpHeaders.ACCEPT, defaultValue = MediaType.APPLICATION_JSON_VALUE) String accept) {
+
+<span class="nc" id="L154">        validateVersionUid(versionUid);</span>
+
+<span class="nc" id="L156">        assertValidPath(path);</span>
+
+        // Get the folder entry from database
+<span class="nc" id="L159">        Optional&lt;Folder&gt; foundFolder = directoryService.get(ehrId, versionUid, path);</span>
+<span class="nc bnc" id="L160" title="All 2 branches missed.">        if (foundFolder.isEmpty()) {</span>
+<span class="nc" id="L161">            throw new ObjectNotFoundException(</span>
+                    &quot;DIRECTORY&quot;,
+<span class="nc" id="L163">                    String.format(</span>
+<span class="nc bnc" id="L164" title="All 2 branches missed.">                            &quot;Folder with id %s and path %s does not exist.&quot;, versionUid, path != null ? path : &quot;/&quot;));</span>
+        }
+
+<span class="nc" id="L167">        return createDirectoryResponse(HttpMethod.GET, RETURN_REPRESENTATION, accept, foundFolder.get(), ehrId);</span>
+    }
+
+    private void validateVersionUid(ObjectVersionId versionUid) {
+<span class="nc" id="L171">        String versionUidStr = versionUid.getValue();</span>
+<span class="nc bnc" id="L172" title="All 2 branches missed.">        if (StringUtils.isEmpty(versionUidStr)) {</span>
+<span class="nc" id="L173">            throw new InvalidApiParameterException(&quot;a valid  must be provided&quot;);</span>
+        }
+
+        try {
+<span class="nc" id="L177">            versionUid.getCreatingSystemId();</span>
+<span class="nc bnc" id="L178" title="All 2 branches missed.">            if (versionUid.isBranch()) {</span>
+<span class="nc" id="L179">                throw new InvalidApiParameterException(&quot;Version branching is not supported&quot;);</span>
+            }
+<span class="nc" id="L181">        } catch (UnsupportedOperationException e) {</span>
+<span class="nc" id="L182">            throw new InvalidApiParameterException(e.getMessage(), e);</span>
+<span class="nc" id="L183">        }</span>
+<span class="nc" id="L184">    }</span>
+
+    @EhrbaseAuthorization(permission = EhrbasePermission.EHRBASE_DIRECTORY_READ)
+    @Override
+    @GetMapping(path = &quot;/{ehr_id}/directory&quot;)
+    public ResponseEntity&lt;DirectoryResponseData&gt; getFolderInDirectoryVersionAtTime(
+            @PathVariable(name = &quot;ehr_id&quot;) UUID ehrId,
+            @RequestParam(name = &quot;version_at_time&quot;, required = false) String versionAtTime,
+            @RequestParam(name = &quot;path&quot;, required = false) String path,
+            @RequestHeader(name = ACCEPT, required = false, defaultValue = MediaType.APPLICATION_JSON_VALUE)
+                    String accept) {
+
+        // Check ehr exists
+
+<span class="nc" id="L198">        assertValidPath(path);</span>
+
+        final Optional&lt;Folder&gt; foundFolder;
+        // Get the folder entry from database
+<span class="nc" id="L202">        Optional&lt;OffsetDateTime&gt; temporal = decodeVersionAtTime(versionAtTime);</span>
+
+<span class="nc bnc" id="L204" title="All 2 branches missed.">        if (temporal.isPresent()) {</span>
+<span class="nc" id="L205">            foundFolder = directoryService.getByTime(ehrId, temporal.get(), path);</span>
+        } else {
+<span class="nc" id="L207">            foundFolder = directoryService.get(ehrId, null, path);</span>
+        }
+
+<span class="nc bnc" id="L210" title="All 2 branches missed.">        if (foundFolder.isEmpty()) {</span>
+<span class="nc" id="L211">            throw new ObjectNotFoundException(</span>
+                    &quot;folder&quot;,
+                    &quot;The FOLDER for ehrId %s and path %s does not exist.&quot;
+<span class="nc bnc" id="L214" title="All 2 branches missed.">                            .formatted(ehrId.toString(), path != null ? path : &quot;/&quot;));</span>
+        }
+
+<span class="nc" id="L217">        return createDirectoryResponse(HttpMethod.GET, RETURN_REPRESENTATION, accept, foundFolder.get(), ehrId);</span>
+    }
+
+    private DirectoryResponseData buildResponse(Folder folderDto) {
+<span class="nc" id="L221">        DirectoryResponseData resBody = new DirectoryResponseData();</span>
+<span class="nc" id="L222">        resBody.setDetails(folderDto.getDetails());</span>
+<span class="nc" id="L223">        resBody.setFolders(folderDto.getFolders());</span>
+<span class="nc" id="L224">        resBody.setItems(folderDto.getItems());</span>
+<span class="nc" id="L225">        resBody.setName(folderDto.getName());</span>
+<span class="nc" id="L226">        resBody.setUid(folderDto.getUid());</span>
+<span class="nc" id="L227">        return resBody;</span>
+    }
+
+    private ResponseEntity&lt;DirectoryResponseData&gt; createDirectoryResponse(
+            HttpMethod method, String prefer, String accept, Folder folderDto, UUID ehrId) {
+<span class="nc" id="L232">        HttpHeaders headers = new HttpHeaders();</span>
+        HttpStatus successStatus;
+        DirectoryResponseData body;
+
+<span class="nc bnc" id="L236" title="All 4 branches missed.">        if (prefer != null &amp;&amp; prefer.equals(RETURN_REPRESENTATION)) {</span>
+<span class="nc" id="L237">            headers.setContentType(resolveContentType(accept, MediaType.APPLICATION_XML));</span>
+<span class="nc" id="L238">            body = buildResponse(folderDto);</span>
+<span class="nc" id="L239">            successStatus = getSuccessStatus(method);</span>
+        } else {
+<span class="nc" id="L241">            body = null;</span>
+<span class="nc" id="L242">            successStatus = HttpStatus.NO_CONTENT;</span>
+        }
+
+<span class="nc bnc" id="L245" title="All 2 branches missed.">        if (folderDto != null) {</span>
+<span class="nc" id="L246">            String versionUid = folderDto.getUid().toString();</span>
+
+<span class="nc" id="L248">            headers.setETag(&quot;\&quot;&quot; + versionUid + &quot;\&quot;&quot;);</span>
+<span class="nc" id="L249">            headers.setLocation(createLocationUri(EHR, ehrId.toString(), DIRECTORY, versionUid));</span>
+            // TODO: Extract last modified from SysPeriod timestamp of fetched folder record
+<span class="nc" id="L251">            headers.setLastModified(DateTime.now().getMillis());</span>
+<span class="nc" id="L252">            createAuditLogsMsgBuilder(ehrId.toString(), versionUid);</span>
+        }
+
+<span class="nc" id="L255">        return new ResponseEntity&lt;&gt;(body, headers, successStatus);</span>
+    }
+
+    private HttpStatus getSuccessStatus(HttpMethod method) {
+<span class="nc bnc" id="L259" title="All 3 branches missed.">        switch (method) {</span>
+            case POST: {
+<span class="nc" id="L261">                return HttpStatus.CREATED;</span>
+            }
+            case DELETE: {
+<span class="nc" id="L264">                return HttpStatus.NO_CONTENT;</span>
+            }
+            default: {
+<span class="nc" id="L267">                return HttpStatus.OK;</span>
+            }
+        }
+    }
+
+    /**
+     * Assert that the given path is valid.
+     *
+     * @param path the path to check
+     * @throws InvalidApiParameterException if the path is invalid
+     */
+    private void assertValidPath(String path) {
+<span class="nc bnc" id="L279" title="All 2 branches missed.">        if (path == null) {</span>
+<span class="nc" id="L280">            return;</span>
+        }
+
+        try {
+<span class="nc" id="L284">            Paths.get(path);</span>
+<span class="nc" id="L285">        } catch (InvalidPathException e) {</span>
+<span class="nc" id="L286">            throw new InvalidApiParameterException(&quot;The value of path parameter is invalid&quot;, e);</span>
+<span class="nc" id="L287">        }</span>
+<span class="nc" id="L288">    }</span>
+
+    private void createAuditLogsMsgBuilder(String ehrId, String versionedObjectUid) {
+<span class="nc" id="L291">        AuditMsgBuilder.getInstance()</span>
+<span class="nc" id="L292">                .setEhrIds(ehrId)</span>
+<span class="nc" id="L293">                .setDirectoryId(versionedObjectUid)</span>
+<span class="nc" id="L294">                .setLocation(fromPath(&quot;&quot;)</span>
+<span class="nc" id="L295">                        .pathSegment(EHR, ehrId, DIRECTORY, versionedObjectUid)</span>
+<span class="nc" id="L296">                        .build()</span>
+<span class="nc" id="L297">                        .toString());</span>
+<span class="nc" id="L298">    }</span>
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.7.202105040129</span></div></body></html>

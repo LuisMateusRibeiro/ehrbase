@@ -1,0 +1,136 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../../jacoco-resources/report.gif" type="image/gif"/><title>WebTemplateAqlPath.java</title><link rel="stylesheet" href="../../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../../index.html" class="el_report">Overall Coverage</a> &gt; <a href="../index.html" class="el_bundle">service</a> &gt; <a href="index.source.html" class="el_package">org.ehrbase.aql.sql.queryimpl</a> &gt; <span class="el_source">WebTemplateAqlPath.java</span></div><h1>WebTemplateAqlPath.java</h1><pre class="source lang-java linenums">/*
+ * Copyright (c) 2022 vitasystems GmbH and Hannover Medical School.
+ *
+ * This file is part of project EHRbase
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     https://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.ehrbase.aql.sql.queryimpl;
+
+import static org.ehrbase.aql.sql.queryimpl.EntryAttributeMapper.OTHER_PARTICIPATIONS;
+import static org.ehrbase.aql.sql.queryimpl.NormalizedRmAttributePath.OTHER_CONTEXT;
+import static org.ehrbase.aql.sql.queryimpl.NormalizedRmAttributePath.OTHER_DETAILS;
+import static org.ehrbase.aql.sql.queryimpl.attribute.GenericJsonPath.CONTENT;
+
+import java.util.Collection;
+import java.util.Optional;
+import org.apache.commons.lang3.StringUtils;
+import org.apache.commons.lang3.tuple.Pair;
+import org.ehrbase.openehr.sdk.util.rmconstants.RmConstants;
+import org.ehrbase.openehr.sdk.webtemplate.model.WebTemplate;
+import org.ehrbase.openehr.sdk.webtemplate.model.WebTemplateInput;
+import org.ehrbase.openehr.sdk.webtemplate.model.WebTemplateNode;
+
+public final class WebTemplateAqlPath {
+
+    private static final String TERMINAL_NODE_PATH_PART = &quot;]/&quot;;
+
+    private WebTemplateAqlPath() {
+        // NOOP
+    }
+
+    public static boolean isValid(WebTemplate webTemplate, String containerPart, String variablePart) {
+
+        // TODO: WebTemplate doesn't provide details when this ITEM_STRUCTURE is passed in /participations
+<span class="pc bpc" id="L45" title="1 of 2 branches missed.">        if (containerPart.contains(OTHER_PARTICIPATIONS)) {</span>
+<span class="nc" id="L46">            return true;</span>
+        }
+
+<span class="fc" id="L49">        var nodeAttributrePair = identifyPathParts(variablePart);</span>
+<span class="fc" id="L50">        String nodePart = nodeAttributrePair.getLeft();</span>
+<span class="fc" id="L51">        String attributePart = nodeAttributrePair.getRight();</span>
+
+<span class="fc" id="L53">        String pathToCheck = containerPart + nodePart;</span>
+        // TODO: Simple contains check?
+<span class="pc bpc" id="L55" title="2 of 4 branches missed.">        if (pathToCheck.contains(OTHER_CONTEXT) || pathToCheck.contains(OTHER_DETAILS)) {</span>
+<span class="nc" id="L56">            return true; // TODO: ignore basically since the ITEM_STRUCTURE is part of an attribute not reflected in</span>
+            // WebTemplate
+        }
+
+<span class="fc" id="L60">        Optional&lt;WebTemplateNode&gt; webTemplateNode = webTemplate.findByAqlPath(pathToCheck);</span>
+
+<span class="fc bfc" id="L62" title="All 4 branches covered.">        if (webTemplateNode.isEmpty() &amp;&amp; !isMissingAttributeFromWebTemplate(webTemplate, pathToCheck)) {</span>
+            // TODO: check if this is an attribute for an ELEMENT see CR #...
+<span class="fc" id="L64">            return false;</span>
+        }
+
+<span class="fc bfc" id="L67" title="All 4 branches covered.">        if (attributePart == null || !attributePart.startsWith(&quot;value&quot;)) {</span>
+<span class="fc" id="L68">            return true;</span>
+        }
+
+<span class="fc" id="L71">        String[] attributePartBits = attributePart.split(&quot;value/&quot;);</span>
+<span class="pc bpc" id="L72" title="1 of 2 branches missed.">        if (attributePartBits.length == 1) {</span>
+            // value not followed by an attribute
+<span class="fc" id="L74">            return true;</span>
+        }
+
+        // check if the remainder is an input
+<span class="nc" id="L78">        return webTemplateNode.stream()</span>
+<span class="nc" id="L79">                .map(WebTemplateNode::getInputs)</span>
+<span class="nc" id="L80">                .flatMap(Collection::stream)</span>
+<span class="nc" id="L81">                .map(WebTemplateInput::getSuffix)</span>
+<span class="nc" id="L82">                .anyMatch(attributePartBits[1]::equals);</span>
+    }
+
+    /**
+     *
+     * @param path
+     * @return Pair&lt;nodePart, attributrePath&gt;
+     */
+    private static Pair&lt;String, String&gt; identifyPathParts(String path) {
+        final String nodePart;
+        final String attributePart;
+
+<span class="fc bfc" id="L94" title="All 2 branches covered.">        if (StringUtils.isEmpty(path)) {</span>
+<span class="fc" id="L95">            attributePart = null;</span>
+<span class="fc" id="L96">            nodePart = &quot;&quot;;</span>
+
+<span class="fc bfc" id="L98" title="All 2 branches covered.">        } else if (path.startsWith(CONTENT)) {</span>
+<span class="fc" id="L99">            attributePart = &quot;&quot;;</span>
+<span class="fc" id="L100">            nodePart = &quot;&quot;;</span>
+
+<span class="fc bfc" id="L102" title="All 2 branches covered.">        } else if (path.contains(TERMINAL_NODE_PATH_PART)) {</span>
+<span class="fc" id="L103">            int lastNodeSegmentIndex = path.lastIndexOf(TERMINAL_NODE_PATH_PART);</span>
+<span class="fc" id="L104">            attributePart = path.substring(lastNodeSegmentIndex + 2).split(&quot;/&quot;)[0];</span>
+<span class="fc" id="L105">            nodePart = &quot;/&quot; + path.substring(0, lastNodeSegmentIndex + 1) + &quot;/&quot; + attributePart;</span>
+
+<span class="pc bpc" id="L107" title="1 of 2 branches missed.">        } else if (path.contains(&quot;/&quot;)) {</span>
+<span class="nc" id="L108">            attributePart = path.split(&quot;/&quot;)[0];</span>
+<span class="nc bnc" id="L109" title="All 2 branches missed.">            nodePart = attributePart.isEmpty() ? &quot;&quot; : &quot;/&quot; + attributePart;</span>
+
+<span class="nc" id="L111">        } else {</span>
+<span class="fc" id="L112">            attributePart = &quot;&quot;;</span>
+<span class="fc" id="L113">            nodePart = &quot;&quot;;</span>
+        }
+<span class="fc" id="L115">        return Pair.of(nodePart, attributePart);</span>
+    }
+
+    /**
+     * check whether this path relates to missing attributes in WebTemplate (many Locatable attributes are not reflected)
+     * @param pathToCheck
+     * @return
+     */
+    private static boolean isMissingAttributeFromWebTemplate(WebTemplate webTemplate, String pathToCheck) {
+<span class="fc bfc" id="L124" title="All 2 branches covered.">        if (pathToCheck.lastIndexOf(TERMINAL_NODE_PATH_PART) &lt;= 0) {</span>
+<span class="fc" id="L125">            return false;</span>
+        }
+<span class="fc" id="L127">        int lastNodeSegmentIndex = pathToCheck.lastIndexOf(TERMINAL_NODE_PATH_PART);</span>
+
+        // check if we have an ELEMENT
+<span class="fc" id="L130">        return webTemplate</span>
+<span class="fc" id="L131">                .findByAqlPath(pathToCheck.substring(0, lastNodeSegmentIndex + 1))</span>
+<span class="fc" id="L132">                .filter(n -&gt; n.getRmType().equals(RmConstants.ELEMENT))</span>
+<span class="fc" id="L133">                .isPresent();</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.7.202105040129</span></div></body></html>

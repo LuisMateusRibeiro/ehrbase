@@ -1,0 +1,596 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../../jacoco-resources/report.gif" type="image/gif"/><title>ContextAccess.java</title><link rel="stylesheet" href="../../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../../index.html" class="el_report">Coverage with Unit Tests</a> &gt; <a href="../index.html" class="el_bundle">service</a> &gt; <a href="index.source.html" class="el_package">org.ehrbase.dao.access.jooq</a> &gt; <span class="el_source">ContextAccess.java</span></div><h1>ContextAccess.java</h1><pre class="source lang-java linenums">/*
+ * Copyright (c) 2019-2022 vitasystems GmbH and Hannover Medical School.
+ *
+ * This file is part of project EHRbase
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     https://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.ehrbase.dao.access.jooq;
+
+import static org.ehrbase.jooq.pg.Tables.EVENT_CONTEXT;
+import static org.ehrbase.jooq.pg.Tables.EVENT_CONTEXT_HISTORY;
+import static org.ehrbase.jooq.pg.Tables.IDENTIFIER;
+import static org.ehrbase.jooq.pg.Tables.PARTICIPATION;
+import static org.ehrbase.jooq.pg.Tables.PARTICIPATION_HISTORY;
+import static org.ehrbase.jooq.pg.Tables.PARTY_IDENTIFIED;
+
+import com.nedap.archie.rm.composition.EventContext;
+import com.nedap.archie.rm.datastructures.ItemStructure;
+import com.nedap.archie.rm.datavalues.DvCodedText;
+import com.nedap.archie.rm.datavalues.DvIdentifier;
+import com.nedap.archie.rm.datavalues.DvText;
+import com.nedap.archie.rm.datavalues.quantity.DvInterval;
+import com.nedap.archie.rm.datavalues.quantity.datetime.DvDateTime;
+import com.nedap.archie.rm.generic.Participation;
+import com.nedap.archie.rm.generic.PartyIdentified;
+import com.nedap.archie.rm.generic.PartyProxy;
+import com.nedap.archie.rm.support.identification.ObjectId;
+import com.nedap.archie.rm.support.identification.PartyRef;
+import java.sql.Timestamp;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.UUID;
+import org.apache.commons.collections4.CollectionUtils;
+import org.ehrbase.api.definitions.ServerConfig;
+import org.ehrbase.api.exception.InternalServerException;
+import org.ehrbase.dao.access.interfaces.I_CompositionAccess;
+import org.ehrbase.dao.access.interfaces.I_ContextAccess;
+import org.ehrbase.dao.access.interfaces.I_DomainAccess;
+import org.ehrbase.dao.access.jooq.party.PersistedObjectId;
+import org.ehrbase.dao.access.jooq.party.PersistedPartyProxy;
+import org.ehrbase.dao.access.support.DataAccess;
+import org.ehrbase.dao.access.util.TransactionTime;
+import org.ehrbase.jooq.dbencoding.RawJson;
+import org.ehrbase.jooq.pg.tables.records.EventContextHistoryRecord;
+import org.ehrbase.jooq.pg.tables.records.EventContextRecord;
+import org.ehrbase.jooq.pg.tables.records.ParticipationHistoryRecord;
+import org.ehrbase.jooq.pg.tables.records.ParticipationRecord;
+import org.ehrbase.jooq.pg.tables.records.PartyIdentifiedRecord;
+import org.ehrbase.service.RecordedDvCodedText;
+import org.ehrbase.service.RecordedDvDateTime;
+import org.ehrbase.service.RecordedDvText;
+import org.ehrbase.util.UuidGenerator;
+import org.jooq.DSLContext;
+import org.jooq.InsertQuery;
+import org.jooq.JSONB;
+import org.jooq.Result;
+import org.jooq.UpdateQuery;
+import org.jooq.exception.DataAccessException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+/**
+ * @author Christian Chevalley
+ * @author Jake Smolka
+ * @author Luis Marco-Ruiz
+ * @since 1.0
+ */
+public class ContextAccess extends DataAccess implements I_ContextAccess {
+    private static final String DB_INCONSISTENCY = &quot;DB inconsistency&quot;;
+
+<span class="nc" id="L81">    private final Logger log = LoggerFactory.getLogger(ContextAccess.class);</span>
+<span class="nc" id="L82">    private final List&lt;ParticipationRecord&gt; participations = new ArrayList&lt;&gt;();</span>
+    private EventContextRecord eventContextRecord;
+
+    public ContextAccess(DSLContext context, ServerConfig serverConfig, EventContext eventContext, Short sysTenant) {
+<span class="nc" id="L86">        super(context, null, null, serverConfig);</span>
+<span class="nc bnc" id="L87" title="All 2 branches missed.">        if (eventContext == null) return;</span>
+<span class="nc" id="L88">        eventContextRecord = context.newRecord(EVENT_CONTEXT);</span>
+<span class="nc" id="L89">        setRecordFields(UuidGenerator.randomUUID(), eventContext, sysTenant);</span>
+<span class="nc" id="L90">    }</span>
+
+    private ContextAccess(I_DomainAccess domainAccess) {
+<span class="nc" id="L93">        super(domainAccess);</span>
+<span class="nc" id="L94">    }</span>
+
+    public static I_ContextAccess retrieveInstance(I_DomainAccess domainAccess, UUID id) {
+<span class="nc" id="L97">        ContextAccess contextAccess = new ContextAccess(domainAccess);</span>
+        // We explicitly do not fetch the participations, since we do not update them. They are replaced in case of an
+        // update
+<span class="nc" id="L100">        contextAccess.eventContextRecord = domainAccess.getContext().fetchOne(EVENT_CONTEXT, EVENT_CONTEXT.ID.eq(id));</span>
+<span class="nc" id="L101">        return contextAccess;</span>
+    }
+
+    public static I_ContextAccess retrieveInstance(I_DomainAccess domainAccess, Result&lt;?&gt; records) {
+<span class="nc" id="L105">        ContextAccess contextAccess = new ContextAccess(domainAccess);</span>
+<span class="nc" id="L106">        EventContextRecord eventContextRecord = domainAccess.getContext().newRecord(EVENT_CONTEXT);</span>
+<span class="nc" id="L107">        eventContextRecord.setStartTime((Timestamp) records.getValue(0, I_CompositionAccess.F_CONTEXT_START_TIME));</span>
+<span class="nc" id="L108">        eventContextRecord.setStartTimeTzid(</span>
+<span class="nc" id="L109">                (String) records.getValue(0, I_CompositionAccess.F_CONTEXT_START_TIME_TZID));</span>
+<span class="nc" id="L110">        eventContextRecord.setEndTime((Timestamp) records.getValue(0, I_CompositionAccess.F_CONTEXT_END_TIME));</span>
+<span class="nc" id="L111">        eventContextRecord.setEndTimeTzid((String) records.getValue(0, I_CompositionAccess.F_CONTEXT_END_TIME_TZID));</span>
+<span class="nc" id="L112">        eventContextRecord.setLocation((String) records.getValue(0, I_CompositionAccess.F_CONTEXT_LOCATION));</span>
+<span class="nc" id="L113">        eventContextRecord.setOtherContext((JSONB) records.getValue(0, I_CompositionAccess.F_CONTEXT_OTHER_CONTEXT));</span>
+<span class="nc" id="L114">        return contextAccess;</span>
+    }
+
+    /**
+     * @throws InternalServerException on failure of decoding DvText or DvDateTime
+     */
+    public static EventContext retrieveHistoricalEventContext(
+            I_DomainAccess domainAccess, UUID compositionId, Timestamp transactionTime) {
+
+        // use fetch any since duplicates are possible during tests...
+<span class="nc" id="L124">        EventContextHistoryRecord eventContextHistoryRecord = domainAccess</span>
+<span class="nc" id="L125">                .getContext()</span>
+<span class="nc" id="L126">                .fetchAny(</span>
+                        EVENT_CONTEXT_HISTORY,
+                        EVENT_CONTEXT_HISTORY
+                                .COMPOSITION_ID
+<span class="nc" id="L130">                                .eq(compositionId)</span>
+<span class="nc" id="L131">                                .and(EVENT_CONTEXT_HISTORY.SYS_TRANSACTION.eq(transactionTime)));</span>
+
+<span class="nc bnc" id="L133" title="All 2 branches missed.">        if (eventContextHistoryRecord == null) return null; // no matching version for this composition</span>
+
+        // get the facility entry
+<span class="nc" id="L136">        PartyIdentified healthCareFacility = null;</span>
+
+<span class="nc bnc" id="L138" title="All 2 branches missed.">        if (eventContextHistoryRecord.getFacility() != null) {</span>
+<span class="nc" id="L139">            PartyIdentifiedRecord partyIdentifiedRecord = domainAccess</span>
+<span class="nc" id="L140">                    .getContext()</span>
+<span class="nc" id="L141">                    .fetchOne(PARTY_IDENTIFIED, PARTY_IDENTIFIED.ID.eq(eventContextHistoryRecord.getFacility()));</span>
+            // facility identifiers
+
+<span class="nc bnc" id="L144" title="All 2 branches missed.">            if (partyIdentifiedRecord != null) {</span>
+<span class="nc" id="L145">                List&lt;DvIdentifier&gt; identifiers = new ArrayList&lt;&gt;();</span>
+
+<span class="nc" id="L147">                domainAccess</span>
+<span class="nc" id="L148">                        .getContext()</span>
+<span class="nc" id="L149">                        .fetch(IDENTIFIER, IDENTIFIER.PARTY.eq(partyIdentifiedRecord.getId()))</span>
+<span class="nc" id="L150">                        .forEach(record -&gt; {</span>
+<span class="nc" id="L151">                            DvIdentifier dvIdentifier = new DvIdentifier();</span>
+<span class="nc" id="L152">                            dvIdentifier.setIssuer(record.getIssuer());</span>
+<span class="nc" id="L153">                            dvIdentifier.setAssigner(record.getAssigner());</span>
+<span class="nc" id="L154">                            dvIdentifier.setId(record.getIdValue());</span>
+<span class="nc" id="L155">                            dvIdentifier.setType(record.getTypeName());</span>
+<span class="nc" id="L156">                            identifiers.add(dvIdentifier);</span>
+<span class="nc" id="L157">                        });</span>
+
+                // get PartyRef values from record
+<span class="nc" id="L160">                healthCareFacility = getPartyIdentifiedFromRecord(partyIdentifiedRecord, identifiers);</span>
+            }
+        }
+
+<span class="nc" id="L164">        List&lt;Participation&gt; participationList = new ArrayList&lt;&gt;();</span>
+        // get the participations
+<span class="nc" id="L166">        domainAccess</span>
+<span class="nc" id="L167">                .getContext()</span>
+<span class="nc" id="L168">                .fetch(</span>
+                        PARTICIPATION_HISTORY,
+                        PARTICIPATION_HISTORY
+                                .EVENT_CONTEXT
+<span class="nc" id="L172">                                .eq(eventContextHistoryRecord.getId())</span>
+<span class="nc" id="L173">                                .and(PARTICIPATION_HISTORY.SYS_TRANSACTION.eq(transactionTime)))</span>
+<span class="nc" id="L174">                .forEach(historyRecord -&gt; {</span>
+
+                    // retrieve performer
+<span class="nc" id="L177">                    PartyProxy performer = new PersistedPartyProxy(domainAccess).retrieve(historyRecord.getPerformer());</span>
+
+<span class="nc" id="L179">                    DvInterval&lt;DvDateTime&gt; startTime = getStartTimeInterval(historyRecord);</span>
+                    DvCodedText mode;
+<span class="nc bnc" id="L181" title="All 2 branches missed.">                    if (historyRecord.getMode() != null) {</span>
+<span class="nc" id="L182">                        mode = (DvCodedText)</span>
+<span class="nc" id="L183">                                new RecordedDvCodedText().fromDB(historyRecord, PARTICIPATION_HISTORY.MODE);</span>
+                    } else {
+<span class="nc" id="L185">                        mode = null;</span>
+                    }
+
+<span class="nc" id="L188">                    Participation participation = new Participation(</span>
+                            performer,
+<span class="nc" id="L190">                            (DvText) new RecordedDvCodedText().fromDB(historyRecord, PARTICIPATION_HISTORY.FUNCTION),</span>
+                            mode,
+                            startTime);
+
+<span class="nc" id="L194">                    participationList.add(participation);</span>
+<span class="nc" id="L195">                });</span>
+
+<span class="nc" id="L197">        DvCodedText setting = (DvCodedText)</span>
+<span class="nc" id="L198">                new RecordedDvCodedText().fromDB(eventContextHistoryRecord, EVENT_CONTEXT_HISTORY.SETTING);</span>
+
+<span class="nc" id="L200">        return new EventContext(</span>
+                healthCareFacility,
+                new RecordedDvDateTime()
+<span class="nc" id="L203">                        .decodeDvDateTime(</span>
+<span class="nc" id="L204">                                eventContextHistoryRecord.getStartTime(), eventContextHistoryRecord.getStartTimeTzid()),</span>
+                new RecordedDvDateTime()
+<span class="nc" id="L206">                        .decodeDvDateTime(</span>
+<span class="nc" id="L207">                                eventContextHistoryRecord.getEndTime(), eventContextHistoryRecord.getEndTimeTzid()),</span>
+<span class="nc bnc" id="L208" title="All 2 branches missed.">                participationList.isEmpty() ? null : participationList,</span>
+<span class="nc" id="L209">                eventContextHistoryRecord.getLocation(),</span>
+                setting,
+                null);
+    }
+
+    private static PartyIdentified getPartyIdentifiedFromRecord(
+            PartyIdentifiedRecord partyIdentifiedRecord, List&lt;DvIdentifier&gt; identifiers) {
+        PartyIdentified healthCareFacility;
+<span class="nc" id="L217">        PartyRef partyRef = null;</span>
+<span class="nc bnc" id="L218" title="All 4 branches missed.">        if (partyIdentifiedRecord.getPartyRefValue() != null &amp;&amp; partyIdentifiedRecord.getPartyRefScheme() != null) {</span>
+<span class="nc" id="L219">            ObjectId objectID = new PersistedObjectId().fromDB(partyIdentifiedRecord);</span>
+<span class="nc" id="L220">            partyRef = new PartyRef(</span>
+<span class="nc" id="L221">                    objectID, partyIdentifiedRecord.getPartyRefNamespace(), partyIdentifiedRecord.getPartyRefType());</span>
+        }
+<span class="nc" id="L223">        healthCareFacility = new PartyIdentified(</span>
+<span class="nc bnc" id="L224" title="All 2 branches missed.">                partyRef, partyIdentifiedRecord.getName(), identifiers.isEmpty() ? null : identifiers);</span>
+<span class="nc" id="L225">        return healthCareFacility;</span>
+    }
+
+    /**
+     * setup an EventContextRecord instance based on values from an EventContext instance
+     *
+     * @param id
+     * @param eventContext
+     */
+    @Override
+    public void setRecordFields(UUID id, EventContext eventContext, Short sysTenant) {
+<span class="nc" id="L236">        RecordedDvDateTime recordedDvDateTime = new RecordedDvDateTime(eventContext.getStartTime());</span>
+<span class="nc" id="L237">        eventContextRecord.setStartTime(recordedDvDateTime.toTimestamp());</span>
+<span class="nc" id="L238">        eventContextRecord.setSysTenant(sysTenant);</span>
+<span class="nc" id="L239">        recordedDvDateTime.zoneId().ifPresent(eventContextRecord::setStartTimeTzid);</span>
+<span class="nc bnc" id="L240" title="All 2 branches missed.">        if (eventContext.getEndTime() != null) {</span>
+<span class="nc" id="L241">            recordedDvDateTime = new RecordedDvDateTime(eventContext.getEndTime());</span>
+<span class="nc" id="L242">            eventContextRecord.setEndTime(recordedDvDateTime.toTimestamp());</span>
+<span class="nc" id="L243">            recordedDvDateTime.zoneId().ifPresent(eventContextRecord::setEndTimeTzid);</span>
+        }
+<span class="nc bnc" id="L245" title="All 2 branches missed.">        eventContextRecord.setId(id != null ? id : UuidGenerator.randomUUID());</span>
+
+        // Health care facility
+<span class="nc bnc" id="L248" title="All 2 branches missed.">        if (eventContext.getHealthCareFacility() != null) {</span>
+<span class="nc" id="L249">            UUID healthcareFacilityId =</span>
+<span class="nc" id="L250">                    new PersistedPartyProxy(this).getOrCreate(eventContext.getHealthCareFacility(), sysTenant);</span>
+
+<span class="nc" id="L252">            eventContextRecord.setFacility(healthcareFacilityId);</span>
+        }
+
+        // location
+<span class="nc bnc" id="L256" title="All 2 branches missed.">        if (eventContext.getLocation() != null) eventContextRecord.setLocation(eventContext.getLocation());</span>
+
+<span class="nc" id="L258">        new RecordedDvCodedText().toDB(eventContextRecord, EVENT_CONTEXT.SETTING, eventContext.getSetting());</span>
+
+        // We always replace participations -&gt; remove the old ones if any
+<span class="nc" id="L261">        participations.clear();</span>
+<span class="nc bnc" id="L262" title="All 2 branches missed.">        if (eventContext.getParticipations() != null) {</span>
+<span class="nc bnc" id="L263" title="All 2 branches missed.">            for (Participation participation : eventContext.getParticipations()) {</span>
+<span class="nc" id="L264">                ParticipationRecord participationRecord = getContext().newRecord(PARTICIPATION);</span>
+<span class="nc" id="L265">                participationRecord.setEventContext(eventContextRecord.getId());</span>
+<span class="nc" id="L266">                new RecordedDvText().toDB(participationRecord, PARTICIPATION.FUNCTION, participation.getFunction());</span>
+<span class="nc bnc" id="L267" title="All 2 branches missed.">                if (participation.getMode() != null)</span>
+<span class="nc" id="L268">                    new RecordedDvCodedText().toDB(participationRecord, PARTICIPATION.MODE, participation.getMode());</span>
+<span class="nc bnc" id="L269" title="All 2 branches missed.">                if (participation.getTime() != null) {</span>
+<span class="nc" id="L270">                    DvDateTime lower = participation.getTime().getLower();</span>
+<span class="nc bnc" id="L271" title="All 2 branches missed.">                    if (lower != null) {</span>
+<span class="nc" id="L272">                        recordedDvDateTime = new RecordedDvDateTime(lower);</span>
+<span class="nc" id="L273">                        participationRecord.setTimeLower(recordedDvDateTime.toTimestamp());</span>
+<span class="nc" id="L274">                        recordedDvDateTime.zoneId().ifPresent(participationRecord::setTimeLowerTz);</span>
+                    }
+<span class="nc" id="L276">                    DvDateTime upper = participation.getTime().getUpper();</span>
+<span class="nc bnc" id="L277" title="All 2 branches missed.">                    if (upper != null) {</span>
+<span class="nc" id="L278">                        recordedDvDateTime = new RecordedDvDateTime(upper);</span>
+<span class="nc" id="L279">                        participationRecord.setTimeUpper(recordedDvDateTime.toTimestamp());</span>
+<span class="nc" id="L280">                        recordedDvDateTime.zoneId().ifPresent(participationRecord::setTimeUpperTz);</span>
+                    }
+                }
+
+                PartyIdentified performer; // only PartyIdentified performer is supported now
+
+<span class="nc" id="L286">                PartyProxy setPerformer = participation.getPerformer();</span>
+
+<span class="nc bnc" id="L288" title="All 2 branches missed.">                if (!(setPerformer instanceof PartyIdentified)) {</span>
+<span class="nc" id="L289">                    log.warn(&quot;Set performer is using unsupported type: {}&quot;, setPerformer);</span>
+<span class="nc" id="L290">                    break;</span>
+                }
+
+<span class="nc" id="L293">                performer = (PartyIdentified) setPerformer;</span>
+<span class="nc" id="L294">                UUID performerUuid = new PersistedPartyProxy(this).getOrCreate(performer, sysTenant);</span>
+                // set the performer
+<span class="nc" id="L296">                participationRecord.setPerformer(performerUuid);</span>
+<span class="nc" id="L297">                participationRecord.setSysTenant(sysTenant);</span>
+<span class="nc" id="L298">                participations.add(participationRecord);</span>
+<span class="nc" id="L299">            }</span>
+        }
+
+        // other context
+<span class="nc bnc" id="L303" title="All 2 branches missed.">        if (eventContext.getOtherContext() != null</span>
+<span class="nc bnc" id="L304" title="All 2 branches missed.">                &amp;&amp; CollectionUtils.isNotEmpty(eventContext.getOtherContext().getItems())) {</span>
+            // set up the JSONB field other_context
+<span class="nc" id="L306">            eventContextRecord.setOtherContext(JSONB.valueOf(new RawJson().marshal(eventContext.getOtherContext())));</span>
+        }
+<span class="nc" id="L308">    }</span>
+
+    /**
+     * @throws InternalServerException  when database operation or
+     * @throws IllegalArgumentException when context commit failed
+     */
+    @Override
+    public UUID commit(Timestamp transactionTime) {
+<span class="nc" id="L316">        eventContextRecord.setSysTransaction(transactionTime);</span>
+<span class="nc" id="L317">        InsertQuery&lt;?&gt; insertQuery = getContext().insertQuery(EVENT_CONTEXT);</span>
+<span class="nc" id="L318">        insertQuery.addValue(EVENT_CONTEXT.ID, eventContextRecord.getId());</span>
+<span class="nc" id="L319">        insertQuery.addValue(EVENT_CONTEXT.COMPOSITION_ID, eventContextRecord.getCompositionId());</span>
+<span class="nc" id="L320">        insertQuery.addValue(EVENT_CONTEXT.START_TIME, eventContextRecord.getStartTime());</span>
+<span class="nc" id="L321">        insertQuery.addValue(EVENT_CONTEXT.START_TIME_TZID, eventContextRecord.getStartTimeTzid());</span>
+<span class="nc" id="L322">        insertQuery.addValue(EVENT_CONTEXT.END_TIME, eventContextRecord.getEndTime());</span>
+<span class="nc" id="L323">        insertQuery.addValue(EVENT_CONTEXT.END_TIME_TZID, eventContextRecord.getEndTimeTzid());</span>
+<span class="nc" id="L324">        insertQuery.addValue(EVENT_CONTEXT.FACILITY, eventContextRecord.getFacility());</span>
+<span class="nc" id="L325">        insertQuery.addValue(EVENT_CONTEXT.LOCATION, eventContextRecord.getLocation());</span>
+<span class="nc" id="L326">        insertQuery.addValue(EVENT_CONTEXT.SYS_TENANT, eventContextRecord.getSysTenant());</span>
+<span class="nc bnc" id="L327" title="All 2 branches missed.">        if (eventContextRecord.getOtherContext() != null)</span>
+<span class="nc" id="L328">            insertQuery.addValue(EVENT_CONTEXT.OTHER_CONTEXT, eventContextRecord.getOtherContext());</span>
+<span class="nc" id="L329">        insertQuery.addValue(EVENT_CONTEXT.SETTING, eventContextRecord.getSetting());</span>
+<span class="nc" id="L330">        insertQuery.addValue(EVENT_CONTEXT.SYS_TRANSACTION, eventContextRecord.getSysTransaction());</span>
+
+        int result;
+        try {
+<span class="nc" id="L334">            result = insertQuery.execute();</span>
+<span class="nc" id="L335">        } catch (DataAccessException e) {</span>
+<span class="nc" id="L336">            throw new InternalServerException(&quot;Problem executing database operation&quot;, e);</span>
+<span class="nc" id="L337">        }</span>
+
+<span class="nc bnc" id="L339" title="All 2 branches missed.">        if (result &lt; 1) throw new IllegalArgumentException(&quot;Context commit failed&quot;);</span>
+
+<span class="nc bnc" id="L341" title="All 2 branches missed.">        if (!participations.isEmpty()) {</span>
+<span class="nc" id="L342">            participations.forEach(participation -&gt; {</span>
+<span class="nc" id="L343">                participation.setEventContext(eventContextRecord.getId());</span>
+<span class="nc" id="L344">                participation.setSysTransaction(transactionTime);</span>
+<span class="nc" id="L345">                participation.store();</span>
+<span class="nc" id="L346">            });</span>
+        }
+
+<span class="nc" id="L349">        return eventContextRecord.getId();</span>
+    }
+
+    /**
+     * @throws InternalServerException  when database operation or
+     * @throws IllegalArgumentException when context commit failed
+     */
+    @Override
+    public UUID commit() {
+<span class="nc" id="L358">        return commit(TransactionTime.millis());</span>
+    }
+
+    /**
+     * @throws InternalServerException if DB inconsistency or other problem with updating DB entry
+     */
+    @Override
+    public Boolean update(Timestamp transactionTime) {
+        // updateComposition participations
+        // We replace participations, instead of updating them, because we have no concrete criteria which
+        // participations should be updated
+<span class="nc" id="L369">        getContext()</span>
+<span class="nc" id="L370">                .deleteFrom(PARTICIPATION)</span>
+<span class="nc" id="L371">                .where(PARTICIPATION.EVENT_CONTEXT.eq(getId()))</span>
+<span class="nc" id="L372">                .execute();</span>
+<span class="nc bnc" id="L373" title="All 2 branches missed.">        for (ParticipationRecord participationRecord : participations) {</span>
+<span class="nc" id="L374">            participationRecord.setSysTransaction(transactionTime);</span>
+            // check if commit or updateComposition (exists or not...)
+            try {
+<span class="nc" id="L377">                participationRecord.setId(UuidGenerator.randomUUID());</span>
+<span class="nc" id="L378">                participationRecord.store();</span>
+<span class="nc" id="L379">            } catch (DataAccessException e) { // generalize DB exceptions</span>
+<span class="nc" id="L380">                throw new InternalServerException(DB_INCONSISTENCY, e);</span>
+<span class="nc" id="L381">            }</span>
+<span class="nc" id="L382">        }</span>
+        // ignore the temporal field since it is maintained by an external trigger!
+<span class="nc" id="L384">        eventContextRecord.changed(EVENT_CONTEXT.SYS_PERIOD, false);</span>
+
+<span class="nc" id="L386">        eventContextRecord.setSysTransaction(transactionTime);</span>
+
+<span class="nc" id="L388">        UpdateQuery&lt;?&gt; updateQuery = getContext().updateQuery(EVENT_CONTEXT);</span>
+
+<span class="nc" id="L390">        updateQuery.addValue(EVENT_CONTEXT.COMPOSITION_ID, eventContextRecord.getCompositionId());</span>
+<span class="nc" id="L391">        updateQuery.addValue(EVENT_CONTEXT.START_TIME, eventContextRecord.getStartTime());</span>
+<span class="nc" id="L392">        updateQuery.addValue(EVENT_CONTEXT.START_TIME_TZID, eventContextRecord.getStartTimeTzid());</span>
+<span class="nc" id="L393">        updateQuery.addValue(EVENT_CONTEXT.END_TIME, eventContextRecord.getEndTime());</span>
+<span class="nc" id="L394">        updateQuery.addValue(EVENT_CONTEXT.END_TIME_TZID, eventContextRecord.getEndTimeTzid());</span>
+<span class="nc" id="L395">        updateQuery.addValue(EVENT_CONTEXT.FACILITY, eventContextRecord.getFacility());</span>
+<span class="nc" id="L396">        updateQuery.addValue(EVENT_CONTEXT.LOCATION, eventContextRecord.getLocation());</span>
+<span class="nc bnc" id="L397" title="All 2 branches missed.">        if (eventContextRecord.getOtherContext() != null)</span>
+<span class="nc" id="L398">            updateQuery.addValue(EVENT_CONTEXT.OTHER_CONTEXT, eventContextRecord.getOtherContext());</span>
+<span class="nc" id="L399">        updateQuery.addValue(EVENT_CONTEXT.SETTING, eventContextRecord.getSetting());</span>
+<span class="nc" id="L400">        updateQuery.addValue(EVENT_CONTEXT.SYS_TRANSACTION, eventContextRecord.getSysTransaction());</span>
+<span class="nc" id="L401">        updateQuery.addConditions(EVENT_CONTEXT.ID.eq(getId()));</span>
+
+        boolean result;
+        try {
+<span class="nc bnc" id="L405" title="All 2 branches missed.">            result = updateQuery.execute() &gt; 0;</span>
+<span class="nc" id="L406">        } catch (DataAccessException e) { // generalize DB exceptions</span>
+<span class="nc" id="L407">            throw new InternalServerException(&quot;Problem when updating DB entry&quot;, e);</span>
+<span class="nc" id="L408">        }</span>
+
+<span class="nc" id="L410">        return result;</span>
+    }
+
+    /**
+     * @throws InternalServerException when update failed
+     */
+    @Override
+    public Boolean update(Timestamp transactionTime, boolean force) {
+<span class="nc bnc" id="L418" title="All 2 branches missed.">        if (force) {</span>
+<span class="nc" id="L419">            eventContextRecord.changed(true);</span>
+            // jOOQ limited support of TSTZRANGE, exclude sys_period from updateComposition!
+<span class="nc" id="L421">            eventContextRecord.changed(EVENT_CONTEXT.SYS_PERIOD, false);</span>
+
+<span class="nc bnc" id="L423" title="All 2 branches missed.">            for (ParticipationRecord participationRecord : participations) {</span>
+<span class="nc" id="L424">                participationRecord.changed(true);</span>
+                // jOOQ limited support of TSTZRANGE, exclude sys_period from updateComposition!
+<span class="nc" id="L426">                participationRecord.changed(PARTICIPATION.SYS_PERIOD, false);</span>
+<span class="nc" id="L427">            }</span>
+        }
+<span class="nc" id="L429">        return update(transactionTime);</span>
+    }
+
+    /**
+     * @throws InternalServerException because inherited interface function isn't implemented in this class
+     * @deprecated
+     */
+    @Deprecated
+    @Override
+    public Boolean update() {
+<span class="nc" id="L439">        throw new InternalServerException(</span>
+                &quot;INTERNAL: Invalid updateComposition call to updateComposition without Transaction time and/or force flag arguments&quot;);
+    }
+
+    /**
+     * @throws InternalServerException because inherited interface function isn't implemented in this class
+     * @deprecated
+     */
+    @Deprecated
+    @Override
+    public Boolean update(Boolean force) {
+<span class="nc" id="L450">        throw new InternalServerException(</span>
+                &quot;INTERNAL: Invalid updateComposition call to updateComposition without Transaction time and/or force flag arguments&quot;);
+    }
+
+    @Override
+    public Integer delete() {
+<span class="nc" id="L456">        int count = 0;</span>
+        // delete any cross reference participants if any
+        // delete the participation record
+<span class="nc" id="L459">        count += getContext()</span>
+<span class="nc" id="L460">                .delete(PARTICIPATION)</span>
+<span class="nc" id="L461">                .where(PARTICIPATION.EVENT_CONTEXT.eq(eventContextRecord.getId()))</span>
+<span class="nc" id="L462">                .execute();</span>
+
+<span class="nc" id="L464">        count += eventContextRecord.delete();</span>
+<span class="nc" id="L465">        return count;</span>
+    }
+
+    /**
+     * @throws InternalServerException on failure of decoding DvText or DvDateTime
+     */
+    @Override
+    public EventContext mapRmEventContext() {
+
+        // get the facility entry
+<span class="nc" id="L475">        PartyIdentifiedRecord partyIdentifiedRecord =</span>
+<span class="nc" id="L476">                getContext().fetchOne(PARTY_IDENTIFIED, PARTY_IDENTIFIED.ID.eq(eventContextRecord.getFacility()));</span>
+        // facility identifiers
+<span class="nc" id="L478">        PartyIdentified healthCareFacility = null;</span>
+
+<span class="nc bnc" id="L480" title="All 2 branches missed.">        if (partyIdentifiedRecord != null) {</span>
+<span class="nc" id="L481">            List&lt;DvIdentifier&gt; identifiers = new ArrayList&lt;&gt;();</span>
+
+<span class="nc" id="L483">            getContext()</span>
+<span class="nc" id="L484">                    .fetch(IDENTIFIER, IDENTIFIER.PARTY.eq(partyIdentifiedRecord.getId()))</span>
+<span class="nc" id="L485">                    .forEach(record -&gt; {</span>
+<span class="nc" id="L486">                        DvIdentifier dvIdentifier = new DvIdentifier();</span>
+<span class="nc" id="L487">                        dvIdentifier.setIssuer(record.getIssuer());</span>
+<span class="nc" id="L488">                        dvIdentifier.setAssigner(record.getAssigner());</span>
+<span class="nc" id="L489">                        dvIdentifier.setId(record.getIdValue());</span>
+<span class="nc" id="L490">                        dvIdentifier.setType(record.getTypeName());</span>
+<span class="nc" id="L491">                        identifiers.add(dvIdentifier);</span>
+<span class="nc" id="L492">                    });</span>
+
+            // get PartyRef values from record
+<span class="nc" id="L495">            healthCareFacility = getPartyIdentifiedFromRecord(partyIdentifiedRecord, identifiers);</span>
+        }
+
+<span class="nc" id="L498">        List&lt;Participation&gt; participationList = new ArrayList&lt;&gt;();</span>
+        // get the participations
+<span class="nc" id="L500">        getContext()</span>
+<span class="nc" id="L501">                .fetch(PARTICIPATION, PARTICIPATION.EVENT_CONTEXT.eq(eventContextRecord.getId()))</span>
+<span class="nc" id="L502">                .forEach(participationRecord -&gt; {</span>
+                    // retrieve performer
+<span class="nc" id="L504">                    PartyProxy performer = new PersistedPartyProxy(this).retrieve(participationRecord.getPerformer());</span>
+
+<span class="nc" id="L506">                    DvInterval&lt;DvDateTime&gt; startTime = getStartTimeInterval(participationRecord);</span>
+                    DvCodedText mode;
+<span class="nc bnc" id="L508" title="All 2 branches missed.">                    if (participationRecord.getMode() != null) {</span>
+<span class="nc" id="L509">                        mode = (DvCodedText) new RecordedDvCodedText().fromDB(participationRecord, PARTICIPATION.MODE);</span>
+                    } else {
+<span class="nc" id="L511">                        mode = null;</span>
+                    }
+
+<span class="nc" id="L514">                    Participation participation = new Participation(</span>
+                            performer,
+<span class="nc" id="L516">                            (DvText) new RecordedDvCodedText().fromDB(participationRecord, PARTICIPATION.FUNCTION),</span>
+                            mode,
+                            startTime);
+
+<span class="nc" id="L520">                    participationList.add(participation);</span>
+<span class="nc" id="L521">                });</span>
+
+<span class="nc" id="L523">        DvCodedText concept = (DvCodedText) new RecordedDvCodedText().fromDB(eventContextRecord, EVENT_CONTEXT.SETTING);</span>
+
+<span class="nc" id="L525">        ItemStructure otherContext = null;</span>
+
+<span class="nc bnc" id="L527" title="All 2 branches missed.">        if (eventContextRecord.getOtherContext() != null) {</span>
+<span class="nc" id="L528">            otherContext = new RawJson()</span>
+<span class="nc" id="L529">                    .unmarshal((eventContextRecord.getOtherContext().data()), ItemStructure.class);</span>
+        }
+
+<span class="nc" id="L532">        return new EventContext(</span>
+                healthCareFacility,
+                new RecordedDvDateTime()
+<span class="nc" id="L535">                        .decodeDvDateTime(eventContextRecord.getStartTime(), eventContextRecord.getStartTimeTzid()),</span>
+                new RecordedDvDateTime()
+<span class="nc" id="L537">                        .decodeDvDateTime(eventContextRecord.getEndTime(), eventContextRecord.getEndTimeTzid()),</span>
+<span class="nc bnc" id="L538" title="All 2 branches missed.">                participationList.isEmpty() ? null : participationList,</span>
+<span class="nc" id="L539">                eventContextRecord.getLocation(),</span>
+                concept,
+                otherContext);
+    }
+
+    private static DvInterval&lt;DvDateTime&gt; getStartTimeInterval(ParticipationHistoryRecord historyRecord) {
+<span class="nc bnc" id="L545" title="All 2 branches missed.">        if (historyRecord.getTimeLower() != null) { // start time null value is allowed for participation</span>
+<span class="nc" id="L546">            return new DvInterval&lt;&gt;(</span>
+                    new RecordedDvDateTime()
+<span class="nc" id="L548">                            .decodeDvDateTime(historyRecord.getTimeLower(), historyRecord.getTimeLowerTz()),</span>
+                    new RecordedDvDateTime()
+<span class="nc" id="L550">                            .decodeDvDateTime(historyRecord.getTimeUpper(), historyRecord.getTimeUpperTz()));</span>
+        } else {
+<span class="nc" id="L552">            return null;</span>
+        }
+    }
+
+    private static DvInterval&lt;DvDateTime&gt; getStartTimeInterval(ParticipationRecord participationRecord) {
+<span class="nc bnc" id="L557" title="All 2 branches missed.">        if (participationRecord.getTimeLower() != null) {</span>
+            // start time null value is allowed for participation
+<span class="nc" id="L559">            return new DvInterval&lt;&gt;(</span>
+                    new RecordedDvDateTime()
+<span class="nc" id="L561">                            .decodeDvDateTime(participationRecord.getTimeLower(), participationRecord.getTimeLowerTz()),</span>
+                    new RecordedDvDateTime()
+<span class="nc" id="L563">                            .decodeDvDateTime(</span>
+<span class="nc" id="L564">                                    participationRecord.getTimeUpper(), participationRecord.getTimeUpperTz()));</span>
+        } else {
+<span class="nc" id="L566">            return null;</span>
+        }
+    }
+
+    @Override
+    public String getOtherContextJson() {
+<span class="nc bnc" id="L572" title="All 2 branches missed.">        if (eventContextRecord.getOtherContext() == null) return null;</span>
+<span class="nc" id="L573">        return (eventContextRecord.getOtherContext().data());</span>
+    }
+
+    @Override
+    public void setCompositionId(UUID compositionId) {
+<span class="nc" id="L578">        eventContextRecord.setCompositionId(compositionId);</span>
+<span class="nc" id="L579">    }</span>
+
+    @Override
+    public UUID getId() {
+<span class="nc" id="L583">        return eventContextRecord.getId();</span>
+    }
+
+    @Override
+    public boolean isVoid() {
+<span class="nc bnc" id="L588" title="All 2 branches missed.">        return eventContextRecord == null;</span>
+    }
+
+    @Override
+    public DataAccess getDataAccess() {
+<span class="nc" id="L593">        return this;</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.7.202105040129</span></div></body></html>

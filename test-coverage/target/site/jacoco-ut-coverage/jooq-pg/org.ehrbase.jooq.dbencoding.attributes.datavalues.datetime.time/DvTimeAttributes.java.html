@@ -1,0 +1,149 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../../jacoco-resources/report.gif" type="image/gif"/><title>DvTimeAttributes.java</title><link rel="stylesheet" href="../../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../../index.html" class="el_report">Coverage with Unit Tests</a> &gt; <a href="../index.html" class="el_bundle">jooq-pg</a> &gt; <a href="index.source.html" class="el_package">org.ehrbase.jooq.dbencoding.attributes.datavalues.datetime.time</a> &gt; <span class="el_source">DvTimeAttributes.java</span></div><h1>DvTimeAttributes.java</h1><pre class="source lang-java linenums">/*
+ * Copyright (c) 2020 vitasystems GmbH and Hannover Medical School.
+ *
+ * This file is part of project EHRbase
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     https://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.ehrbase.jooq.dbencoding.attributes.datavalues.datetime.time;
+
+import com.nedap.archie.rm.datavalues.quantity.datetime.DvTime;
+import java.time.LocalTime;
+import java.time.OffsetTime;
+import java.time.ZoneOffset;
+import java.time.temporal.ChronoField;
+import java.time.temporal.Temporal;
+import java.time.temporal.TemporalAccessor;
+import org.ehrbase.jooq.dbencoding.attributes.datavalues.datetime.I_PartialTime;
+import org.ehrbase.jooq.dbencoding.attributes.datavalues.datetime.I_TimeAttributes;
+import org.ehrbase.jooq.dbencoding.attributes.datavalues.datetime.TemporalAttributes;
+
+/**
+ * decorator for DvTime.
+ * Add attributes and handling for partial time (f.e. 10:00)
+ * Provide a defaulted representation (f.e. 10:00:00 for the above)
+ * Calculate a timestamp based on the defaulted representation
+ */
+public class DvTimeAttributes extends TemporalAttributes implements I_TimeAttributes {
+
+    private I_TimeAttributes timeAttributes;
+    private static ZoneOffset zoneOffset;
+
+<span class="fc" id="L42">    private DvTimeAttributes(I_TimeAttributes timeAttributes) {</span>
+<span class="fc" id="L43">        this.timeAttributes = timeAttributes;</span>
+<span class="fc" id="L44">    }</span>
+
+    public static DvTimeAttributes instanceFromValue(TemporalAccessor timeValue) {
+
+<span class="fc bfc" id="L48" title="All 2 branches covered.">        if (!timeValue.isSupported(ChronoField.HOUR_OF_DAY)) return null;</span>
+
+        try {
+<span class="fc" id="L51">            zoneOffset = ZoneOffset.from(timeValue);</span>
+<span class="pc" id="L52">        } catch (Exception e) {</span>
+<span class="nc" id="L53">            zoneOffset = null;</span>
+        }
+
+<span class="pc bpc" id="L56" title="1 of 2 branches missed.">        if (zoneOffset != null) {</span>
+<span class="fc" id="L57">            OffsetTime offsetTime = OffsetTime.of(</span>
+<span class="fc" id="L58">                    timeValue.get(ChronoField.HOUR_OF_DAY),</span>
+<span class="fc" id="L59">                    timeValue.get(ChronoField.MINUTE_OF_HOUR),</span>
+<span class="fc" id="L60">                    timeValue.get(ChronoField.SECOND_OF_MINUTE),</span>
+<span class="fc" id="L61">                    timeValue.get(ChronoField.NANO_OF_SECOND),</span>
+<span class="fc" id="L62">                    zoneOffset);</span>
+
+<span class="fc" id="L64">            return instanceFromValue(new DvTime(offsetTime));</span>
+        } else {
+<span class="nc" id="L66">            LocalTime localTime = LocalTime.of(</span>
+<span class="nc" id="L67">                    timeValue.get(ChronoField.HOUR_OF_DAY),</span>
+<span class="nc" id="L68">                    timeValue.get(ChronoField.MINUTE_OF_HOUR),</span>
+<span class="nc" id="L69">                    timeValue.get(ChronoField.SECOND_OF_MINUTE),</span>
+<span class="nc" id="L70">                    timeValue.get(ChronoField.NANO_OF_SECOND));</span>
+<span class="nc" id="L71">            return instanceFromValue(new DvTime(localTime));</span>
+        }
+    }
+
+    public static DvTimeAttributes instanceFromValue(DvTime dvTime) {
+        I_TimeAttributes timeAttributes;
+<span class="fc" id="L77">        I_PartialTime partialTime = PartialTime.getInstance(dvTime);</span>
+
+<span class="fc bfc" id="L79" title="All 2 branches covered.">        if (partialTime.ishhmmssfff()) {</span>
+<span class="fc" id="L80">            timeAttributes = new DvTimehhmmssfffImp(dvTime);</span>
+<span class="fc bfc" id="L81" title="All 2 branches covered.">        } else if (partialTime.ishhmmss()) {</span>
+<span class="fc" id="L82">            timeAttributes = new DvTimehhmmssImp(dvTime);</span>
+<span class="pc bpc" id="L83" title="1 of 2 branches missed.">        } else if (partialTime.ishhmm()) {</span>
+<span class="fc" id="L84">            timeAttributes = new DvTimehhmmImp(dvTime);</span>
+<span class="pc bnc" id="L85" title="All 2 branches missed.">        } else if (partialTime.ishh()) {</span>
+<span class="nc" id="L86">            timeAttributes = new DvTimehhImp(dvTime);</span>
+<span class="nc" id="L87">        } else</span>
+<span class="nc" id="L88">            throw new IllegalArgumentException(</span>
+<span class="nc" id="L89">                    &quot;Invalid time:&quot; + dvTime.getValue().toString());</span>
+
+<span class="fc" id="L91">        return new DvTimeAttributes(timeAttributes);</span>
+    }
+
+    @Override
+    public Long getMagnitude() {
+<span class="nc" id="L96">        return timeAttributes.getMagnitude();</span>
+    }
+
+    @Override
+    public Temporal getValueAsProvided() {
+<span class="fc" id="L101">        return timeAttributes.getValueAsProvided();</span>
+    }
+
+    @Override
+    public Temporal getValueExtended() {
+<span class="fc" id="L106">        return timeAttributes.getValueExtended();</span>
+    }
+
+    @Override
+    public Integer getSupportedChronoFields() {
+<span class="fc" id="L111">        return timeAttributes.getSupportedChronoFields();</span>
+    }
+
+    @Override
+    public Long getTimeStamp() {
+<span class="fc" id="L116">        return timeAttributes.getTimeStamp();</span>
+    }
+
+    @Override
+    public boolean isRmDvTime() {
+<span class="fc" id="L121">        return timeAttributes.isRmDvTime();</span>
+    }
+
+    @Override
+    public boolean isTimeHH() {
+<span class="fc" id="L126">        return timeAttributes.isTimeHH();</span>
+    }
+
+    @Override
+    public boolean isTimeHHMM() {
+<span class="fc" id="L131">        return timeAttributes.isTimeHHMM();</span>
+    }
+
+    @Override
+    public boolean isTimeHHMMSS() {
+<span class="fc" id="L136">        return timeAttributes.isTimeHHMMSS();</span>
+    }
+
+    @Override
+    public boolean isTimeHHMMSSmmm() {
+<span class="fc" id="L141">        return timeAttributes.isTimeHHMMSSmmm();</span>
+    }
+
+    @Override
+    public ZoneOffset getZoneOffset() {
+<span class="fc" id="L146">        return zoneOffset;</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.7.202105040129</span></div></body></html>

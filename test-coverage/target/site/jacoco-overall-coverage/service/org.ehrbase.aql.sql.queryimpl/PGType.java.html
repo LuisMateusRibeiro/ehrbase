@@ -1,0 +1,109 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../../jacoco-resources/report.gif" type="image/gif"/><title>PGType.java</title><link rel="stylesheet" href="../../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../../index.html" class="el_report">Overall Coverage</a> &gt; <a href="../index.html" class="el_bundle">service</a> &gt; <a href="index.source.html" class="el_package">org.ehrbase.aql.sql.queryimpl</a> &gt; <span class="el_source">PGType.java</span></div><h1>PGType.java</h1><pre class="source lang-java linenums">/*
+ * Copyright (c) 2019 vitasystems GmbH and Hannover Medical School.
+ *
+ * This file is part of project EHRbase
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     https://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.ehrbase.aql.sql.queryimpl;
+
+import static org.jooq.impl.SQLDataType.*;
+
+import java.util.List;
+import org.apache.commons.lang3.StringUtils;
+import org.ehrbase.jooq.dbencoding.wrappers.json.writer.translator_db2raw.GenericRmType;
+import org.jooq.DataType;
+
+/**
+ * Created by christian on 5/9/2018.
+ */
+public class PGType {
+
+    public static final String MAGNITUDE = &quot;magnitude&quot;;
+    public static final String VALUE = &quot;value&quot;;
+    public static final String VALUE_VALUE = &quot;/value,value&quot;;
+    public static final String COMMA_VALUE = &quot;,value&quot;;
+    public static final String NUMERATOR = &quot;numerator&quot;;
+    public static final String DENOMINATOR = &quot;denominator&quot;;
+    List&lt;String&gt; segmentedPath;
+    private final IQueryImpl.Clause clause;
+
+<span class="fc" id="L41">    public PGType(List&lt;String&gt; segmentedPath, IQueryImpl.Clause clause) {</span>
+<span class="fc" id="L42">        this.segmentedPath = segmentedPath;</span>
+<span class="fc" id="L43">        this.clause = clause;</span>
+<span class="fc" id="L44">    }</span>
+
+    public DataType forRmType(String type) {
+<span class="fc" id="L47">        String attribute = segmentedPath.get(segmentedPath.size() - 1);</span>
+<span class="fc" id="L48">        String actualType = type;</span>
+<span class="fc" id="L49">        DataType pgtype = null;</span>
+
+<span class="pc bpc" id="L51" title="1 of 2 branches missed.">        if (new GenericRmType(type).isSpecialized()) {</span>
+<span class="nc bnc" id="L52" title="All 2 branches missed.">            if (new GenericRmType(type).mainType().equals(&quot;DV_INTERVAL&quot;)</span>
+<span class="nc bnc" id="L53" title="All 2 branches missed.">                    &amp;&amp; (StringUtils.endsWith(attribute, &quot;lower_unbounded&quot;)</span>
+<span class="nc bnc" id="L54" title="All 2 branches missed.">                            || StringUtils.endsWith(attribute, &quot;upper_unbounded&quot;))) pgtype = BOOLEAN;</span>
+<span class="nc" id="L55">            else actualType = new GenericRmType(type).specializedWith();</span>
+        }
+
+<span class="pc bpc" id="L58" title="1 of 2 branches missed.">        if (pgtype == null) {</span>
+<span class="fc" id="L59">            pgtype = resolvePgTypeFromRmType(actualType, attribute);</span>
+        }
+
+        // smart guess(?)
+<span class="pc bpc" id="L63" title="1 of 4 branches missed.">        if (pgtype == null &amp;&amp; attribute.endsWith(MAGNITUDE)) // this may happen when we have a choice...</span>
+<span class="nc" id="L64">        pgtype = NUMERIC;</span>
+
+<span class="fc" id="L66">        return pgtype;</span>
+    }
+
+    DataType resolvePgTypeFromRmType(String type, String attribute) {
+
+<span class="fc" id="L71">        DataType pgtype = null;</span>
+
+<span class="pc bpc" id="L73" title="4 of 7 branches missed.">        switch (type) {</span>
+            case &quot;DV_QUANTITY&quot;:
+<span class="pc bpc" id="L75" title="1 of 2 branches missed.">                if (StringUtils.endsWith(attribute, MAGNITUDE)) pgtype = NUMERIC;</span>
+                break;
+            case &quot;DV_PROPORTION&quot;:
+<span class="nc bnc" id="L78" title="All 4 branches missed.">                if (StringUtils.endsWith(attribute, NUMERATOR) || StringUtils.endsWith(attribute, DENOMINATOR))</span>
+<span class="nc" id="L79">                    pgtype = NUMERIC;</span>
+                break;
+            case &quot;DV_COUNT&quot;:
+<span class="pc bpc" id="L82" title="1 of 2 branches missed.">                if (StringUtils.endsWith(attribute, MAGNITUDE)) pgtype = BIGINT;</span>
+                break;
+            case &quot;DV_ORDINAL&quot;:
+<span class="nc bnc" id="L85" title="All 2 branches missed.">                if (StringUtils.endsWith(attribute, VALUE_VALUE)) pgtype = BIGINT;</span>
+                break;
+            case &quot;DV_BOOLEAN&quot;:
+<span class="nc bnc" id="L88" title="All 2 branches missed.">                if (StringUtils.endsWith(attribute, COMMA_VALUE)) pgtype = BOOLEAN;</span>
+                break;
+            case &quot;DV_DURATION&quot;:
+                // we cast to pg interval only in WHERE clause
+                // interval type is handled by jOOQ with a built-in type and
+                // wrongly formatted when rendering as it looses the ISO_8601 formatting (YearToSecond jOOQ class)
+<span class="nc bnc" id="L94" title="All 2 branches missed.">                if (StringUtils.endsWith(attribute, COMMA_VALUE)) {</span>
+<span class="nc bnc" id="L95" title="All 2 branches missed.">                    if (clause.equals(IQueryImpl.Clause.WHERE)) pgtype = INTERVAL;</span>
+<span class="nc" id="L96">                    else pgtype = VARCHAR;</span>
+                }
+                break;
+            default:
+                break;
+        }
+
+<span class="pc bpc" id="L103" title="1 of 4 branches missed.">        if (pgtype == null &amp;&amp; attribute.endsWith(MAGNITUDE)) // this may happen when we have a choice...</span>
+<span class="nc" id="L104">        pgtype = NUMERIC;</span>
+
+<span class="fc" id="L106">        return pgtype;</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.7.202105040129</span></div></body></html>

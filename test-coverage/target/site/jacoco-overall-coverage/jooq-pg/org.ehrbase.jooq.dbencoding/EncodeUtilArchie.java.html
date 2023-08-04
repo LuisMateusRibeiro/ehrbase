@@ -1,0 +1,85 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../../jacoco-resources/report.gif" type="image/gif"/><title>EncodeUtilArchie.java</title><link rel="stylesheet" href="../../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../../index.html" class="el_report">Overall Coverage</a> &gt; <a href="../index.html" class="el_bundle">jooq-pg</a> &gt; <a href="index.source.html" class="el_package">org.ehrbase.jooq.dbencoding</a> &gt; <span class="el_source">EncodeUtilArchie.java</span></div><h1>EncodeUtilArchie.java</h1><pre class="source lang-java linenums">/*
+ * Copyright (c) 2019 vitasystems GmbH and Hannover Medical School.
+ *
+ * This file is part of project EHRbase
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     https://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.ehrbase.jooq.dbencoding;
+
+import com.google.gson.GsonBuilder;
+import com.google.gson.internal.LinkedTreeMap;
+import com.nedap.archie.rm.datatypes.CodePhrase;
+import com.nedap.archie.rm.datavalues.DvCodedText;
+import com.nedap.archie.rm.datavalues.DvText;
+import com.nedap.archie.rm.datavalues.quantity.datetime.DvDate;
+import com.nedap.archie.rm.datavalues.quantity.datetime.DvDateTime;
+import com.nedap.archie.rm.datavalues.quantity.datetime.DvDuration;
+import com.nedap.archie.rm.datavalues.quantity.datetime.DvTime;
+import com.nedap.archie.rm.generic.Participation;
+import com.nedap.archie.rm.generic.PartyIdentified;
+import com.nedap.archie.rm.support.identification.PartyRef;
+import java.util.ArrayList;
+import org.ehrbase.jooq.dbencoding.wrappers.json.I_DvTypeAdapter.AdapterType;
+import org.ehrbase.jooq.dbencoding.wrappers.json.writer.CodePhraseAdapter;
+import org.ehrbase.jooq.dbencoding.wrappers.json.writer.DvCodedTextAdapter;
+import org.ehrbase.jooq.dbencoding.wrappers.json.writer.DvDateAdapter;
+import org.ehrbase.jooq.dbencoding.wrappers.json.writer.DvDateTimeAdapter;
+import org.ehrbase.jooq.dbencoding.wrappers.json.writer.DvDurationAdapter;
+import org.ehrbase.jooq.dbencoding.wrappers.json.writer.DvTextAdapter;
+import org.ehrbase.jooq.dbencoding.wrappers.json.writer.DvTimeAdapter;
+import org.ehrbase.jooq.dbencoding.wrappers.json.writer.ParticipationAdapter;
+import org.ehrbase.jooq.dbencoding.wrappers.json.writer.PartyIdentifiedAdapter;
+import org.ehrbase.jooq.dbencoding.wrappers.json.writer.PartyRefAdapter;
+import org.ehrbase.jooq.dbencoding.wrappers.json.writer.translator_db2raw.ArrayListAdapter;
+import org.ehrbase.jooq.dbencoding.wrappers.json.writer.translator_db2raw.LinkedTreeMapAdapter;
+
+/** Created by christian on 9/9/2016. */
+public class EncodeUtilArchie {
+
+<span class="nc" id="L50">    private EncodeUtilArchie() {</span>
+<span class="nc" id="L51">        throw new IllegalStateException(&quot;Use static calls instead&quot;);</span>
+    }
+
+    /**
+     * utility to make sure writer adapter are set consistently
+     *
+     * @return GsonBuilder
+     */
+    public static GsonBuilder getGsonBuilderInstance() {
+<span class="fc" id="L60">        return new GsonBuilder()</span>
+<span class="fc" id="L61">                .registerTypeAdapter(DvDateTime.class, new DvDateTimeAdapter())</span>
+<span class="fc" id="L62">                .registerTypeAdapter(DvDate.class, new DvDateAdapter())</span>
+<span class="fc" id="L63">                .registerTypeAdapter(DvTime.class, new DvTimeAdapter())</span>
+<span class="fc" id="L64">                .registerTypeAdapter(DvDuration.class, new DvDurationAdapter())</span>
+<span class="fc" id="L65">                .registerTypeAdapter(DvText.class, new DvTextAdapter())</span>
+<span class="fc" id="L66">                .registerTypeAdapter(DvCodedText.class, new DvCodedTextAdapter())</span>
+<span class="fc" id="L67">                .registerTypeAdapter(CodePhrase.class, new CodePhraseAdapter())</span>
+<span class="fc" id="L68">                .registerTypeAdapter(Participation.class, new ParticipationAdapter())</span>
+<span class="fc" id="L69">                .registerTypeAdapter(PartyIdentified.class, new PartyIdentifiedAdapter())</span>
+<span class="fc" id="L70">                .registerTypeAdapter(PartyRef.class, new PartyRefAdapter());</span>
+    }
+
+    public static GsonBuilder getGsonBuilderInstance(AdapterType dbjson2rawjson) {
+<span class="pc bpc" id="L74" title="1 of 2 branches missed.">        switch (dbjson2rawjson) {</span>
+            case DBJSON2RAWJSON:
+<span class="fc" id="L76">                GsonBuilder builder = new GsonBuilder()</span>
+<span class="fc" id="L77">                        .registerTypeAdapter(LinkedTreeMap.class, new LinkedTreeMapAdapter())</span>
+<span class="fc" id="L78">                        .registerTypeAdapter(ArrayList.class, new ArrayListAdapter());</span>
+<span class="fc" id="L79">                return builder;</span>
+            default:
+<span class="nc" id="L81">                throw new IllegalStateException(&quot;Invalid/unsupported json converter:&quot; + dbjson2rawjson);</span>
+        }
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.7.202105040129</span></div></body></html>

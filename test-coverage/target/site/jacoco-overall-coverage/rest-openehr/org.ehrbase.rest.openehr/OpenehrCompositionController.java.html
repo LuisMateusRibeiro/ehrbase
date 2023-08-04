@@ -1,0 +1,516 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../../jacoco-resources/report.gif" type="image/gif"/><title>OpenehrCompositionController.java</title><link rel="stylesheet" href="../../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../../index.html" class="el_report">Overall Coverage</a> &gt; <a href="../index.html" class="el_bundle">rest-openehr</a> &gt; <a href="index.source.html" class="el_package">org.ehrbase.rest.openehr</a> &gt; <span class="el_source">OpenehrCompositionController.java</span></div><h1>OpenehrCompositionController.java</h1><pre class="source lang-java linenums">/*
+ * Copyright (c) 2019-2022 vitasystems GmbH and Hannover Medical School.
+ *
+ * This file is part of project EHRbase
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     https://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.ehrbase.rest.openehr;
+
+import static org.apache.commons.lang3.StringUtils.unwrap;
+import static org.springframework.web.util.UriComponentsBuilder.fromPath;
+
+import com.nedap.archie.rm.composition.Composition;
+import com.nedap.archie.rm.support.identification.ObjectId;
+import com.nedap.archie.rm.support.identification.ObjectVersionId;
+import java.net.URI;
+import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
+import java.time.ZoneId;
+import java.time.ZonedDateTime;
+import java.util.Arrays;
+import java.util.List;
+import java.util.Objects;
+import java.util.Optional;
+import java.util.UUID;
+import java.util.function.Supplier;
+import org.ehrbase.api.annotations.TenantAware;
+import org.ehrbase.api.audit.msg.AuditMsgBuilder;
+import org.ehrbase.api.authorization.EhrbaseAuthorization;
+import org.ehrbase.api.authorization.EhrbasePermission;
+import org.ehrbase.api.exception.InternalServerException;
+import org.ehrbase.api.exception.ObjectNotFoundException;
+import org.ehrbase.api.exception.PreconditionFailedException;
+import org.ehrbase.api.exception.StateConflictException;
+import org.ehrbase.api.service.CompositionService;
+import org.ehrbase.openehr.sdk.response.dto.CompositionResponseData;
+import org.ehrbase.openehr.sdk.response.dto.ehrscape.CompositionDto;
+import org.ehrbase.openehr.sdk.response.dto.ehrscape.CompositionFormat;
+import org.ehrbase.openehr.sdk.response.dto.ehrscape.StructuredString;
+import org.ehrbase.rest.BaseController;
+import org.ehrbase.rest.openehr.specification.CompositionApiSpecification;
+import org.ehrbase.rest.util.InternalResponse;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PostAuthorize;
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.ResponseStatus;
+import org.springframework.web.bind.annotation.RestController;
+
+/**
+ * Controller for /composition resource as part of the EHR sub-API of the openEHR REST API
+ *
+ * @author Stefan Spiska
+ * @author Jake Smolka
+ * @since 1.0.0
+ */
+@TenantAware
+@RestController
+@RequestMapping(
+        path = BaseController.API_CONTEXT_PATH_WITH_VERSION + &quot;/ehr&quot;,
+        produces = {MediaType.APPLICATION_JSON_VALUE, MediaType.APPLICATION_XML_VALUE})
+public class OpenehrCompositionController extends BaseController implements CompositionApiSpecification {
+
+    private final CompositionService compositionService;
+
+    @Autowired
+<span class="nc" id="L89">    public OpenehrCompositionController(CompositionService compositionService) {</span>
+<span class="nc" id="L90">        this.compositionService = Objects.requireNonNull(compositionService);</span>
+<span class="nc" id="L91">    }</span>
+
+    @EhrbaseAuthorization(permission = EhrbasePermission.EHRBASE_COMPOSITION_CREATE)
+    @PostMapping(
+            value = &quot;/{ehr_id}/composition&quot;,
+            consumes = {&quot;application/xml&quot;, &quot;application/json&quot;})
+    // checkAbacPre /-Post attributes (type, subject, payload, content type)
+    @PreAuthorize(&quot;checkAbacPre(@openehrCompositionController.COMPOSITION, &quot;
+            + &quot;@ehrService.getSubjectExtRef(#ehrIdString), #composition, #contentType)&quot;)
+    @ResponseStatus(value = HttpStatus.CREATED)
+    @Override
+    public ResponseEntity createComposition(
+            @RequestHeader(value = &quot;openEHR-VERSION&quot;, required = false) String openehrVersion,
+            @RequestHeader(value = &quot;openEHR-AUDIT_DETAILS&quot;, required = false) String openehrAuditDetails,
+            @RequestHeader(value = CONTENT_TYPE) String contentType,
+            @RequestHeader(value = ACCEPT, required = false) String accept,
+            @RequestHeader(value = PREFER, required = false) String prefer,
+            @PathVariable(value = &quot;ehr_id&quot;) String ehrIdString,
+            @RequestBody String composition) {
+
+<span class="nc" id="L111">        var ehrId = getEhrUuid(ehrIdString);</span>
+
+<span class="nc" id="L113">        var compositionFormat = extractCompositionFormat(contentType);</span>
+
+<span class="nc" id="L115">        var compoObj = compositionService.buildComposition(composition, compositionFormat, null);</span>
+
+<span class="nc" id="L117">        var compositionUuid = compositionService</span>
+<span class="nc" id="L118">                .create(ehrId, compoObj)</span>
+<span class="nc" id="L119">                .orElseThrow(() -&gt; new InternalServerException(&quot;Failed to create composition&quot;));</span>
+<span class="nc" id="L120">        URI uri = createLocationUri(EHR, ehrId.toString(), COMPOSITION, compositionUuid.toString());</span>
+
+<span class="nc" id="L122">        List&lt;String&gt; headerList = Arrays.asList(</span>
+                LOCATION,
+                ETAG,
+                LAST_MODIFIED); // whatever is required by REST spec - CONTENT_TYPE only needed for 201, so handled
+        // separately
+
+        Optional&lt;InternalResponse&lt;CompositionResponseData&gt;&gt;
+                respData; // variable to overload with more specific object if requested
+
+        Supplier&lt;CompositionResponseData&gt; responseDataSupplier;
+<span class="nc bnc" id="L132" title="All 2 branches missed.">        if (Optional.ofNullable(prefer)</span>
+<span class="nc" id="L133">                .map(i -&gt; i.equals(RETURN_REPRESENTATION))</span>
+<span class="nc" id="L134">                .orElse(false)) { // null safe way to test prefer header</span>
+<span class="nc" id="L135">            responseDataSupplier = () -&gt; new CompositionResponseData(null, null);</span>
+        } else { // &quot;minimal&quot; is default fallback
+<span class="nc" id="L137">            responseDataSupplier = () -&gt; null;</span>
+        }
+<span class="nc" id="L139">        respData =</span>
+<span class="nc" id="L140">                buildCompositionResponseData(ehrId, compositionUuid, 1, accept, uri, headerList, responseDataSupplier);</span>
+
+        // Enriches request attributes with current compositionId for later audit processing
+<span class="nc" id="L143">        createAuditLogsMsgBuilder(ehrId, compositionUuid, 0);</span>
+
+        // returns 201 with body + headers, 204 only with headers or 500 error depending on what processing above yields
+<span class="nc" id="L146">        return respData.map(i -&gt; Optional.ofNullable(i.getResponseData())</span>
+<span class="nc" id="L147">                        .map(StructuredString::getValue)</span>
+<span class="nc" id="L148">                        .map(j -&gt; ResponseEntity.created(uri)</span>
+<span class="nc" id="L149">                                .headers(i.getHeaders())</span>
+<span class="nc" id="L150">                                .body(j))</span>
+                        // when the body is empty
+<span class="nc" id="L152">                        .orElse(ResponseEntity.noContent()</span>
+<span class="nc" id="L153">                                .headers(i.getHeaders())</span>
+<span class="nc" id="L154">                                .build()))</span>
+                // when no response could be created at all
+<span class="nc" id="L156">                .orElse(ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build());</span>
+    }
+
+    @EhrbaseAuthorization(permission = EhrbasePermission.EHRBASE_COMPOSITION_UPDATE)
+    @PutMapping(&quot;/{ehr_id}/composition/{versioned_object_uid}&quot;)
+    // checkAbacPre /-Post attributes (type, subject, payload, content type)
+    @PreAuthorize(&quot;checkAbacPre(@openehrCompositionController.COMPOSITION, &quot;
+            + &quot;@ehrService.getSubjectExtRef(#ehrIdString), #composition, #contentType)&quot;)
+    @Override
+    public ResponseEntity updateComposition(
+            String openehrVersion,
+            @RequestHeader(value = &quot;openEHR-AUDIT_DETAILS&quot;, required = false) String openehrAuditDetails,
+            @RequestHeader(value = CONTENT_TYPE, required = false) String contentType,
+            @RequestHeader(value = ACCEPT, required = false) String accept,
+            @RequestHeader(value = PREFER, required = false) String prefer,
+            @RequestHeader(value = IF_MATCH) String ifMatch,
+            @PathVariable(value = &quot;ehr_id&quot;) String ehrIdString,
+            @PathVariable(value = &quot;versioned_object_uid&quot;) String versionedObjectUidString,
+            @RequestBody String composition) {
+
+<span class="nc" id="L176">        UUID ehrId = getEhrUuid(ehrIdString);</span>
+<span class="nc" id="L177">        UUID versionedObjectUid = getCompositionVersionedObjectUidString(versionedObjectUidString);</span>
+
+<span class="nc" id="L179">        CompositionFormat compositionFormat = extractCompositionFormat(contentType);</span>
+
+        // check if composition ID path variable is valid
+<span class="nc" id="L182">        compositionService.exists(versionedObjectUid);</span>
+
+<span class="nc" id="L184">        ifMatch = unwrap(ifMatch, '&quot;');</span>
+        // If the If-Match is not the latest existing version, throw error
+<span class="nc" id="L186">        if (!((versionedObjectUid + &quot;::&quot; + compositionService.getServerConfig().getNodename() + &quot;::&quot;</span>
+<span class="nc" id="L187">                        + compositionService.getLastVersionNumber(</span>
+<span class="nc" id="L188">                                extractVersionedObjectUidFromVersionUid(versionedObjectUid.toString())))</span>
+<span class="nc bnc" id="L189" title="All 2 branches missed.">                .equals(ifMatch))) {</span>
+<span class="nc" id="L190">            throw new PreconditionFailedException(&quot;If-Match header does not match latest existing version&quot;);</span>
+        }
+
+<span class="nc" id="L193">        Composition compoObj = compositionService.buildComposition(composition, compositionFormat, null);</span>
+        // If body already contains a composition uid it must match the {versioned_object_uid} in request url
+<span class="nc" id="L195">        Optional&lt;String&gt; inputUuid = getUidFrom(compoObj);</span>
+<span class="nc" id="L196">        inputUuid.ifPresent(id -&gt; {</span>
+            // TODO currently the this part of the spec is implemented as &quot;the request body's composition version_uid
+            // must be compatible to the given versioned_object_uid&quot;
+            // TODO it is further unclear what exactly the REST spec's &quot;match&quot; means, see:
+            // https://github.com/openEHR/specifications-ITS-REST/issues/83
+<span class="nc bnc" id="L201" title="All 2 branches missed.">            if (!versionedObjectUid.equals(extractVersionedObjectUidFromVersionUid(id)))</span>
+<span class="nc" id="L202">                throw new PreconditionFailedException(</span>
+                        &quot;UUID from input must match given versioned_object_uid in request URL&quot;);
+<span class="nc" id="L204">        });</span>
+
+        Optional&lt;InternalResponse&lt;CompositionResponseData&gt;&gt; respData =
+<span class="nc" id="L207">                Optional.empty(); // variable to overload with more specific object if requested</span>
+        try {
+            // ifMatch header has to be tested for correctness already above
+<span class="nc" id="L210">            var compositionVersionUid = compositionService</span>
+<span class="nc" id="L211">                    .update(ehrId, new ObjectVersionId(ifMatch), compoObj)</span>
+<span class="nc" id="L212">                    .orElseThrow(() -&gt; new InternalServerException(&quot;Failed to create composition&quot;))</span>
+<span class="nc" id="L213">                    .toString();</span>
+
+<span class="nc" id="L215">            URI uri = createLocationUri(EHR, ehrId.toString(), COMPOSITION, compositionVersionUid);</span>
+
+            // whatever is required by REST spec - CONTENT_TYPE only needed for 200, so handled separately
+<span class="nc" id="L218">            List&lt;String&gt; headerList = Arrays.asList(LOCATION, ETAG, LAST_MODIFIED);</span>
+
+<span class="nc" id="L220">            UUID compositionId = extractVersionedObjectUidFromVersionUid(compositionVersionUid);</span>
+
+<span class="nc" id="L222">            int version = extractVersionFromVersionUid(compositionVersionUid);</span>
+<span class="nc bnc" id="L223" title="All 2 branches missed.">            if (RETURN_REPRESENTATION.equals(prefer)) {</span>
+                // both options extract needed info from versionUid
+<span class="nc" id="L225">                respData = buildCompositionResponseData(</span>
+                        ehrId,
+                        compositionId,
+                        version,
+                        accept,
+                        uri,
+                        headerList,
+<span class="nc" id="L232">                        () -&gt; new CompositionResponseData(null, null));</span>
+            } else {
+                // &quot;minimal&quot; is default fallback
+<span class="nc" id="L235">                respData = buildCompositionResponseData(</span>
+<span class="nc" id="L236">                        ehrId, compositionId, version, accept, uri, headerList, () -&gt; null);</span>
+            }
+
+<span class="nc" id="L239">            createAuditLogsMsgBuilder(ehrId, compositionId, version);</span>
+
+<span class="nc" id="L241">        } catch (ObjectNotFoundException e) { // composition not found</span>
+<span class="nc" id="L242">            return ResponseEntity.notFound().build();</span>
+<span class="nc" id="L243">        } // composition input not parsable / buildable -&gt; bad request handled by BaseController class</span>
+
+        // returns 200 with body + headers, 204 only with headers or 500 error depending on what processing above yields
+<span class="nc" id="L246">        return respData.map(i -&gt; Optional.ofNullable(i.getResponseData())</span>
+<span class="nc" id="L247">                        .map(StructuredString::getValue)</span>
+<span class="nc" id="L248">                        .map(j -&gt; ResponseEntity.ok().headers(i.getHeaders()).body(j))</span>
+<span class="nc" id="L249">                        .orElse(ResponseEntity.noContent()</span>
+<span class="nc" id="L250">                                .headers(i.getHeaders())</span>
+<span class="nc" id="L251">                                .build()))</span>
+<span class="nc" id="L252">                .orElse(ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build());</span>
+    }
+
+    @EhrbaseAuthorization(permission = EhrbasePermission.EHRBASE_COMPOSITION_DELETE)
+    @DeleteMapping(&quot;/{ehr_id}/composition/{preceding_version_uid}&quot;)
+    // checkAbacPre /-Post attributes (type, subject, payload, content type)
+    @PreAuthorize(&quot;checkAbacPre(@openehrCompositionController.COMPOSITION, &quot;
+            + &quot;@ehrService.getSubjectExtRef(#ehrIdString), #precedingVersionUid, null)&quot;)
+    @ResponseStatus(value = HttpStatus.NO_CONTENT)
+    @Override
+    public ResponseEntity deleteComposition(
+            @RequestHeader(value = &quot;openEHR-VERSION&quot;, required = false) String openehrVersion,
+            @RequestHeader(value = &quot;openEHR-AUDIT_DETAILS&quot;, required = false) String openehrAuditDetails,
+            @PathVariable(value = &quot;ehr_id&quot;) String ehrIdString,
+            @PathVariable(value = &quot;preceding_version_uid&quot;) String precedingVersionUid) {
+<span class="nc" id="L267">        UUID ehrId = getEhrUuid(ehrIdString);</span>
+
+<span class="nc" id="L269">        HttpHeaders headers = new HttpHeaders();</span>
+
+<span class="nc" id="L271">        UUID uidFromVersionUid = extractVersionedObjectUidFromVersionUid(precedingVersionUid);</span>
+        // check if this composition in given preceding version is available
+<span class="nc" id="L273">        compositionService</span>
+<span class="nc" id="L274">                .retrieve(ehrId, uidFromVersionUid, 1)</span>
+<span class="nc" id="L275">                .orElseThrow(</span>
+<span class="nc" id="L276">                        () -&gt; new ObjectNotFoundException(</span>
+                                &quot;composition&quot;,
+                                &quot;No EHR with the supplied ehr_id or no COMPOSITION with the supplied preceding_version_uid.&quot;)); // TODO check for ehr + composition match as well - wow to to that? should be part of deletion, according to openEHR platform spec --&gt; postponed, see EHR-265
+
+        // TODO check if already deleted - how is that saved / retrievable? --&gt; postponed, see EHR-264
+        /*if () {
+            throw new GeneralRequestProcessingException(&quot;The composition with preceding_version_uid is already deleted.&quot;);  // exception is wired to 400 BAD_REQUEST
+        }*/
+
+        // prepare header data
+<span class="nc" id="L286">        Integer lastVersionNumber = compositionService.getLastVersionNumber(uidFromVersionUid);</span>
+<span class="nc" id="L287">        String latestVersionId = uidFromVersionUid + &quot;::&quot;</span>
+<span class="nc" id="L288">                + compositionService.getServerConfig().getNodename() + &quot;::&quot;</span>
+                + lastVersionNumber;
+        // TODO change to dynamic linking --&gt; postponed, see EHR-230
+<span class="nc" id="L291">        URI uri = createLocationUri(EHR, ehrId.toString(), COMPOSITION, latestVersionId);</span>
+
+        // If precedingVersionUid parameter doesn't match latest version
+<span class="nc bnc" id="L294" title="All 2 branches missed.">        if (!lastVersionNumber.equals(extractVersionFromVersionUid(precedingVersionUid))) {</span>
+            // 409 is returned when supplied preceding_version_uid doesn’t match the latest version. Returns latest
+            // version in the Location and ETag headers.
+<span class="nc" id="L297">            headers.setLocation(uri);</span>
+<span class="nc" id="L298">            headers.setETag(&quot;\&quot;&quot; + latestVersionId + &quot;\&quot;&quot;);</span>
+
+<span class="nc" id="L300">            return ResponseEntity.status(HttpStatus.CONFLICT).headers(headers).build();</span>
+        }
+
+        try { // the actual deleting
+            // precedingVersionUid needs to be checked already
+<span class="nc" id="L305">            compositionService.delete(ehrId, new ObjectVersionId(precedingVersionUid));</span>
+
+<span class="nc" id="L307">            headers.setLocation(uri);</span>
+<span class="nc" id="L308">            headers.setETag(&quot;\&quot;&quot; + latestVersionId + &quot;\&quot;&quot;);</span>
+<span class="nc" id="L309">            headers.setLastModified(ZonedDateTime.of(LocalDateTime.now(), ZoneId.systemDefault())</span>
+<span class="nc" id="L310">                    .toInstant()</span>
+<span class="nc" id="L311">                    .toEpochMilli());</span>
+
+<span class="nc" id="L313">            createAuditLogsMsgBuilder(ehrId, uidFromVersionUid, lastVersionNumber);</span>
+
+<span class="nc" id="L315">            return ResponseEntity.noContent().headers(headers).build();</span>
+<span class="nc" id="L316">        } catch (ObjectNotFoundException e) {</span>
+            // if composition not available at all --&gt; 404
+<span class="nc" id="L318">            throw new ObjectNotFoundException(</span>
+                    COMPOSITION,
+                    &quot;No EHR with the supplied ehr_id or no COMPOSITION with the supplied &quot; + &quot;preceding_version_uid.&quot;);
+<span class="nc" id="L321">        } catch (StateConflictException e) {</span>
+<span class="nc" id="L322">            throw e;</span>
+<span class="nc" id="L323">        } catch (Exception e) {</span>
+<span class="nc" id="L324">            throw new InternalServerException(&quot;Deleting of composition failed&quot;, e);</span>
+        }
+    }
+
+    /**
+     * This mapping combines both GETs &quot;/{ehr_id}/composition/{version_uid}&quot; (via overlapping path)
+     * and &quot;/{ehr_id}/composition/{versioned_object_uid}{?version_at_time}&quot; (here). This is necessary
+     * because of the overlapping paths. Both mappings are specified to behave almost the same, so
+     * this solution works in this case.
+     */
+    @EhrbaseAuthorization(permission = EhrbasePermission.EHRBASE_COMPOSITION_READ)
+    @GetMapping(&quot;/{ehr_id}/composition/{versioned_object_uid}&quot;)
+    // checkAbacPre /-Post attributes (type, subject, payload, content type)
+    @PostAuthorize(&quot;checkAbacPost(@openehrCompositionController.COMPOSITION, &quot;
+            + &quot;@ehrService.getSubjectExtRef(#ehrIdString), returnObject, #accept)&quot;)
+    @Override
+    public ResponseEntity getComposition(
+            @RequestHeader(value = ACCEPT, required = false) String accept,
+            @PathVariable(value = &quot;ehr_id&quot;) String ehrIdString,
+            @PathVariable(value = &quot;versioned_object_uid&quot;) String versionedObjectUid,
+            @RequestParam(value = &quot;version_at_time&quot;, required = false) String versionAtTime) {
+<span class="nc" id="L345">        UUID ehrId = getEhrUuid(ehrIdString);</span>
+
+        // Note: Since this method can be called by another mapping as &quot;almost overloaded&quot; function some parameters
+        // might be semantically named wrong in that case. E.g. versionedObjectUid can contain a versionUid.
+        // Note: versionUid should be of format &quot;uuid::domain::version&quot;, versionObjectUid of format &quot;uuid&quot;
+<span class="nc" id="L350">        UUID compositionUid = extractVersionedObjectUidFromVersionUid(</span>
+                versionedObjectUid); // extracts UUID from long or short notation
+
+<span class="nc bnc" id="L353" title="All 2 branches missed.">        if (compositionService.isDeleted(compositionUid)) {</span>
+<span class="nc" id="L354">            return new ResponseEntity&lt;&gt;(HttpStatus.NO_CONTENT);</span>
+        }
+
+<span class="nc" id="L357">        int version = extractVersionFromVersionUid(versionedObjectUid);</span>
+<span class="nc bnc" id="L358" title="All 2 branches missed.">        if (version == 0) {</span>
+            // case GET {versioned_object_uid}{?version_at_time}
+<span class="nc" id="L360">            Optional&lt;OffsetDateTime&gt; temporal = decodeVersionAtTime(versionAtTime);</span>
+<span class="nc bnc" id="L361" title="All 2 branches missed.">            if (temporal.isPresent()) {</span>
+                // when optional request parameter was provided, retrieve version according to given time
+<span class="nc" id="L363">                version = temporal.map(OffsetDateTime::toLocalDateTime)</span>
+<span class="nc" id="L364">                        .map(t -&gt; compositionService.getVersionByTimestamp(compositionUid, t))</span>
+<span class="nc" id="L365">                        .orElseThrow(() -&gt; new ObjectNotFoundException(</span>
+                                COMPOSITION, &quot;No composition version matching the timestamp condition&quot;));
+            } // else continue with fallback: latest version
+        }
+
+<span class="nc" id="L370">        URI uri = createLocationUri(EHR, ehrId.toString(), COMPOSITION, versionedObjectUid);</span>
+
+<span class="nc" id="L372">        List&lt;String&gt; headerList = Arrays.asList(</span>
+                LOCATION,
+                ETAG,
+                LAST_MODIFIED); // whatever is required by REST spec - CONTENT_TYPE only needed for 200, so handled
+        // separately
+
+<span class="nc" id="L378">        Optional&lt;InternalResponse&lt;CompositionResponseData&gt;&gt; respData = buildCompositionResponseData(</span>
+<span class="nc" id="L379">                ehrId, compositionUid, version, accept, uri, headerList, () -&gt; new CompositionResponseData(null, null));</span>
+
+<span class="nc" id="L381">        createAuditLogsMsgBuilder(ehrId, compositionUid, version).setVersion(version);</span>
+
+        // returns 200 with body + headers, 204 only with headers or 500 error depending on what processing above yields
+<span class="nc" id="L384">        return respData.map(i -&gt; Optional.ofNullable(i.getResponseData().getValue())</span>
+<span class="nc" id="L385">                        .map(j -&gt; ResponseEntity.ok().headers(i.getHeaders()).body(j))</span>
+                        // when the body is empty
+<span class="nc" id="L387">                        .orElse(ResponseEntity.noContent()</span>
+<span class="nc" id="L388">                                .headers(i.getHeaders())</span>
+<span class="nc" id="L389">                                .build()))</span>
+                // when no response could be created at all
+<span class="nc" id="L391">                .orElse(ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build());</span>
+    }
+
+    private AuditMsgBuilder createAuditLogsMsgBuilder(UUID ehrId, UUID compositionUid, int version) {
+<span class="nc" id="L395">        return AuditMsgBuilder.getInstance()</span>
+<span class="nc" id="L396">                .setEhrIds(ehrId)</span>
+<span class="nc" id="L397">                .setCompositionId(compositionUid.toString())</span>
+<span class="nc" id="L398">                .setTemplateId(compositionService.retrieveTemplateId(compositionUid))</span>
+<span class="nc" id="L399">                .setLocation(getLocationUrl(compositionUid, ehrId, version));</span>
+    }
+
+    private String getLocationUrl(UUID versionedObjectUid, UUID ehrId, int version) {
+<span class="nc bnc" id="L403" title="All 2 branches missed.">        if (version == 0) {</span>
+<span class="nc" id="L404">            version = compositionService.getLastVersionNumber(versionedObjectUid);</span>
+        }
+
+<span class="nc" id="L407">        return fromPath(&quot;{ehrSegment}/{ehrId}/{compositionSegment}/{compositionId}::{nodeName}::{version}&quot;)</span>
+<span class="nc" id="L408">                .build(</span>
+                        EHR,
+<span class="nc" id="L410">                        ehrId.toString(),</span>
+                        COMPOSITION,
+                        versionedObjectUid,
+<span class="nc" id="L413">                        compositionService.getServerConfig().getNodename(),</span>
+<span class="nc" id="L414">                        version)</span>
+<span class="nc" id="L415">                .toString();</span>
+    }
+
+    /**
+     * Builder method to prepare appropriate HTTP response. Flexible to either allow minimal or full
+     * representation of resource.
+     *
+     * @param &lt;T&gt;           Type of the response body
+     * @param ehrId
+     * @param compositionId ID of the composition
+     * @param version       0 if latest, otherwise integer of specific version.
+     * @param accept        Format the response should be delivered in, as given by request
+     * @param uri           Location of resource
+     * @param headerList    List of headers to be set for response
+     * @param factory       Lambda function to constructor of desired object
+     * @return
+     */
+    private &lt;T extends CompositionResponseData&gt; Optional&lt;InternalResponse&lt;T&gt;&gt; buildCompositionResponseData(
+            UUID ehrId,
+            UUID compositionId,
+            int version,
+            String accept,
+            URI uri,
+            List&lt;String&gt; headerList,
+            Supplier&lt;T&gt; factory) {
+        // create either CompositionResponseData or null (means no body, only headers incl. link to resource), via
+        // lambda request
+<span class="nc" id="L442">        T minimalOrRepresentation = factory.get();</span>
+
+        final int versionNumber;
+<span class="nc bnc" id="L445" title="All 2 branches missed.">        if (version &lt;= 0) {</span>
+<span class="nc" id="L446">            versionNumber = compositionService.getLastVersionNumber(compositionId);</span>
+        } else {
+<span class="nc" id="L448">            versionNumber = version;</span>
+        }
+
+        // do minimal scope steps
+        // create and supplement headers with data depending on which headers are requested
+<span class="nc" id="L453">        HttpHeaders respHeaders = new HttpHeaders();</span>
+<span class="nc bnc" id="L454" title="All 2 branches missed.">        for (String header : headerList) {</span>
+<span class="nc bnc" id="L455" title="All 4 branches missed.">            switch (header) {</span>
+                case LOCATION:
+<span class="nc" id="L457">                    respHeaders.setLocation(uri);</span>
+<span class="nc" id="L458">                    break;</span>
+                case ETAG:
+<span class="nc" id="L460">                    respHeaders.setETag(&quot;\&quot;&quot; + compositionId + &quot;::&quot;</span>
+<span class="nc" id="L461">                            + compositionService.getServerConfig().getNodename() + &quot;::&quot;</span>
+                            + versionNumber + &quot;\&quot;&quot;);
+<span class="nc" id="L463">                    break;</span>
+                case LAST_MODIFIED:
+                    // TODO should be VERSION.commit_audit.time_committed.value which is not implemented yet - mock for
+                    // now
+<span class="nc" id="L467">                    respHeaders.setLastModified(123124442);</span>
+<span class="nc" id="L468">                    break;</span>
+                default:
+                    // Ignore header
+            }
+<span class="nc" id="L472">        }</span>
+
+        // if response data objects was created as &quot;representation&quot; do all task from wider scope, too
+        // if (minimalOrRepresentation.getClass().equals(CompositionResponseData.class)) {     // TODO make
+        // Optional.ofNull....
+<span class="nc bnc" id="L477" title="All 2 branches missed.">        if (minimalOrRepresentation != null) {</span>
+            // when this &quot;if&quot; is true the following casting can be executed and data manipulated by reference (handled
+            // by temporary variable)
+<span class="nc" id="L480">            CompositionResponseData objByReference = (CompositionResponseData) minimalOrRepresentation;</span>
+
+<span class="nc" id="L482">            CompositionFormat format = extractCompositionFormat(accept);</span>
+
+<span class="nc" id="L484">            Optional&lt;CompositionDto&gt; compositionDto = compositionService</span>
+<span class="nc" id="L485">                    .retrieve(ehrId, compositionId, versionNumber)</span>
+<span class="nc" id="L486">                    .map(c -&gt; CompositionService.from(ehrId, c));</span>
+            // TODO how to handle error situation here only with Optional? is there a better way without java 9
+            // Optional.ifPresentOrElse()?
+<span class="nc bnc" id="L489" title="All 2 branches missed.">            if (compositionDto.isPresent()) {</span>
+<span class="nc" id="L490">                StructuredString ss = compositionService.serialize(compositionDto.get(), format);</span>
+<span class="nc" id="L491">                objByReference.setValue(ss.getValue());</span>
+<span class="nc" id="L492">                objByReference.setFormat(ss.getFormat());</span>
+                // objByReference.setComposition(compositionService.serialize(compositionDto.get(), format));
+<span class="nc" id="L494">            } else {</span>
+                // TODO undo creation of composition, if applicable
+<span class="nc" id="L496">                throw new ObjectNotFoundException(COMPOSITION, &quot;Couldn't retrieve composition&quot;);</span>
+            }
+
+            // finally set last header
+<span class="nc bnc" id="L500" title="All 2 branches missed.">            if (format.equals(CompositionFormat.XML)) {</span>
+<span class="nc" id="L501">                respHeaders.setContentType(MediaType.APPLICATION_XML);</span>
+<span class="nc bnc" id="L502" title="All 2 branches missed.">            } else if (format.equals(CompositionFormat.FLAT)</span>
+<span class="nc bnc" id="L503" title="All 2 branches missed.">                    || format.equals(CompositionFormat.ECISFLAT)</span>
+<span class="nc bnc" id="L504" title="All 2 branches missed.">                    || format.equals(CompositionFormat.RAW)) {</span>
+<span class="nc" id="L505">                respHeaders.setContentType(MediaType.APPLICATION_JSON);</span>
+            }
+        } // else continue with returning but without additional data from above, e.g. body
+
+<span class="nc" id="L509">        return Optional.of(new InternalResponse&lt;&gt;(minimalOrRepresentation, respHeaders));</span>
+    }
+
+    private Optional&lt;String&gt; getUidFrom(Composition composition) {
+<span class="nc" id="L513">        return Optional.ofNullable(composition.getUid()).map(ObjectId::toString);</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.7.202105040129</span></div></body></html>

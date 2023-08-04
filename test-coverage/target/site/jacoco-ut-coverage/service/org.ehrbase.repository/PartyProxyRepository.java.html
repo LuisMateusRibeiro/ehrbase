@@ -1,0 +1,382 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../../jacoco-resources/report.gif" type="image/gif"/><title>PartyProxyRepository.java</title><link rel="stylesheet" href="../../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../../index.html" class="el_report">Coverage with Unit Tests</a> &gt; <a href="../index.html" class="el_bundle">service</a> &gt; <a href="index.source.html" class="el_package">org.ehrbase.repository</a> &gt; <span class="el_source">PartyProxyRepository.java</span></div><h1>PartyProxyRepository.java</h1><pre class="source lang-java linenums">/*
+ * Copyright (c) 2023 vitasystems GmbH and Hannover Medical School.
+ *
+ * This file is part of project EHRbase
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     https://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.ehrbase.repository;
+
+import static org.ehrbase.jooq.pg.Tables.IDENTIFIER;
+import static org.ehrbase.jooq.pg.Tables.PARTY_IDENTIFIED;
+import static org.ehrbase.jooq.pg.Tables.USERS;
+
+import com.nedap.archie.rm.datavalues.DvCodedText;
+import com.nedap.archie.rm.datavalues.DvIdentifier;
+import com.nedap.archie.rm.generic.PartyIdentified;
+import com.nedap.archie.rm.generic.PartyProxy;
+import com.nedap.archie.rm.generic.PartyRelated;
+import com.nedap.archie.rm.generic.PartySelf;
+import com.nedap.archie.rm.support.identification.GenericId;
+import com.nedap.archie.rm.support.identification.HierObjectId;
+import com.nedap.archie.rm.support.identification.ObjectId;
+import com.nedap.archie.rm.support.identification.ObjectVersionId;
+import com.nedap.archie.rm.support.identification.PartyRef;
+import java.util.Collections;
+import java.util.List;
+import java.util.Objects;
+import java.util.Optional;
+import java.util.UUID;
+import java.util.function.Function;
+import org.ehrbase.api.exception.InternalServerException;
+import org.ehrbase.api.service.TenantService;
+import org.ehrbase.dao.access.jooq.party.PartyRefValue;
+import org.ehrbase.dao.access.jooq.party.PersistedPartyIdentified;
+import org.ehrbase.jooq.pg.enums.PartyType;
+import org.ehrbase.jooq.pg.tables.records.IdentifierRecord;
+import org.ehrbase.jooq.pg.tables.records.PartyIdentifiedRecord;
+import org.ehrbase.jooq.pg.tables.records.UsersRecord;
+import org.ehrbase.jooq.pg.udt.records.DvCodedTextRecord;
+import org.ehrbase.service.BaseServiceImp;
+import org.ehrbase.service.PersistentCodePhrase;
+import org.ehrbase.service.PersistentTermMapping;
+import org.ehrbase.util.UuidGenerator;
+import org.jooq.DSLContext;
+import org.jooq.impl.DSL;
+import org.springframework.stereotype.Repository;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
+
+/**
+ * Handles DB-Access to {@link org.ehrbase.jooq.pg.tables.PartyIdentified} and {@link org.ehrbase.jooq.pg.tables.Identifier}
+ * @author Stefan Spiska
+ */
+@Repository
+public class PartyProxyRepository {
+
+    private final DSLContext context;
+
+    private final TenantService tenantService;
+
+<span class="nc" id="L71">    public PartyProxyRepository(DSLContext context, TenantService tenantService) {</span>
+<span class="nc" id="L72">        this.context = context;</span>
+<span class="nc" id="L73">        this.tenantService = tenantService;</span>
+<span class="nc" id="L74">    }</span>
+
+    /**
+     * Find the party id of a ehrbase user corresponding to &lt;code&gt;username&lt;/code&gt;
+     * @param username
+     * @return
+     */
+    public Optional&lt;UUID&gt; findInternalUserId(String username) {
+
+<span class="nc" id="L83">        return context.select(USERS.PARTY_ID)</span>
+<span class="nc" id="L84">                .from(USERS)</span>
+<span class="nc" id="L85">                .where(USERS.USERNAME.eq(username))</span>
+<span class="nc" id="L86">                .fetchOptional(USERS.PARTY_ID);</span>
+    }
+
+    /**
+     * Create a {@link PartyIdentified} for a ehrbase user corresponding to &lt;code&gt;username&lt;/code&gt;
+     * @param username
+     * @return
+     */
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public UUID createInternalUser(String username) {
+
+<span class="nc" id="L97">        DvIdentifier identifier = new DvIdentifier();</span>
+
+<span class="nc" id="L99">        identifier.setId(username);</span>
+<span class="nc" id="L100">        identifier.setIssuer(PersistedPartyIdentified.EHRBASE);</span>
+<span class="nc" id="L101">        identifier.setAssigner(PersistedPartyIdentified.EHRBASE);</span>
+<span class="nc" id="L102">        identifier.setType(PersistedPartyIdentified.SECURITY_USER_TYPE);</span>
+
+<span class="nc" id="L104">        PartyRef externalRef = new PartyRef(</span>
+<span class="nc" id="L105">                new GenericId(UuidGenerator.randomUUID().toString(), BaseServiceImp.DEMOGRAPHIC),</span>
+<span class="nc" id="L106">                &quot;User&quot;,</span>
+<span class="nc" id="L107">                BaseServiceImp.PARTY);</span>
+<span class="nc" id="L108">        PartyIdentified partyIdentified =</span>
+<span class="nc" id="L109">                new PartyIdentified(externalRef, &quot;EHRbase Internal &quot; + username, List.of(identifier));</span>
+
+<span class="nc" id="L111">        UUID uuid = create(partyIdentified);</span>
+
+<span class="nc" id="L113">        UsersRecord usersRecord = context.newRecord(USERS);</span>
+
+<span class="nc" id="L115">        usersRecord.setPartyId(uuid);</span>
+<span class="nc" id="L116">        usersRecord.setUsername(username);</span>
+<span class="nc" id="L117">        usersRecord.setSysTenant(tenantService.getCurrentSysTenant());</span>
+<span class="nc" id="L118">        usersRecord.store();</span>
+
+<span class="nc" id="L120">        return uuid;</span>
+    }
+
+    /**
+     * Creates a new {@link PartyProxy} in the DB.
+     * @param partyProxy
+     * @return
+     */
+    @Transactional
+    public UUID create(PartyProxy partyProxy) {
+
+<span class="nc" id="L131">        PartyRefValue partyRefValue = new PartyRefValue(partyProxy).attributes();</span>
+
+<span class="nc" id="L133">        PartyIdentifiedRecord partyIdentifiedRecord = context.newRecord(PARTY_IDENTIFIED);</span>
+
+<span class="nc" id="L135">        partyIdentifiedRecord.setId(UuidGenerator.randomUUID());</span>
+
+<span class="nc" id="L137">        partyIdentifiedRecord.setPartyRefNamespace(partyRefValue.getNamespace());</span>
+<span class="nc" id="L138">        partyIdentifiedRecord.setPartyRefValue(partyRefValue.getValue());</span>
+<span class="nc" id="L139">        partyIdentifiedRecord.setPartyRefScheme(partyRefValue.getScheme());</span>
+<span class="nc" id="L140">        partyIdentifiedRecord.setPartyRefType(partyRefValue.getType());</span>
+<span class="nc" id="L141">        partyIdentifiedRecord.setObjectIdType(partyRefValue.getObjectIdType());</span>
+<span class="nc" id="L142">        partyIdentifiedRecord.setSysTenant(tenantService.getCurrentSysTenant());</span>
+
+<span class="nc" id="L144">        List&lt;DvIdentifier&gt; identifierList = Collections.emptyList();</span>
+
+<span class="nc bnc" id="L146" title="All 2 branches missed.">        if (partyProxy instanceof PartyIdentified partyIdentified) {</span>
+
+<span class="nc" id="L148">            identifierList = partyIdentified.getIdentifiers();</span>
+
+<span class="nc" id="L150">            partyIdentifiedRecord.setPartyType(PartyType.party_identified);</span>
+<span class="nc" id="L151">            partyIdentifiedRecord.setName(partyIdentified.getName());</span>
+
+<span class="nc bnc" id="L153" title="All 2 branches missed.">            if (partyIdentified instanceof PartyRelated partyRelated) {</span>
+                // Overwrite Type
+<span class="nc" id="L155">                partyIdentifiedRecord.setPartyType(PartyType.party_related);</span>
+<span class="nc" id="L156">                partyIdentifiedRecord.setRelationship(relationshipAsRecord(partyRelated));</span>
+            }
+
+<span class="nc" id="L159">        } else {</span>
+<span class="nc" id="L160">            partyIdentifiedRecord.setPartyType(PartyType.party_self);</span>
+        }
+
+<span class="nc" id="L163">        partyIdentifiedRecord.store();</span>
+
+<span class="nc" id="L165">        RepositoryHelper.executeBulkInsert(</span>
+<span class="nc" id="L166">                context,</span>
+<span class="nc" id="L167">                identifierList.stream()</span>
+<span class="nc" id="L168">                        .map(i -&gt; to(partyIdentifiedRecord.getId(), i))</span>
+<span class="nc" id="L169">                        .toList(),</span>
+<span class="nc" id="L170">                IDENTIFIER);</span>
+
+<span class="nc" id="L172">        return partyIdentifiedRecord.getId();</span>
+    }
+
+    /**
+     * Find the uuid a {@link PartyProxy} in the DB wich matches the given &lt;code&gt;partyProxy&lt;/code&gt;
+     * @param partyProxy
+     * @return
+     */
+    public Optional&lt;UUID&gt; findMatching(PartyProxy partyProxy) {
+
+<span class="nc bnc" id="L182" title="All 2 branches missed.">        if (partyProxy instanceof PartySelf partySelf) {</span>
+<span class="nc" id="L183">            return findInDBSelf(partySelf);</span>
+<span class="nc bnc" id="L184" title="All 2 branches missed.">        } else if (partyProxy instanceof PartyRelated partyRelated) {</span>
+<span class="nc" id="L185">            return findInDBPartyRelated(partyRelated);</span>
+<span class="nc bnc" id="L186" title="All 2 branches missed.">        } else if (partyProxy instanceof PartyIdentified partyIdentified) {</span>
+<span class="nc" id="L187">            return findInDBIdentified(partyIdentified);</span>
+        } else {
+<span class="nc" id="L189">            throw new UnsupportedOperationException();</span>
+        }
+    }
+
+    private DvCodedTextRecord relationshipAsRecord(PartyProxy partyProxy) {
+
+<span class="nc" id="L195">        DvCodedText relationship = ((PartyRelated) partyProxy).getRelationship();</span>
+
+<span class="nc" id="L197">        return new DvCodedTextRecord(</span>
+<span class="nc" id="L198">                relationship.getValue(),</span>
+<span class="nc" id="L199">                new PersistentCodePhrase(relationship.getDefiningCode()).encode(),</span>
+<span class="nc" id="L200">                relationship.getFormatting(),</span>
+<span class="nc" id="L201">                new PersistentCodePhrase(relationship.getLanguage()).encode(),</span>
+<span class="nc" id="L202">                new PersistentCodePhrase(relationship.getEncoding()).encode(),</span>
+<span class="nc" id="L203">                new PersistentTermMapping().termMappingRepresentation(relationship.getMappings()));</span>
+    }
+
+    private IdentifierRecord to(UUID partyId, DvIdentifier identifier) {
+
+<span class="nc bnc" id="L208" title="All 2 branches missed.">        if (identifier.getId() == null) {</span>
+
+<span class="nc" id="L210">            throw new IllegalArgumentException(&quot;DV_IDENTIFIER with null ID&quot;);</span>
+        }
+
+<span class="nc" id="L213">        IdentifierRecord identifierRecord = context.newRecord(IDENTIFIER);</span>
+
+<span class="nc" id="L215">        identifierRecord.setParty(partyId);</span>
+<span class="nc" id="L216">        identifierRecord.setIdValue(identifier.getId());</span>
+<span class="nc" id="L217">        identifierRecord.setIssuer(identifier.getIssuer());</span>
+<span class="nc" id="L218">        identifierRecord.setAssigner(identifier.getAssigner());</span>
+<span class="nc" id="L219">        identifierRecord.setTypeName(identifier.getType());</span>
+<span class="nc" id="L220">        identifierRecord.setSysTenant(tenantService.getCurrentSysTenant());</span>
+
+<span class="nc" id="L222">        return identifierRecord;</span>
+    }
+
+    private Optional&lt;UUID&gt; findInDBSelf(PartySelf partyProxy) {
+<span class="nc" id="L226">        Optional&lt;UUID&gt; partySelfUUID = findInDB(partyProxy.getExternalRef());</span>
+
+<span class="nc bnc" id="L228" title="All 4 branches missed.">        if (partySelfUUID.isEmpty() &amp;&amp; partyProxy.getExternalRef() == null) { // find the generic PARTY_SELF in DB</span>
+<span class="nc" id="L229">            PartyIdentifiedRecord partyIdentifiedRecord = context.fetchAny(</span>
+<span class="nc" id="L230">                    PARTY_IDENTIFIED,</span>
+<span class="nc" id="L231">                    PARTY_IDENTIFIED</span>
+<span class="nc" id="L232">                            .PARTY_REF_VALUE</span>
+<span class="nc" id="L233">                            .isNull()</span>
+<span class="nc" id="L234">                            .and(PARTY_IDENTIFIED.PARTY_REF_NAMESPACE.isNull())</span>
+<span class="nc" id="L235">                            .and(PARTY_IDENTIFIED.PARTY_REF_SCHEME.isNull())</span>
+<span class="nc" id="L236">                            .and(PARTY_IDENTIFIED.PARTY_REF_TYPE.isNull())</span>
+<span class="nc" id="L237">                            .and(PARTY_IDENTIFIED.PARTY_TYPE.eq(PartyType.party_self)));</span>
+
+<span class="nc" id="L239">            partySelfUUID = Optional.ofNullable(partyIdentifiedRecord).map(PartyIdentifiedRecord::getId);</span>
+        }
+
+<span class="nc" id="L242">        return partySelfUUID;</span>
+    }
+
+    private Optional&lt;UUID&gt; findInDBPartyRelated(PartyRelated partyProxy) {
+<span class="nc" id="L246">        Optional&lt;UUID&gt; uuid = findInDB(partyProxy.getExternalRef());</span>
+
+        // see https://www.postgresql.org/docs/11/rowtypes.html for syntax on accessing specific attributes in UDT
+<span class="nc bnc" id="L249" title="All 4 branches missed.">        if (uuid.isEmpty() &amp;&amp; partyProxy.getExternalRef() == null) { // check for the same name and same relationship</span>
+<span class="nc" id="L250">            PartyIdentifiedRecord partyIdentifiedRecord = context.fetchAny(</span>
+<span class="nc" id="L251">                    PARTY_IDENTIFIED,</span>
+<span class="nc" id="L252">                    PARTY_IDENTIFIED</span>
+<span class="nc" id="L253">                            .PARTY_REF_VALUE</span>
+<span class="nc" id="L254">                            .isNull()</span>
+<span class="nc" id="L255">                            .and(PARTY_IDENTIFIED.PARTY_REF_NAMESPACE.isNull())</span>
+<span class="nc" id="L256">                            .and(PARTY_IDENTIFIED.PARTY_REF_SCHEME.isNull())</span>
+<span class="nc" id="L257">                            .and(PARTY_IDENTIFIED.PARTY_REF_TYPE.isNull())</span>
+<span class="nc" id="L258">                            .and(PARTY_IDENTIFIED.NAME.eq(partyProxy.getName()))</span>
+<span class="nc" id="L259">                            .and(DSL.field(&quot;(&quot; + PARTY_IDENTIFIED.RELATIONSHIP + &quot;).value&quot;)</span>
+<span class="nc" id="L260">                                    .eq(relationshipAsRecord(partyProxy).getValue()))</span>
+<span class="nc" id="L261">                            .and(PARTY_IDENTIFIED.PARTY_TYPE.eq(PartyType.party_related)));</span>
+
+<span class="nc bnc" id="L263" title="All 2 branches missed.">            if (partyIdentifiedRecord != null) {</span>
+<span class="nc" id="L264">                uuid = Optional.ofNullable(partyIdentifiedRecord.getId());</span>
+                // check for identifiers
+<span class="nc bnc" id="L266" title="All 2 branches missed.">                if (compare(partyIdentifiedRecord, partyProxy.getIdentifiers())) {</span>
+<span class="nc" id="L267">                    uuid = Optional.empty();</span>
+                }
+            }
+        }
+
+<span class="nc" id="L272">        return uuid;</span>
+    }
+
+    private boolean compare(PartyIdentifiedRecord partyIdentifiedRecord, List&lt;DvIdentifier&gt; identifiers) {
+<span class="nc" id="L276">        List&lt;DvIdentifier&gt; identifiersFromDB =</span>
+<span class="nc" id="L277">                context.fetch(IDENTIFIER, IDENTIFIER.PARTY.eq(partyIdentifiedRecord.getId())).stream()</span>
+<span class="nc" id="L278">                        .map(idConvert::apply)</span>
+<span class="nc" id="L279">                        .toList();</span>
+
+<span class="nc" id="L281">        return compare(identifiersFromDB, identifiers);</span>
+    }
+
+<span class="nc" id="L284">    private static final Function&lt;IdentifierRecord, DvIdentifier&gt; idConvert = identifierRecord -&gt; {</span>
+<span class="nc" id="L285">        DvIdentifier identifier = new DvIdentifier();</span>
+<span class="nc" id="L286">        identifier.setIssuer(identifierRecord.getIssuer());</span>
+<span class="nc" id="L287">        identifier.setAssigner(identifierRecord.getAssigner());</span>
+<span class="nc" id="L288">        identifier.setId(identifierRecord.getIdValue());</span>
+<span class="nc" id="L289">        identifier.setType(identifierRecord.getTypeName());</span>
+<span class="nc" id="L290">        return identifier;</span>
+<span class="nc" id="L291">    };</span>
+
+    private boolean compare(List&lt;DvIdentifier&gt; identifiersFromDB, List&lt;DvIdentifier&gt; identifiers) {
+
+<span class="nc bnc" id="L295" title="All 4 branches missed.">        if (identifiersFromDB == null &amp;&amp; identifiers == null) {</span>
+<span class="nc" id="L296">            return true;</span>
+        }
+
+<span class="nc bnc" id="L299" title="All 4 branches missed.">        if (identifiersFromDB == null || identifiers == null) {</span>
+<span class="nc" id="L300">            return false;</span>
+        }
+
+<span class="nc bnc" id="L303" title="All 2 branches missed.">        if (identifiersFromDB.size() != identifiers.size()) {</span>
+<span class="nc" id="L304">            return false;</span>
+        }
+
+<span class="nc" id="L307">        List&lt;DvIdentifier&gt; filteredList = identifiersFromDB.stream()</span>
+<span class="nc" id="L308">                .filter(identifier -&gt; identifiers.stream()</span>
+<span class="nc bnc" id="L309" title="All 2 branches missed.">                        .anyMatch(identifier1 -&gt; Objects.equals(identifier1.getType(), identifier.getType())</span>
+<span class="nc bnc" id="L310" title="All 2 branches missed.">                                &amp;&amp; Objects.equals(identifier1.getId(), identifier.getId())</span>
+<span class="nc bnc" id="L311" title="All 2 branches missed.">                                &amp;&amp; Objects.equals(identifier1.getAssigner(), identifier.getAssigner())</span>
+<span class="nc bnc" id="L312" title="All 2 branches missed.">                                &amp;&amp; Objects.equals(identifier1.getIssuer(), identifier.getIssuer())))</span>
+<span class="nc" id="L313">                .toList();</span>
+
+<span class="nc bnc" id="L315" title="All 2 branches missed.">        return filteredList.size() == identifiersFromDB.size();</span>
+    }
+
+    private Optional&lt;UUID&gt; findInDBIdentified(PartyIdentified partyProxy) {
+<span class="nc" id="L319">        Optional&lt;UUID&gt; uuid = findInDB(partyProxy.getExternalRef());</span>
+
+        // check that name matches the one already stored in DB, otherwise throw an exception (conflicting
+        // identification)
+<span class="nc bnc" id="L323" title="All 2 branches missed.">        if (uuid.isPresent()) {</span>
+<span class="nc" id="L324">            PartyIdentifiedRecord partyIdentifiedRecord =</span>
+<span class="nc" id="L325">                    context.fetchAny(PARTY_IDENTIFIED, PARTY_IDENTIFIED.ID.eq(uuid.get()));</span>
+<span class="nc bnc" id="L326" title="All 2 branches missed.">            if (partyIdentifiedRecord == null) {</span>
+<span class="nc" id="L327">                throw new InternalServerException(&quot;Inconsistent PartyIdentified UUID:&quot; + uuid);</span>
+            }
+<span class="nc bnc" id="L329" title="All 2 branches missed.">            if (!partyIdentifiedRecord.getName().equals(partyProxy.getName())) {</span>
+<span class="nc" id="L330">                throw new IllegalArgumentException(&quot;Conflicting identification, existing name was:&quot;</span>
+<span class="nc" id="L331">                        + partyIdentifiedRecord.get(PARTY_IDENTIFIED.NAME)</span>
+                        + &quot;, but found passed name:&quot;
+<span class="nc" id="L333">                        + partyProxy.getName());</span>
+            }
+
+            // check for identifiers
+<span class="nc bnc" id="L337" title="All 2 branches missed.">            if (compare(partyIdentifiedRecord, partyProxy.getIdentifiers())) {</span>
+<span class="nc" id="L338">                uuid = Optional.empty();</span>
+            }
+        }
+
+<span class="nc" id="L342">        return uuid;</span>
+    }
+
+    private Optional&lt;UUID&gt; findInDB(PartyRef partyRef) {
+
+<span class="nc bnc" id="L347" title="All 2 branches missed.">        if (partyRef == null) {</span>
+<span class="nc" id="L348">            return Optional.empty();</span>
+        }
+
+<span class="nc" id="L351">        Object ref = partyRef.getId();</span>
+        PartyIdentifiedRecord partyIdentifiedRecord;
+
+<span class="nc bnc" id="L354" title="All 4 branches missed.">        if (ref instanceof ObjectVersionId || ref instanceof HierObjectId) {</span>
+
+<span class="nc" id="L356">            ObjectId objectId = (ObjectId) ref;</span>
+
+<span class="nc" id="L358">            partyIdentifiedRecord = context.fetchAny(</span>
+<span class="nc" id="L359">                    PARTY_IDENTIFIED,</span>
+<span class="nc" id="L360">                    PARTY_IDENTIFIED</span>
+<span class="nc" id="L361">                            .PARTY_REF_NAMESPACE</span>
+<span class="nc" id="L362">                            .eq(partyRef.getNamespace())</span>
+<span class="nc" id="L363">                            .and(PARTY_IDENTIFIED.PARTY_REF_VALUE.eq(objectId.getValue())));</span>
+
+<span class="nc bnc" id="L365" title="All 2 branches missed.">        } else if (ref instanceof GenericId genericId) {</span>
+
+<span class="nc" id="L367">            partyIdentifiedRecord = context.fetchAny(</span>
+<span class="nc" id="L368">                    PARTY_IDENTIFIED,</span>
+<span class="nc" id="L369">                    PARTY_IDENTIFIED</span>
+<span class="nc" id="L370">                            .PARTY_REF_NAMESPACE</span>
+<span class="nc" id="L371">                            .eq(partyRef.getNamespace())</span>
+<span class="nc" id="L372">                            .and(PARTY_IDENTIFIED.PARTY_REF_SCHEME.eq(genericId.getScheme()))</span>
+<span class="nc" id="L373">                            .and(PARTY_IDENTIFIED.PARTY_REF_VALUE.eq(genericId.getValue())));</span>
+<span class="nc" id="L374">        } else {</span>
+<span class="nc" id="L375">            throw new IllegalStateException(</span>
+<span class="nc" id="L376">                    &quot;Unsupported PartyRef identification:&quot; + ref.getClass().getSimpleName());</span>
+        }
+
+<span class="nc" id="L379">        return Optional.ofNullable(partyIdentifiedRecord).map(PartyIdentifiedRecord::getId);</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.7.202105040129</span></div></body></html>

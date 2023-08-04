@@ -1,0 +1,105 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../../jacoco-resources/report.gif" type="image/gif"/><title>HttpClientConfiguration.java</title><link rel="stylesheet" href="../../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../../index.html" class="el_report">Coverage with Unit Tests</a> &gt; <a href="../index.html" class="el_bundle">application</a> &gt; <a href="index.source.html" class="el_package">org.ehrbase.application.config.client</a> &gt; <span class="el_source">HttpClientConfiguration.java</span></div><h1>HttpClientConfiguration.java</h1><pre class="source lang-java linenums">/*
+ * Copyright (c) 2021 vitasystems GmbH and Hannover Medical School.
+ *
+ * This file is part of project EHRbase
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     https://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.ehrbase.application.config.client;
+
+import java.io.IOException;
+import java.security.KeyManagementException;
+import java.security.KeyStoreException;
+import java.security.NoSuchAlgorithmException;
+import java.security.UnrecoverableKeyException;
+import java.security.cert.CertificateException;
+import javax.net.ssl.SSLContext;
+import org.apache.http.HttpHost;
+import org.apache.http.auth.AuthScope;
+import org.apache.http.auth.UsernamePasswordCredentials;
+import org.apache.http.client.HttpClient;
+import org.apache.http.conn.ssl.NoopHostnameVerifier;
+import org.apache.http.conn.ssl.TrustAllStrategy;
+import org.apache.http.impl.client.BasicCredentialsProvider;
+import org.apache.http.impl.client.HttpClientBuilder;
+import org.apache.http.impl.client.HttpClients;
+import org.apache.http.ssl.SSLContextBuilder;
+import org.springframework.boot.context.properties.EnableConfigurationProperties;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.util.ResourceUtils;
+
+/**
+ * {@link Configuration} for Apache HTTP Client.
+ */
+@Configuration
+@EnableConfigurationProperties(HttpClientProperties.class)
+@SuppressWarnings(&quot;java:S6212&quot;)
+<span class="nc" id="L48">public class HttpClientConfiguration {</span>
+
+    @Bean
+    public HttpClient httpClient(HttpClientProperties properties)
+            throws UnrecoverableKeyException, CertificateException, NoSuchAlgorithmException, KeyStoreException,
+                    IOException, KeyManagementException {
+
+<span class="nc" id="L55">        HttpClientBuilder builder = HttpClients.custom();</span>
+
+<span class="nc bnc" id="L57" title="All 2 branches missed.">        if (properties.getSsl().isEnabled()) {</span>
+<span class="nc" id="L58">            builder.setSSLContext(buildSSLContext(properties.getSsl()));</span>
+<span class="nc" id="L59">            builder.setSSLHostnameVerifier(NoopHostnameVerifier.INSTANCE);</span>
+        }
+
+<span class="nc bnc" id="L62" title="All 4 branches missed.">        if (properties.getProxy().getHost() != null &amp;&amp; properties.getProxy().getPort() != null) {</span>
+<span class="nc" id="L63">            builder.setProxy(new HttpHost(</span>
+<span class="nc" id="L64">                    properties.getProxy().getHost(), properties.getProxy().getPort()));</span>
+
+<span class="nc bnc" id="L66" title="All 2 branches missed.">            if (properties.getProxy().getUsername() != null</span>
+<span class="nc bnc" id="L67" title="All 2 branches missed.">                    &amp;&amp; properties.getProxy().getPassword() != null) {</span>
+<span class="nc" id="L68">                UsernamePasswordCredentials credentials = new UsernamePasswordCredentials(</span>
+<span class="nc" id="L69">                        properties.getProxy().getUsername(),</span>
+<span class="nc" id="L70">                        properties.getProxy().getPassword());</span>
+<span class="nc" id="L71">                BasicCredentialsProvider credentialsProvider = new BasicCredentialsProvider();</span>
+<span class="nc" id="L72">                credentialsProvider.setCredentials(AuthScope.ANY, credentials);</span>
+<span class="nc" id="L73">                builder.setDefaultCredentialsProvider(credentialsProvider);</span>
+            }
+        }
+
+<span class="nc" id="L77">        return builder.build();</span>
+    }
+
+    private SSLContext buildSSLContext(HttpClientProperties.Ssl properties)
+            throws UnrecoverableKeyException, CertificateException, NoSuchAlgorithmException, KeyStoreException,
+                    IOException, KeyManagementException {
+
+<span class="nc" id="L84">        SSLContextBuilder builder = SSLContextBuilder.create();</span>
+
+<span class="nc bnc" id="L86" title="All 2 branches missed.">        if (properties.getKeyStoreType() != null) {</span>
+<span class="nc" id="L87">            builder.setKeyStoreType(properties.getKeyStoreType());</span>
+        }
+<span class="nc" id="L89">        builder.loadKeyMaterial(</span>
+<span class="nc" id="L90">                ResourceUtils.getFile(properties.getKeyStore()),</span>
+<span class="nc" id="L91">                properties.getKeyStorePassword().toCharArray(),</span>
+<span class="nc" id="L92">                properties.getKeyPassword().toCharArray());</span>
+
+<span class="nc bnc" id="L94" title="All 2 branches missed.">        if (properties.getTrustStoreType() != null) {</span>
+<span class="nc" id="L95">            builder.setKeyStoreType(properties.getTrustStoreType());</span>
+        }
+<span class="nc" id="L97">        builder.loadTrustMaterial(</span>
+<span class="nc" id="L98">                ResourceUtils.getFile(properties.getTrustStore()),</span>
+<span class="nc" id="L99">                properties.getTrustStorePassword().toCharArray(),</span>
+                TrustAllStrategy.INSTANCE);
+
+<span class="nc" id="L102">        return builder.build();</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.7.202105040129</span></div></body></html>

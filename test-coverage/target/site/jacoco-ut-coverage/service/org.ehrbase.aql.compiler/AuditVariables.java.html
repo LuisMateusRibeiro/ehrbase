@@ -1,0 +1,75 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../../jacoco-resources/report.gif" type="image/gif"/><title>AuditVariables.java</title><link rel="stylesheet" href="../../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../../index.html" class="el_report">Coverage with Unit Tests</a> &gt; <a href="../index.html" class="el_bundle">service</a> &gt; <a href="index.source.html" class="el_package">org.ehrbase.aql.compiler</a> &gt; <span class="el_source">AuditVariables.java</span></div><h1>AuditVariables.java</h1><pre class="source lang-java linenums">/*
+ * Copyright (c) 2020 vitasystems GmbH and Hannover Medical School.
+ *
+ * This file is part of project EHRbase
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     https://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.ehrbase.aql.compiler;
+
+import java.util.*;
+import org.ehrbase.aql.definition.FunctionDefinition;
+import org.ehrbase.aql.definition.I_VariableDefinition;
+
+public class AuditVariables {
+
+    public static final String AUDIT_VARIABLE_PREFIX = &quot;$__AUDIT_&quot;;
+    public static final String EHR_PATH = &quot;ehr_id/value&quot;;
+    public static final String TEMPLATE_PATH = &quot;archetype_details/template_id/value&quot;;
+    // a list of audit variables needed if not present
+    // defined as: path, alias, usual symbol
+    // NB. only the path is relevant for identification
+<span class="nc" id="L32">    public static final String[][] requiredAuditVariables = {</span>
+        {EHR_PATH, AUDIT_VARIABLE_PREFIX + &quot;EHR_ID&quot;, &quot;e&quot;},
+        {TEMPLATE_PATH, AUDIT_VARIABLE_PREFIX + &quot;TEMPLATE_ID&quot;, &quot;c&quot;}
+    };
+
+    // set of path to skip whenever used in aggregate function
+    private Set&lt;String&gt; skipList;
+
+<span class="nc" id="L40">    public AuditVariables() {</span>
+<span class="nc" id="L41">        this.skipList = new HashSet&lt;&gt;();</span>
+<span class="nc" id="L42">    }</span>
+
+    /**
+     * return true if the variable is also an audit variable used for logging (f.e. ehr_id/value)
+     * @param variable
+     * @return
+     */
+    public boolean isAuditVariable(I_VariableDefinition variable) {
+
+<span class="nc" id="L51">        boolean retval = false;</span>
+
+<span class="nc bnc" id="L53" title="All 2 branches missed.">        for (String[] auditVarDef : requiredAuditVariables) {</span>
+<span class="nc bnc" id="L54" title="All 2 branches missed.">            if (variable instanceof FunctionDefinition) {</span>
+                // check if this function uses an audit variable
+<span class="nc bnc" id="L56" title="All 2 branches missed.">                if (variable.getPath().contains(auditVarDef[0])) {</span>
+<span class="nc" id="L57">                    skipList.add(auditVarDef[0]);</span>
+                }
+<span class="nc bnc" id="L59" title="All 4 branches missed.">            } else if (variable.getPath() != null &amp;&amp; variable.getPath().equals(auditVarDef[0])) {</span>
+<span class="nc" id="L60">                retval = true;</span>
+<span class="nc" id="L61">                break;</span>
+            }
+        }
+
+<span class="nc" id="L65">        return retval;</span>
+    }
+
+    public void addResults(Map&lt;String, Set&lt;Object&gt;&gt; auditResultMap, String path, Set&lt;Object&gt; resultSetForVariable) {
+        // check if this path is not to be skipped
+<span class="nc bnc" id="L70" title="All 2 branches missed.">        if (!skipList.contains(path)) {</span>
+<span class="nc" id="L71">            auditResultMap.put(path, resultSetForVariable);</span>
+        }
+<span class="nc" id="L73">    }</span>
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.7.202105040129</span></div></body></html>

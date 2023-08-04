@@ -1,0 +1,102 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../../jacoco-resources/report.gif" type="image/gif"/><title>QuerySteps.java</title><link rel="stylesheet" href="../../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../../index.html" class="el_report">Coverage with Unit Tests</a> &gt; <a href="../index.html" class="el_bundle">service</a> &gt; <a href="index.source.html" class="el_package">org.ehrbase.aql.sql</a> &gt; <span class="el_source">QuerySteps.java</span></div><h1>QuerySteps.java</h1><pre class="source lang-java linenums">/*
+ * Copyright (c) 2019 vitasystems GmbH and Hannover Medical School.
+ *
+ * This file is part of project EHRbase
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     https://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.ehrbase.aql.sql;
+
+import java.util.List;
+import java.util.stream.IntStream;
+import org.apache.commons.lang3.StringUtils;
+import org.ehrbase.aql.definition.LateralJoinDefinition;
+import org.jooq.Condition;
+import org.jooq.SelectQuery;
+
+/**
+ * Created by christian on 2/17/2017.
+ */
+@SuppressWarnings({&quot;java:S3740&quot;})
+public class QuerySteps {
+    private final SelectQuery selectQuery;
+    private Condition whereCondition; // can be force to a NULL condition (f.e. 1 = 0)
+    private final List&lt;LateralJoinDefinition&gt; lateralJoins;
+    private final String templateId;
+
+<span class="fc" id="L37">    public QuerySteps(</span>
+            SelectQuery selectQuery,
+            Condition whereCondition,
+            List&lt;LateralJoinDefinition&gt; lateralJoins,
+            String templateId) {
+<span class="fc" id="L42">        this.selectQuery = selectQuery;</span>
+<span class="fc" id="L43">        this.whereCondition = whereCondition;</span>
+<span class="fc" id="L44">        this.lateralJoins = lateralJoins;</span>
+<span class="fc" id="L45">        this.templateId = templateId;</span>
+<span class="fc" id="L46">    }</span>
+
+    public SelectQuery getSelectQuery() {
+<span class="fc" id="L49">        return selectQuery;</span>
+    }
+
+    public Condition getWhereCondition() {
+<span class="fc" id="L53">        return whereCondition;</span>
+    }
+
+    public String getTemplateId() {
+<span class="fc" id="L57">        return templateId;</span>
+    }
+
+    public List&lt;LateralJoinDefinition&gt; getLateralJoins() {
+<span class="fc" id="L61">        return lateralJoins;</span>
+    }
+
+    public void setWhereCondition(Condition whereCondition) {
+<span class="fc" id="L65">        this.whereCondition = whereCondition;</span>
+<span class="fc" id="L66">    }</span>
+
+    public static boolean compare(QuerySteps querySteps1, QuerySteps querySteps2) {
+
+<span class="nc bnc" id="L70" title="All 2 branches missed.">        if (!querySteps1.getTemplateId().equals(querySteps2.getTemplateId())) return false;</span>
+        // compare select part
+<span class="nc" id="L72">        if (!querySteps1</span>
+<span class="nc" id="L73">                .getSelectQuery()</span>
+<span class="nc" id="L74">                .getSQL()</span>
+<span class="nc bnc" id="L75" title="All 2 branches missed.">                .equals(querySteps2.getSelectQuery().getSQL())) return false;</span>
+<span class="nc bnc" id="L76" title="All 2 branches missed.">        if (querySteps1.getLateralJoins().size()</span>
+<span class="nc" id="L77">                != querySteps2.getLateralJoins().size()) return false;</span>
+<span class="nc" id="L78">        boolean isEquals = IntStream.range(0, querySteps1.getLateralJoins().size())</span>
+<span class="nc" id="L79">                .allMatch(j -&gt; querySteps1</span>
+<span class="nc" id="L80">                        .getLateralJoins()</span>
+<span class="nc" id="L81">                        .get(j)</span>
+<span class="nc" id="L82">                        .getSqlExpression()</span>
+<span class="nc" id="L83">                        .equals(querySteps2.getLateralJoins().get(j).getSqlExpression()));</span>
+<span class="nc bnc" id="L84" title="All 2 branches missed.">        if (!isEquals) return false;</span>
+        // check condition
+<span class="nc" id="L86">        return StringUtils.equals(</span>
+<span class="nc bnc" id="L87" title="All 2 branches missed.">                querySteps1.getWhereCondition() == null</span>
+<span class="nc" id="L88">                        ? null</span>
+<span class="nc" id="L89">                        : querySteps1.getWhereCondition().toString(),</span>
+<span class="nc bnc" id="L90" title="All 2 branches missed.">                querySteps2.getWhereCondition() == null</span>
+<span class="nc" id="L91">                        ? null</span>
+<span class="nc" id="L92">                        : querySteps2.getWhereCondition().toString());</span>
+    }
+
+    public static boolean isIncludedInList(QuerySteps querySteps, List&lt;QuerySteps&gt; queryStepsList) {
+<span class="pc bpc" id="L96" title="1 of 2 branches missed.">        for (QuerySteps queryStepsToCompare : queryStepsList) {</span>
+<span class="nc bnc" id="L97" title="All 2 branches missed.">            if (compare(querySteps, queryStepsToCompare)) return true;</span>
+        }
+<span class="fc" id="L99">        return false;</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.7.202105040129</span></div></body></html>

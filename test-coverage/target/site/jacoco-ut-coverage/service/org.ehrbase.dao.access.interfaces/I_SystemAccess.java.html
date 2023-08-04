@@ -1,0 +1,98 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../../jacoco-resources/report.gif" type="image/gif"/><title>I_SystemAccess.java</title><link rel="stylesheet" href="../../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../../index.html" class="el_report">Coverage with Unit Tests</a> &gt; <a href="../index.html" class="el_bundle">service</a> &gt; <a href="index.source.html" class="el_package">org.ehrbase.dao.access.interfaces</a> &gt; <span class="el_source">I_SystemAccess.java</span></div><h1>I_SystemAccess.java</h1><pre class="source lang-java linenums">/*
+ * Copyright (c) 2015-2022 vitasystems GmbH and Hannover Medical School.
+ *
+ * This file is part of project EHRbase
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     https://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.ehrbase.dao.access.interfaces;
+
+import static org.ehrbase.jooq.pg.Tables.SYSTEM;
+
+import java.util.UUID;
+import org.ehrbase.api.exception.InternalServerException;
+import org.ehrbase.dao.access.jooq.SystemAccess;
+
+/**
+ * System access layer interface.
+ *
+ * @author Christian Chevalley
+ * @author Jake Smolka
+ * @since 1.0
+ */
+@SuppressWarnings(&quot;java:S114&quot;)
+public interface I_SystemAccess extends I_SimpleCRUD {
+
+    static I_SystemAccess getInstance(I_DomainAccess domainAccess, String description, String settings) {
+<span class="nc" id="L37">        return new SystemAccess(domainAccess, description, settings);</span>
+    }
+
+    /**
+     * retrieve a system entry by its Id
+     *
+     * @param domainAccess SQL access
+     * @param id           UUID
+     * @return UUID
+     */
+    static I_SystemAccess retrieveInstance(I_DomainAccess domainAccess, UUID id) {
+<span class="nc" id="L48">        return SystemAccess.retrieveInstance(domainAccess, id);</span>
+    }
+
+    /**
+     * retrieve the Id of a system by name (or settings)
+     *
+     * @param domainAccess SQL access
+     * @param settings     a string describing the system (arbitrary convention)
+     * @return UUID or null if not found
+     * @throws IllegalArgumentException if couldn't retrieve instance with given settings
+     */
+    static UUID retrieveInstanceId(I_DomainAccess domainAccess, String settings) {
+<span class="nc" id="L60">        return SystemAccess.retrieveInstanceId(domainAccess, settings);</span>
+    }
+
+    /**
+     * Helper to retrieve or storeComposition a local host identifier&lt;br&gt;
+     * the local settings is a combination of MAC address and hostname:&lt;br&gt;
+     * for example: 44-87-FC-A9-B4-B2|TEST-PC&lt;br&gt;
+     * if the system is not yet in the DB it is created, it is retrieved otherwise
+     *
+     * @return UUID of local system from DB
+     * @throws InternalServerException when accessing network interface failed
+     */
+    static UUID createOrRetrieveLocalSystem(I_DomainAccess domainAccess) {
+<span class="nc" id="L73">        return SystemAccess.createOrRetrieveLocalSystem(domainAccess);</span>
+    }
+
+    /**
+     * Try to retrieve system with given input. If not available create instance.
+     *
+     * @param domainAccess Data Access Object
+     * @param description  Optional description, can be NULL to use default
+     * @param settings     a string describing the system (arbitrary convention)
+     * @return UUID of system entry
+     */
+    static UUID createOrRetrieveInstanceId(I_DomainAccess domainAccess, String description, String settings) {
+<span class="nc" id="L85">        return SystemAccess.createOrRetrieveInstanceId(domainAccess, description, settings);</span>
+    }
+
+    static Integer delete(I_DomainAccess domainAccess, UUID id) {
+<span class="nc" id="L89">        return domainAccess.getContext().delete(SYSTEM).where(SYSTEM.ID.eq(id)).execute();</span>
+    }
+
+    UUID getId();
+
+    String getSettings();
+
+    String getDescription();
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.7.202105040129</span></div></body></html>

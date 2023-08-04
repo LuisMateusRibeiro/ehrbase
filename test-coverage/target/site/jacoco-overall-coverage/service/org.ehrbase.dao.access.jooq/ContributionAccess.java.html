@@ -1,0 +1,550 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../../jacoco-resources/report.gif" type="image/gif"/><title>ContributionAccess.java</title><link rel="stylesheet" href="../../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../../index.html" class="el_report">Overall Coverage</a> &gt; <a href="../index.html" class="el_bundle">service</a> &gt; <a href="index.source.html" class="el_package">org.ehrbase.dao.access.jooq</a> &gt; <span class="el_source">ContributionAccess.java</span></div><h1>ContributionAccess.java</h1><pre class="source lang-java linenums">/*
+ * Copyright (c) 2019 vitasystems GmbH and Hannover Medical School.
+ *
+ * This file is part of project EHRbase
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     https://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.ehrbase.dao.access.jooq;
+
+import static org.ehrbase.jooq.pg.Tables.CONTRIBUTION;
+
+import com.nedap.archie.rm.generic.AuditDetails;
+import java.sql.Timestamp;
+import java.util.Objects;
+import java.util.Optional;
+import java.util.UUID;
+import org.ehrbase.api.definitions.ServerConfig;
+import org.ehrbase.api.exception.InternalServerException;
+import org.ehrbase.dao.access.interfaces.I_AuditDetailsAccess;
+import org.ehrbase.dao.access.interfaces.I_ConceptAccess;
+import org.ehrbase.dao.access.interfaces.I_ConceptAccess.ContributionChangeType;
+import org.ehrbase.dao.access.interfaces.I_ContributionAccess;
+import org.ehrbase.dao.access.interfaces.I_DomainAccess;
+import org.ehrbase.dao.access.interfaces.I_SystemAccess;
+import org.ehrbase.dao.access.jooq.party.PersistedPartyProxy;
+import org.ehrbase.dao.access.support.DataAccess;
+import org.ehrbase.dao.access.util.ContributionDef;
+import org.ehrbase.dao.access.util.TransactionTime;
+import org.ehrbase.ehr.knowledge.I_KnowledgeCache;
+import org.ehrbase.jooq.pg.Routines;
+import org.ehrbase.jooq.pg.enums.ContributionDataType;
+import org.ehrbase.jooq.pg.enums.ContributionState;
+import org.ehrbase.jooq.pg.tables.AdminDeleteStatusHistory;
+import org.ehrbase.jooq.pg.tables.records.AdminDeleteStatusRecord;
+import org.ehrbase.jooq.pg.tables.records.AdminGetLinkedCompositionsForContribRecord;
+import org.ehrbase.jooq.pg.tables.records.AdminGetLinkedStatusForContribRecord;
+import org.ehrbase.jooq.pg.tables.records.ContributionRecord;
+import org.ehrbase.service.IntrospectService;
+import org.ehrbase.util.UuidGenerator;
+import org.jooq.DSLContext;
+import org.jooq.Result;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+/**
+ * Created by Christian Chevalley on 4/17/2015.
+ */
+public class ContributionAccess extends DataAccess implements I_ContributionAccess {
+
+<span class="nc" id="L60">    Logger log = LoggerFactory.getLogger(ContributionAccess.class);</span>
+    private ContributionRecord contributionRecord;
+    private I_AuditDetailsAccess auditDetails; // audit associated with this contribution
+
+    /**
+     * Basic constructor for contribution.
+     * @param context DB context object of current server context
+     * @param knowledgeManager Knowledge cache object of current server context
+     * @param introspectCache Introspect cache object of current server context
+     * @param serverConfig Server config object of current server context
+     * @param sysTenant the tenant identifier to which the ContributionAccess object belongs to
+     * @param ehrId Given ID of EHR this contribution will be created for
+     */
+    public ContributionAccess(
+            DSLContext context,
+            I_KnowledgeCache knowledgeManager,
+            IntrospectService introspectCache,
+            ServerConfig serverConfig,
+            UUID ehrId,
+            Short sysTenant) {
+
+<span class="nc" id="L81">        super(context, knowledgeManager, introspectCache, serverConfig);</span>
+
+<span class="nc" id="L83">        contributionRecord = context.newRecord(CONTRIBUTION);</span>
+<span class="nc" id="L84">        contributionRecord.setEhrId(ehrId);</span>
+<span class="nc" id="L85">        contributionRecord.setSysTenant(sysTenant);</span>
+
+<span class="nc" id="L87">        auditDetails = I_AuditDetailsAccess.getInstance(this.getDataAccess(), sysTenant);</span>
+<span class="nc" id="L88">    }</span>
+
+    /**
+     * Constructor with convenient {@link I_DomainAccess} parameter, for better readability.
+     * @param domainAccess Current domain access object
+     * @param ehrId Given ID of EHR this contribution will be created for
+     * @param sysTenant the tenant identifier to which the ContributionAccess object belongs to
+     */
+    public ContributionAccess(I_DomainAccess domainAccess, UUID ehrId, Short sysTenant) {
+<span class="nc" id="L97">        this(</span>
+<span class="nc" id="L98">                domainAccess.getContext(),</span>
+<span class="nc" id="L99">                domainAccess.getKnowledgeManager(),</span>
+<span class="nc" id="L100">                domainAccess.getIntrospectService(),</span>
+<span class="nc" id="L101">                domainAccess.getServerConfig(),</span>
+                ehrId,
+                sysTenant);
+<span class="nc" id="L104">    }</span>
+
+    // internal minimal constructor - needs proper initialization before following usage
+    private ContributionAccess(I_DomainAccess domainAccess, ContributionRecord record, I_AuditDetailsAccess audit) {
+<span class="nc" id="L108">        super(domainAccess);</span>
+<span class="nc" id="L109">        this.contributionRecord = record;</span>
+<span class="nc" id="L110">        this.auditDetails = audit;</span>
+<span class="nc" id="L111">    }</span>
+
+    /**
+     * @throws InternalServerException on failed fetching of contribution
+     */
+    public static I_ContributionAccess retrieveInstance(I_DomainAccess domainAccess, UUID contributionId) {
+        try {
+<span class="nc" id="L118">            return Optional.ofNullable(</span>
+<span class="nc" id="L119">                            domainAccess.getContext().fetchOne(CONTRIBUTION, CONTRIBUTION.ID.eq(contributionId)))</span>
+<span class="nc" id="L120">                    .map(rec -&gt; new ContributionAccess(</span>
+                            domainAccess,
+                            rec,
+<span class="nc" id="L123">                            new AuditDetailsAccess(domainAccess.getDataAccess(), rec.getSysTenant())</span>
+<span class="nc" id="L124">                                    .retrieveInstance(domainAccess.getDataAccess(), rec.getHasAudit())))</span>
+<span class="nc" id="L125">                    .orElse(null);</span>
+<span class="nc" id="L126">        } catch (Exception e) {</span>
+<span class="nc" id="L127">            throw new InternalServerException(&quot;fetching contribution failed&quot;, e);</span>
+        }
+    }
+
+    @Override
+    public UUID commit(Timestamp transactionTime) {
+
+        // first create DB entry of auditDetails so they can get referenced in this contribution
+<span class="nc" id="L135">        UUID auditId = this.auditDetails.commit();</span>
+<span class="nc" id="L136">        contributionRecord.setHasAudit(auditId);</span>
+
+<span class="nc bnc" id="L138" title="All 2 branches missed.">        if (contributionRecord.getState() == ContributionState.incomplete) {</span>
+<span class="nc" id="L139">            log.warn(&quot;Contribution state has not been set&quot;);</span>
+        }
+
+<span class="nc" id="L142">        contributionRecord.setEhrId(this.getEhrId());</span>
+<span class="nc bnc" id="L143" title="All 2 branches missed.">        if (contributionRecord.insert() == 0) throw new InternalServerException(&quot;Couldn't store contribution&quot;);</span>
+
+<span class="nc" id="L145">        return contributionRecord.getId();</span>
+    }
+
+    @Override
+    public UUID commit() {
+<span class="nc" id="L150">        return commit(TransactionTime.millis());</span>
+    }
+
+    /**
+     * Commit the contribution with optional values, excluding audit, which needs to be created and set beforehand.
+     */
+    @Override
+    public UUID commit(
+            Timestamp transactionTime, ContributionDataType contributionType, ContributionDef.ContributionState state) {
+
+<span class="nc bnc" id="L160" title="All 2 branches missed.">        if (transactionTime == null) {</span>
+<span class="nc" id="L161">            transactionTime = TransactionTime.millis();</span>
+        }
+
+        // set contribution attributes
+<span class="nc" id="L165">        setContributionDataType(Objects.requireNonNullElse(contributionType, ContributionDataType.other));</span>
+
+<span class="nc" id="L167">        setState(Objects.requireNonNullElse(state, ContributionDef.ContributionState.COMPLETE));</span>
+
+<span class="nc" id="L169">        return commit(transactionTime);</span>
+    }
+
+    /**
+     * Commit the contribution with (optional) given values (incl. audit data, which is handled embedded)
+     * @throws InternalServerException when contribution couldn't be created because of an internal problem
+     */
+    @Override
+    public UUID commit(
+            Timestamp transactionTime,
+            UUID committerId,
+            UUID systemId,
+            ContributionDataType contributionType,
+            ContributionDef.ContributionState state,
+            I_ConceptAccess.ContributionChangeType contributionChangeType,
+            String description) {
+        // create new audit_details instance for this contribution
+<span class="nc" id="L186">        this.auditDetails = I_AuditDetailsAccess.getInstance(this.getDataAccess(), contributionRecord.getSysTenant());</span>
+
+<span class="nc bnc" id="L188" title="All 2 branches missed.">        if (transactionTime == null) {</span>
+<span class="nc" id="L189">            transactionTime = TransactionTime.millis();</span>
+        }
+
+        // set contribution attributes
+<span class="nc" id="L193">        setContributionDataType(Objects.requireNonNullElse(contributionType, ContributionDataType.other));</span>
+
+<span class="nc" id="L195">        setState(Objects.requireNonNullElse(state, ContributionDef.ContributionState.COMPLETE));</span>
+
+        // audit attributes
+<span class="nc bnc" id="L198" title="All 2 branches missed.">        if (committerId != null) {</span>
+<span class="nc" id="L199">            auditDetails.setCommitter(committerId);</span>
+        } else {
+<span class="nc" id="L201">            throw new InternalServerException(&quot;Missing mandatory committer ID&quot;);</span>
+        }
+
+<span class="nc bnc" id="L204" title="All 2 branches missed.">        if (systemId != null) {</span>
+<span class="nc" id="L205">            auditDetails.setSystemId(systemId);</span>
+        } else {
+<span class="nc" id="L207">            throw new InternalServerException(&quot;Missing mandatory system ID&quot;);</span>
+        }
+
+<span class="nc bnc" id="L210" title="All 2 branches missed.">        if (contributionChangeType != null)</span>
+<span class="nc" id="L211">            auditDetails.setChangeType(</span>
+<span class="nc" id="L212">                    I_ConceptAccess.fetchContributionChangeType(this, contributionChangeType.name()));</span>
+        else
+<span class="nc" id="L214">            auditDetails.setChangeType(</span>
+<span class="nc" id="L215">                    I_ConceptAccess.fetchContributionChangeType(this, I_ConceptAccess.ContributionChangeType.CREATION));</span>
+
+<span class="nc bnc" id="L217" title="All 2 branches missed.">        if (description != null) {</span>
+<span class="nc" id="L218">            auditDetails.setDescription(description);</span>
+        }
+<span class="nc" id="L220">        return commit(transactionTime);</span>
+    }
+
+    @Override
+    public Boolean update(
+            Timestamp transactionTime,
+            UUID committerId,
+            UUID systemId,
+            String contributionType,
+            String contributionState,
+            String contributionChangeType,
+            String description) {
+        // set contribution  attributes
+<span class="nc" id="L233">        ContributionDataType type = null;</span>
+<span class="nc" id="L234">        ContributionDef.ContributionState state = null;</span>
+<span class="nc" id="L235">        I_ConceptAccess.ContributionChangeType changeType = null;</span>
+
+<span class="nc bnc" id="L237" title="All 2 branches missed.">        if (contributionType == null) type = ContributionDataType.valueOf(contributionType);</span>
+
+<span class="nc bnc" id="L239" title="All 2 branches missed.">        if (contributionState != null) state = ContributionDef.ContributionState.valueOf(contributionState);</span>
+
+<span class="nc bnc" id="L241" title="All 2 branches missed.">        if (contributionChangeType != null)</span>
+<span class="nc" id="L242">            changeType = I_ConceptAccess.ContributionChangeType.valueOf(contributionChangeType);</span>
+
+        // audit handling will be executed centralized in the following called method
+<span class="nc" id="L245">        return update(transactionTime, committerId, systemId, type, state, changeType, description);</span>
+    }
+
+    @Override
+    public Boolean update(
+            Timestamp transactionTime,
+            UUID committerId,
+            UUID systemId,
+            ContributionDataType contributionType,
+            ContributionDef.ContributionState state,
+            I_ConceptAccess.ContributionChangeType contributionChangeType,
+            String description) {
+        // set contribution  attributes
+<span class="nc bnc" id="L258" title="All 2 branches missed.">        if (contributionType != null) setContributionDataType(contributionType);</span>
+<span class="nc bnc" id="L259" title="All 2 branches missed.">        if (state != null) setState(state);</span>
+
+        // embedded audit handling
+<span class="nc" id="L262">        this.auditDetails = I_AuditDetailsAccess.getInstance(</span>
+<span class="nc" id="L263">                getDataAccess(), contributionRecord.getSysTenant()); // new audit for new action</span>
+<span class="nc bnc" id="L264" title="All 2 branches missed.">        if (committerId != null) this.auditDetails.setCommitter(committerId);</span>
+<span class="nc bnc" id="L265" title="All 2 branches missed.">        if (systemId != null) this.auditDetails.setSystemId(systemId);</span>
+<span class="nc bnc" id="L266" title="All 2 branches missed.">        if (description != null) this.auditDetails.setDescription(description);</span>
+<span class="nc bnc" id="L267" title="All 2 branches missed.">        if (contributionChangeType != null)</span>
+<span class="nc" id="L268">            this.auditDetails.setChangeType(I_ConceptAccess.fetchContributionChangeType(this, contributionChangeType));</span>
+
+<span class="nc" id="L270">        return update(transactionTime);</span>
+    }
+
+    @Override
+    public UUID commitWithSignature(String signature) {
+<span class="nc" id="L275">        contributionRecord.setSignature(signature);</span>
+<span class="nc" id="L276">        contributionRecord.setState(ContributionState.valueOf(&quot;complete&quot;));</span>
+<span class="nc" id="L277">        contributionRecord.store();</span>
+
+<span class="nc" id="L279">        return contributionRecord.getId();</span>
+    }
+
+    @Override
+    public UUID updateWithSignature(String signature) {
+<span class="nc" id="L284">        contributionRecord.setSignature(signature);</span>
+<span class="nc" id="L285">        contributionRecord.setState(ContributionState.valueOf(&quot;complete&quot;));</span>
+<span class="nc" id="L286">        contributionRecord.update();</span>
+
+<span class="nc" id="L288">        return contributionRecord.getId();</span>
+    }
+
+    @Override
+    public Boolean update(Timestamp transactionTime) {
+<span class="nc" id="L293">        return update(transactionTime, false);</span>
+    }
+
+    @Override
+    public Boolean update(Timestamp transactionTime, boolean force) {
+<span class="nc" id="L298">        boolean updated = false;</span>
+
+<span class="nc bnc" id="L300" title="All 4 branches missed.">        if (force || contributionRecord.changed()) { // TODO-447: test if this creates an own audit for contributions</span>
+
+<span class="nc bnc" id="L302" title="All 2 branches missed.">            if (!contributionRecord.changed()) {</span>
+                // hack: force tell jOOQ to perform updateComposition whatever...
+<span class="nc" id="L304">                contributionRecord.changed(true);</span>
+            }
+
+            // update contribution's audit with modification change type and execute update of it, too
+<span class="nc" id="L308">            this.auditDetails.setChangeType(I_ConceptAccess.fetchContributionChangeType(</span>
+                    this, I_ConceptAccess.ContributionChangeType.MODIFICATION));
+<span class="nc bnc" id="L310" title="All 2 branches missed.">            if (this.auditDetails.update(transactionTime, force).equals(Boolean.FALSE))</span>
+<span class="nc" id="L311">                throw new InternalServerException(&quot;Couldn't update auditDetails&quot;);</span>
+<span class="nc" id="L312">            contributionRecord.setHasAudit(this.auditDetails.getId()); // new audit ID</span>
+
+            // execute update of contribution itself
+<span class="nc" id="L315">            contributionRecord.setId(UuidGenerator.randomUUID()); // force to create new entry from old values</span>
+<span class="nc bnc" id="L316" title="All 2 branches missed.">            updated = contributionRecord.insert() == 1;</span>
+        }
+
+<span class="nc" id="L319">        return updated;</span>
+    }
+
+    @Override
+    public Boolean update() {
+<span class="nc" id="L324">        return update(TransactionTime.millis());</span>
+    }
+
+    @Override
+    public Boolean update(Boolean force) {
+<span class="nc" id="L329">        return update(TransactionTime.millis());</span>
+    }
+
+    @Override
+    public Integer delete() {
+<span class="nc" id="L334">        int count = 0;</span>
+        // delete contribution record
+<span class="nc" id="L336">        count += contributionRecord.delete();</span>
+
+<span class="nc" id="L338">        return count;</span>
+    }
+
+    /**
+     * @throws InternalServerException on failed fetching of contribution
+     */
+    public I_ContributionAccess retrieve(UUID id) {
+<span class="nc" id="L345">        return retrieveInstance(this, id);</span>
+    }
+
+    @Override
+    public UUID getContributionId() {
+<span class="nc" id="L350">        return contributionRecord.getId();</span>
+    }
+
+    @Override
+    public void setAuditDetailsChangeType(UUID changeType) {
+<span class="nc" id="L355">        auditDetails.setChangeType(changeType);</span>
+<span class="nc" id="L356">    }</span>
+
+    @Override
+    public ContributionDataType getContributionDataType() {
+<span class="nc" id="L360">        return contributionRecord.getContributionType();</span>
+    }
+
+    @Override
+    public void setContributionDataType(ContributionDataType contributionDataType) {
+<span class="nc" id="L365">        contributionRecord.setContributionType(contributionDataType);</span>
+<span class="nc" id="L366">    }</span>
+
+    @Override
+    public void setState(ContributionDef.ContributionState state) {
+<span class="nc bnc" id="L370" title="All 2 branches missed.">        if (state != null) contributionRecord.setState(ContributionState.valueOf(state.getLiteral()));</span>
+<span class="nc" id="L371">    }</span>
+
+    @Override
+    public void setComplete() {
+<span class="nc" id="L375">        contributionRecord.setState(ContributionState.valueOf(ContributionState.complete.getLiteral()));</span>
+<span class="nc" id="L376">    }</span>
+
+    @Override
+    public void setIncomplete() {
+<span class="nc" id="L380">        contributionRecord.setState(ContributionState.valueOf(ContributionState.incomplete.getLiteral()));</span>
+<span class="nc" id="L381">    }</span>
+
+    @Override
+    public void setDeleted() {
+<span class="nc" id="L385">        contributionRecord.setState(ContributionState.valueOf(ContributionState.deleted.getLiteral()));</span>
+<span class="nc" id="L386">    }</span>
+
+    @Override
+    public void setAuditDetailsValues(
+            UUID committer, UUID system, String description, ContributionChangeType changeType) {
+<span class="nc bnc" id="L391" title="All 6 branches missed.">        if (committer == null || system == null || changeType == null)</span>
+<span class="nc" id="L392">            throw new IllegalArgumentException(&quot;arguments not optional&quot;);</span>
+<span class="nc" id="L393">        auditDetails.setCommitter(committer);</span>
+<span class="nc" id="L394">        auditDetails.setSystemId(system);</span>
+<span class="nc" id="L395">        auditDetails.setChangeType(I_ConceptAccess.fetchContributionChangeType(this, changeType));</span>
+
+<span class="nc bnc" id="L397" title="All 2 branches missed.">        if (description != null) auditDetails.setDescription(description);</span>
+<span class="nc" id="L398">    }</span>
+
+    @Override
+    public void setAuditDetailsValues(AuditDetails auditObject) {
+        // parse
+<span class="nc" id="L403">        UUID committer =</span>
+<span class="nc" id="L404">                new PersistedPartyProxy(this).getOrCreate(auditObject.getCommitter(), auditDetails.getSysTenant());</span>
+<span class="nc" id="L405">        UUID system = I_SystemAccess.createOrRetrieveInstanceId(this, null, auditObject.getSystemId());</span>
+<span class="nc" id="L406">        UUID changeType = I_ConceptAccess.fetchContributionChangeType(</span>
+<span class="nc" id="L407">                this, auditObject.getChangeType().getValue());</span>
+
+        // set
+<span class="nc bnc" id="L410" title="All 4 branches missed.">        if (committer == null || system == null) throw new IllegalArgumentException(&quot;arguments not optional&quot;);</span>
+<span class="nc" id="L411">        auditDetails.setCommitter(committer);</span>
+<span class="nc" id="L412">        auditDetails.setSystemId(system);</span>
+<span class="nc" id="L413">        auditDetails.setChangeType(changeType);</span>
+
+        // optional description
+<span class="nc bnc" id="L416" title="All 2 branches missed.">        if (auditObject.getDescription() != null)</span>
+<span class="nc" id="L417">            auditDetails.setDescription(auditObject.getDescription().getValue());</span>
+<span class="nc" id="L418">    }</span>
+
+    @Override
+    public void setAuditDetailsCommitter(UUID committer) {
+<span class="nc" id="L422">        auditDetails.setCommitter(committer);</span>
+<span class="nc" id="L423">    }</span>
+
+    @Override
+    public void setAuditDetailsSystemId(UUID system) {
+<span class="nc" id="L427">        auditDetails.setSystemId(system);</span>
+<span class="nc" id="L428">    }</span>
+
+    @Override
+    public void setAuditDetailsDescription(String description) {
+<span class="nc" id="L432">        auditDetails.setDescription(description);</span>
+<span class="nc" id="L433">    }</span>
+
+    @Override
+    public UUID getAuditsCommitter() {
+<span class="nc" id="L437">        return auditDetails.getCommitter();</span>
+    }
+
+    @Override
+    public UUID getAuditsSystemId() {
+<span class="nc" id="L442">        return auditDetails.getSystemId();</span>
+    }
+
+    @Override
+    public String getAuditsDescription() {
+<span class="nc" id="L447">        return auditDetails.getDescription();</span>
+    }
+
+    @Override
+    public ContributionChangeType getAuditsChangeType() {
+<span class="nc" id="L452">        return I_ConceptAccess.ContributionChangeType.valueOf(</span>
+<span class="nc" id="L453">                auditDetails.getChangeType().getLiteral().toUpperCase());</span>
+    }
+
+    @Override
+    public ContributionDef.ContributionType getContributionType() {
+<span class="nc" id="L458">        return ContributionDef.ContributionType.valueOf(</span>
+<span class="nc" id="L459">                contributionRecord.getContributionType().getLiteral());</span>
+    }
+
+    @Override
+    public ContributionDef.ContributionState getContributionState() {
+<span class="nc" id="L464">        return ContributionDef.ContributionState.valueOf(</span>
+<span class="nc" id="L465">                contributionRecord.getState().getLiteral());</span>
+    }
+
+    @Override
+    public UUID getEhrId() {
+<span class="nc" id="L470">        return contributionRecord.getEhrId();</span>
+    }
+
+    @Override
+    public String getDataType() {
+<span class="nc" id="L475">        return contributionRecord.getContributionType().getLiteral();</span>
+    }
+
+    @Override
+    public void setDataType(ContributionDataType contributionDataType) {
+<span class="nc" id="L480">        contributionRecord.setContributionType(contributionDataType);</span>
+<span class="nc" id="L481">    }</span>
+
+    @Override
+    public UUID getId() {
+<span class="nc" id="L485">        return contributionRecord.getId();</span>
+    }
+
+    @Override
+    public void setEhrId(UUID ehrId) {
+<span class="nc" id="L490">        contributionRecord.setEhrId(ehrId);</span>
+<span class="nc" id="L491">    }</span>
+
+    @Override
+    public DataAccess getDataAccess() {
+<span class="nc" id="L495">        return this;</span>
+    }
+
+    @Override
+    public void setHasAuditDetails(UUID auditId) {
+<span class="nc" id="L500">        contributionRecord.setHasAudit(auditId);</span>
+<span class="nc" id="L501">    }</span>
+
+    @Override
+    public UUID getHasAuditDetails() {
+<span class="nc" id="L505">        return contributionRecord.getHasAudit();</span>
+    }
+
+    @Override
+    public void adminDelete() {
+<span class="nc" id="L510">        AdminApiUtils adminApi = new AdminApiUtils(getContext());</span>
+
+        // retrieve info on all linked versioned_objects
+<span class="nc" id="L513">        Result&lt;AdminGetLinkedCompositionsForContribRecord&gt; linkedCompositions =</span>
+<span class="nc" id="L514">                Routines.adminGetLinkedCompositionsForContrib(getContext().configuration(), this.getId());</span>
+<span class="nc" id="L515">        Result&lt;AdminGetLinkedStatusForContribRecord&gt; linkedStatus =</span>
+<span class="nc" id="L516">                Routines.adminGetLinkedStatusForContrib(getContext().configuration(), this.getId());</span>
+
+        // handling of linked composition
+<span class="nc" id="L519">        linkedCompositions.forEach(compo -&gt; adminApi.deleteComposition(compo.getComposition()));</span>
+
+        // handling of linked status
+<span class="nc" id="L522">        linkedStatus.forEach(status -&gt; {</span>
+<span class="nc" id="L523">            Result&lt;AdminDeleteStatusRecord&gt; delStatus =</span>
+<span class="nc" id="L524">                    Routines.adminDeleteStatus(getContext().configuration(), status.getStatus());</span>
+<span class="nc bnc" id="L525" title="All 2 branches missed.">            if (delStatus.isEmpty()) {</span>
+<span class="nc" id="L526">                throw new InternalServerException(&quot;Admin deletion of Status failed! Unexpected result.&quot;);</span>
+            }
+            // handle auxiliary objects
+<span class="nc" id="L529">            delStatus.forEach(id -&gt; {</span>
+                // delete status audit
+<span class="nc" id="L531">                adminApi.deleteAudit(id.getStatusAudit(), &quot;Status&quot;, false);</span>
+
+                // clear history
+<span class="nc" id="L534">                int res = getContext()</span>
+<span class="nc" id="L535">                        .selectQuery(new AdminDeleteStatusHistory().call(status.getStatus()))</span>
+<span class="nc" id="L536">                        .execute();</span>
+<span class="nc bnc" id="L537" title="All 2 branches missed.">                if (res != 1) throw new InternalServerException(&quot;Admin deletion of Status failed!&quot;);</span>
+<span class="nc" id="L538">            });</span>
+<span class="nc" id="L539">        });</span>
+
+        // delete contribution itself
+<span class="nc" id="L542">        adminApi.deleteContribution(this.getId(), null, false);</span>
+<span class="nc" id="L543">    }</span>
+
+    @Override
+    public Short getSysTenant() {
+<span class="nc" id="L547">        return contributionRecord.getSysTenant();</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.7.202105040129</span></div></body></html>

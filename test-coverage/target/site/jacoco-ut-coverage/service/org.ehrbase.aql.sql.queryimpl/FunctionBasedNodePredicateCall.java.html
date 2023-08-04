@@ -1,0 +1,151 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../../jacoco-resources/report.gif" type="image/gif"/><title>FunctionBasedNodePredicateCall.java</title><link rel="stylesheet" href="../../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../../index.html" class="el_report">Coverage with Unit Tests</a> &gt; <a href="../index.html" class="el_bundle">service</a> &gt; <a href="index.source.html" class="el_package">org.ehrbase.aql.sql.queryimpl</a> &gt; <span class="el_source">FunctionBasedNodePredicateCall.java</span></div><h1>FunctionBasedNodePredicateCall.java</h1><pre class="source lang-java linenums">/*
+ * Copyright (c) 2019 vitasystems GmbH and Hannover Medical School.
+ *
+ * This file is part of project EHRbase
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     https://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.ehrbase.aql.sql.queryimpl;
+
+import static org.ehrbase.aql.sql.queryimpl.AqlRoutines.jsonpathItemAsText;
+import static org.ehrbase.aql.sql.queryimpl.QueryImplConstants.AQL_NODE_ITERATIVE_MARKER;
+import static org.ehrbase.aql.sql.queryimpl.QueryImplConstants.AQL_NODE_NAME_PREDICATE_MARKER;
+import static org.ehrbase.aql.sql.queryimpl.value_field.Functions.apply;
+import static org.ehrbase.jooq.pg.Routines.aqlNodeNamePredicate;
+
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
+import org.apache.commons.lang3.ArrayUtils;
+import org.ehrbase.aql.sql.queryimpl.attribute.FieldResolutionContext;
+import org.jooq.Configuration;
+import org.jooq.Field;
+import org.jooq.JSONB;
+import org.jooq.TableField;
+import org.jooq.impl.DSL;
+
+/**
+ * Created by christian on 5/9/2018.
+ * build expression to call node name resolution on jsonb
+ * specifically deals with function based sql encoding (used for composition attributes at this stage)
+ * The function call syntax is:
+ * ehr.aql_node_name_predicate(&lt;jsonb structure&gt;,'&lt;a node name predicate&gt;','the path of node to check for name/value predicate')
+ */
+public class FunctionBasedNodePredicateCall {
+
+    private final List&lt;String&gt; itemPathArray;
+    private final FieldResolutionContext fieldContext;
+
+<span class="fc" id="L49">    public FunctionBasedNodePredicateCall(FieldResolutionContext fieldContext, List&lt;String&gt; itemPathArray) {</span>
+<span class="fc" id="L50">        this.fieldContext = fieldContext;</span>
+<span class="fc" id="L51">        this.itemPathArray = itemPathArray;</span>
+<span class="fc" id="L52">    }</span>
+
+    public Field resolve(Object function, TableField... tableFields) {
+<span class="fc" id="L55">        List&lt;String&gt; expression = new ArrayList&lt;&gt;();</span>
+<span class="fc" id="L56">        expression.addAll(patchItemArray(itemPathArray));</span>
+
+<span class="fc bfc" id="L58" title="All 2 branches covered.">        while (expression.contains(AQL_NODE_NAME_PREDICATE_MARKER)) {</span>
+<span class="fc" id="L59">            expression = resolveNodePredicateCall(expression, function, tableFields);</span>
+        }
+
+<span class="fc" id="L62">        return DSL.field(expression.get(0));</span>
+    }
+
+    /**
+     * substitute with the node/name predicate function
+     * @param itemPathArray
+     * @return
+     */
+    private List&lt;String&gt; resolveNodePredicateCall(
+            List&lt;String&gt; itemPathArray, Object function, TableField... tableFields) {
+<span class="fc" id="L72">        Configuration configuration = fieldContext.getContext().configuration();</span>
+        int startList;
+
+<span class="fc" id="L75">        List&lt;String&gt; expression = new ArrayList&lt;&gt;();</span>
+
+        Field nodeField;
+
+<span class="fc bfc" id="L79" title="All 2 branches covered.">        if (!itemPathArray.get(0).replace(&quot;\&quot;&quot;, &quot;&quot;).startsWith(QueryImplConstants.AQL_NODE_NAME_PREDICATE_FUNCTION)) {</span>
+<span class="fc" id="L80">            nodeField = DSL.field(apply(function, tableFields).toString()).cast(JSONB.class);</span>
+<span class="fc" id="L81">            startList = 0;</span>
+<span class="fc" id="L82">        } else {</span>
+<span class="fc" id="L83">            nodeField = DSL.field(itemPathArray.get(0));</span>
+<span class="fc" id="L84">            startList = 1;</span>
+        }
+
+<span class="fc" id="L87">        int markerPos = ArrayUtils.indexOf(</span>
+<span class="fc" id="L88">                itemPathArray.toArray(new String[] {}), QueryImplConstants.AQL_NODE_NAME_PREDICATE_MARKER, startList);</span>
+
+<span class="pc bpc" id="L90" title="1 of 2 branches missed.">        if (markerPos &lt; 0) // not found</span>
+<span class="nc" id="L91">        markerPos = itemPathArray.size();</span>
+
+<span class="fc" id="L93">        expression.add(aqlNodeNamePredicate(</span>
+<span class="fc" id="L94">                        DSL.field(jsonpathItemAsText(</span>
+<span class="fc" id="L95">                                        configuration,</span>
+<span class="fc" id="L96">                                        nodeField,</span>
+<span class="fc" id="L97">                                        itemPathArray</span>
+<span class="fc" id="L98">                                                .subList(startList, markerPos)</span>
+<span class="fc" id="L99">                                                .toArray(new String[] {})))</span>
+<span class="fc" id="L100">                                .cast(JSONB.class),</span>
+<span class="fc" id="L101">                        DSL.val(itemPathArray.get(markerPos + 1).replace(&quot;'&quot;, &quot;&quot;)),</span>
+<span class="fc" id="L102">                        DSL.val(&quot;&quot;))</span>
+<span class="fc" id="L103">                .toString());</span>
+
+        // Locate end tag (end of array or next marker)
+<span class="fc" id="L106">        int endPos = itemPathArray.size();</span>
+
+<span class="fc" id="L108">        expression.addAll(Arrays.asList(rightPathExpression(itemPathArray, markerPos, endPos)));</span>
+
+        // end of iteration, wrap up
+<span class="fc" id="L111">        String[] extractPathArguments = expression.subList(1, expression.size()).toArray(new String[] {});</span>
+
+<span class="fc bfc" id="L113" title="All 2 branches covered.">        if (!expression.contains(QueryImplConstants.AQL_NODE_NAME_PREDICATE_MARKER)</span>
+<span class="pc bpc" id="L114" title="1 of 2 branches missed.">                &amp;&amp; extractPathArguments.length &gt; 0) {</span>
+<span class="fc" id="L115">            List&lt;String&gt; resultList = new ArrayList&lt;&gt;();</span>
+<span class="fc" id="L116">            resultList.add(DSL.field(jsonpathItemAsText(</span>
+<span class="fc" id="L117">                            configuration, DSL.field(expression.get(0)).cast(JSONB.class), extractPathArguments))</span>
+<span class="fc" id="L118">                    .toString());</span>
+<span class="fc" id="L119">            expression = resultList;</span>
+        }
+
+<span class="fc" id="L122">        return expression;</span>
+    }
+
+    private String[] rightPathExpression(List&lt;String&gt; itemPathArray, int from, int to) {
+<span class="fc" id="L126">        return itemPathArray</span>
+<span class="fc" id="L127">                .subList(</span>
+                        // test if the starting item is an index, then skip it as it is mutually exclusive with node
+                        // name predicate node selection
+<span class="fc bfc" id="L130" title="All 2 branches covered.">                        itemPathArray.get(from + 2).matches(&quot;'[0-9]*'|#&quot;) ? from + 3 : from + 2, to)</span>
+<span class="fc" id="L131">                .toArray(new String[] {});</span>
+    }
+
+    /**
+     * remove json array marker and replace it with a dummy index '0'
+     *
+     * @return
+     */
+    private List&lt;String&gt; patchItemArray(List&lt;String&gt; itemPathArray) {
+
+<span class="fc" id="L141">        List&lt;String&gt; items = new ArrayList&lt;&gt;();</span>
+
+<span class="fc bfc" id="L143" title="All 2 branches covered.">        for (String item : itemPathArray) {</span>
+<span class="pc bpc" id="L144" title="1 of 2 branches missed.">            if (item.equals(AQL_NODE_ITERATIVE_MARKER)) items.add(&quot;0&quot;);</span>
+<span class="fc" id="L145">            else items.add(item);</span>
+        }
+
+<span class="fc" id="L148">        return items;</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.7.202105040129</span></div></body></html>

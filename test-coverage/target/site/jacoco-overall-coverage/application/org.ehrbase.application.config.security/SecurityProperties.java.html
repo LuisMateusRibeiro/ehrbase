@@ -1,0 +1,127 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../../jacoco-resources/report.gif" type="image/gif"/><title>SecurityProperties.java</title><link rel="stylesheet" href="../../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../../index.html" class="el_report">Overall Coverage</a> &gt; <a href="../index.html" class="el_bundle">application</a> &gt; <a href="index.source.html" class="el_package">org.ehrbase.application.config.security</a> &gt; <span class="el_source">SecurityProperties.java</span></div><h1>SecurityProperties.java</h1><pre class="source lang-java linenums">/*
+ * Copyright (c) 2020 vitasystems GmbH and Hannover Medical School.
+ *
+ * This file is part of project EHRbase
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     https://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.ehrbase.application.config.security;
+
+import org.springframework.boot.context.properties.ConfigurationProperties;
+
+@ConfigurationProperties(prefix = &quot;security&quot;)
+<span class="nc" id="L23">public class SecurityProperties {</span>
+
+    // Roles, when not using OAuth2
+    public static final String ADMIN = &quot;ADMIN&quot;;
+
+    public static final String USER = &quot;USER&quot;;
+
+    /**
+     * Authentication type.
+     */
+    private AuthTypes authType;
+
+    /**
+     * Username.
+     */
+    private String authUser;
+
+    /**
+     * Password for the user.
+     */
+    private String authPassword;
+
+    /**
+     * Admin username.
+     */
+    private String authAdminUser;
+
+    /**
+     * Password for the admin user.
+     */
+    private String authAdminPassword;
+
+    /**
+     * User role name used with OAuth2 authentication type.
+     */
+    private String oauth2UserRole;
+
+    /**
+     * Admin role name used with OAuth2 authentication type.
+     */
+    private String oauth2AdminRole;
+
+    public AuthTypes getAuthType() {
+<span class="nc" id="L66">        return authType;</span>
+    }
+
+    public void setAuthType(AuthTypes authType) {
+<span class="nc" id="L70">        this.authType = authType;</span>
+<span class="nc" id="L71">    }</span>
+
+    public String getAuthUser() {
+<span class="nc" id="L74">        return authUser;</span>
+    }
+
+    public void setAuthUser(String authUser) {
+<span class="nc" id="L78">        this.authUser = authUser;</span>
+<span class="nc" id="L79">    }</span>
+
+    public String getAuthPassword() {
+<span class="nc" id="L82">        return authPassword;</span>
+    }
+
+    public void setAuthPassword(String authPassword) {
+<span class="nc" id="L86">        this.authPassword = authPassword;</span>
+<span class="nc" id="L87">    }</span>
+
+    public String getAuthAdminUser() {
+<span class="nc" id="L90">        return authAdminUser;</span>
+    }
+
+    public void setAuthAdminUser(String authAdminUser) {
+<span class="nc" id="L94">        this.authAdminUser = authAdminUser;</span>
+<span class="nc" id="L95">    }</span>
+
+    public String getAuthAdminPassword() {
+<span class="nc" id="L98">        return authAdminPassword;</span>
+    }
+
+    public void setAuthAdminPassword(String authAdminPassword) {
+<span class="nc" id="L102">        this.authAdminPassword = authAdminPassword;</span>
+<span class="nc" id="L103">    }</span>
+
+    public String getOauth2UserRole() {
+<span class="nc" id="L106">        return oauth2UserRole;</span>
+    }
+
+    public void setOauth2UserRole(String oauth2UserRole) {
+<span class="nc" id="L110">        this.oauth2UserRole = oauth2UserRole.toUpperCase();</span>
+<span class="nc" id="L111">    }</span>
+
+    public String getOauth2AdminRole() {
+<span class="nc" id="L114">        return oauth2AdminRole;</span>
+    }
+
+    public void setOauth2AdminRole(String oauth2AdminRole) {
+<span class="nc" id="L118">        this.oauth2AdminRole = oauth2AdminRole.toUpperCase();</span>
+<span class="nc" id="L119">    }</span>
+
+<span class="nc" id="L121">    public enum AuthTypes {</span>
+<span class="nc" id="L122">        NONE,</span>
+<span class="nc" id="L123">        BASIC,</span>
+<span class="nc" id="L124">        OAUTH</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.7.202105040129</span></div></body></html>

@@ -1,0 +1,272 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../../jacoco-resources/report.gif" type="image/gif"/><title>AuditDetailsAccess.java</title><link rel="stylesheet" href="../../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../../index.html" class="el_report">Overall Coverage</a> &gt; <a href="../index.html" class="el_bundle">service</a> &gt; <a href="index.source.html" class="el_package">org.ehrbase.dao.access.jooq</a> &gt; <span class="el_source">AuditDetailsAccess.java</span></div><h1>AuditDetailsAccess.java</h1><pre class="source lang-java linenums">/*
+ * Copyright (c) 2019 vitasystems GmbH and Hannover Medical School.
+ *
+ * This file is part of project EHRbase
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     https://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.ehrbase.dao.access.jooq;
+
+import static org.ehrbase.jooq.pg.tables.AuditDetails.AUDIT_DETAILS;
+
+import com.nedap.archie.rm.datatypes.CodePhrase;
+import com.nedap.archie.rm.datavalues.DvCodedText;
+import com.nedap.archie.rm.datavalues.DvText;
+import com.nedap.archie.rm.datavalues.quantity.datetime.DvDateTime;
+import com.nedap.archie.rm.generic.AuditDetails;
+import com.nedap.archie.rm.generic.PartyProxy;
+import com.nedap.archie.rm.support.identification.TerminologyId;
+import java.sql.Timestamp;
+import java.time.ZoneId;
+import java.time.ZonedDateTime;
+import java.util.Objects;
+import java.util.UUID;
+import org.ehrbase.api.exception.InternalServerException;
+import org.ehrbase.dao.access.interfaces.I_AuditDetailsAccess;
+import org.ehrbase.dao.access.interfaces.I_ConceptAccess;
+import org.ehrbase.dao.access.interfaces.I_DomainAccess;
+import org.ehrbase.dao.access.jooq.party.PersistedPartyProxy;
+import org.ehrbase.dao.access.support.DataAccess;
+import org.ehrbase.dao.access.util.TransactionTime;
+import org.ehrbase.jooq.pg.enums.ContributionChangeType;
+import org.ehrbase.jooq.pg.tables.records.AuditDetailsRecord;
+
+public class AuditDetailsAccess extends DataAccess implements I_AuditDetailsAccess {
+
+    private AuditDetailsRecord auditDetailsRecord;
+
+    public AuditDetailsAccess(I_DomainAccess dataAccess, Short sysTenant) {
+<span class="nc" id="L49">        super(dataAccess);</span>
+<span class="nc" id="L50">        this.auditDetailsRecord = dataAccess.getContext().newRecord(AUDIT_DETAILS);</span>
+<span class="nc" id="L51">        this.auditDetailsRecord.setSysTenant(sysTenant);</span>
+<span class="nc" id="L52">    }</span>
+
+    public AuditDetailsAccess(
+            I_DomainAccess dataAccess,
+            UUID systemId,
+            UUID committer,
+            I_ConceptAccess.ContributionChangeType changeType,
+            String description,
+            Short sysTenant) {
+<span class="nc" id="L61">        this(dataAccess, sysTenant);</span>
+<span class="nc" id="L62">        auditDetailsRecord.setSystemId(systemId);</span>
+<span class="nc" id="L63">        auditDetailsRecord.setCommitter(committer);</span>
+<span class="nc" id="L64">        setChangeType(I_ConceptAccess.fetchContributionChangeType(this, changeType));</span>
+<span class="nc" id="L65">        auditDetailsRecord.setDescription(description);</span>
+<span class="nc" id="L66">        auditDetailsRecord.setSysTenant(sysTenant);</span>
+<span class="nc" id="L67">    }</span>
+
+    @Override
+    public I_AuditDetailsAccess retrieveInstance(I_DomainAccess dataAccess, UUID auditId) {
+<span class="nc" id="L71">        AuditDetailsAccess auditDetailsAccess = new AuditDetailsAccess(dataAccess, auditDetailsRecord.getSysTenant());</span>
+
+        try {
+<span class="nc" id="L74">            auditDetailsAccess.auditDetailsRecord =</span>
+<span class="nc" id="L75">                    dataAccess.getContext().fetchOne(AUDIT_DETAILS, AUDIT_DETAILS.ID.eq(auditId));</span>
+<span class="nc bnc" id="L76" title="All 2 branches missed.">            if (!auditDetailsAccess.auditDetailsRecord.getSysTenant().equals(this.auditDetailsRecord.getSysTenant()))</span>
+<span class="nc" id="L77">                throw new InternalServerException(&quot;Tenant id mismatch: Calling for id&quot;);</span>
+<span class="nc" id="L78">        } catch (Exception e) {</span>
+<span class="nc" id="L79">            throw new InternalServerException(&quot;fetching audit_details failed&quot;, e);</span>
+        }
+
+<span class="nc bnc" id="L82" title="All 2 branches missed.">        if (auditDetailsAccess.auditDetailsRecord == null) // FIXME can this even happen?</span>
+<span class="nc" id="L83">        return null;</span>
+
+<span class="nc" id="L85">        return auditDetailsAccess;</span>
+    }
+
+    @Override
+    public DataAccess getDataAccess() {
+<span class="nc" id="L90">        return this;</span>
+    }
+
+    /**
+     * @throws InternalServerException when DB problem on storing the auditDetails
+     */
+    @Override
+    public UUID commit(Timestamp transactionTime) {
+<span class="nc" id="L98">        auditDetailsRecord.setTimeCommitted(transactionTime);</span>
+<span class="nc" id="L99">        auditDetailsRecord.setTimeCommittedTzid(ZonedDateTime.now().getZone().getId()); // extracting only TZ, ignoring</span>
+        // now() itself
+<span class="nc" id="L101">        int result = auditDetailsRecord.insert();</span>
+<span class="nc bnc" id="L102" title="All 2 branches missed.">        if (result == 1) {</span>
+<span class="nc" id="L103">            return auditDetailsRecord.getId();</span>
+        } else {
+<span class="nc" id="L105">            throw new InternalServerException(&quot;Couldn't store auditDetails, DB problem&quot;);</span>
+        }
+    }
+
+    @Override
+    public UUID commit() {
+<span class="nc" id="L111">        return commit(TransactionTime.millis());</span>
+    }
+
+    @Override
+    public UUID commit(UUID systemId, UUID committerId, String description) {
+<span class="nc bnc" id="L116" title="All 4 branches missed.">        if (systemId == null || committerId == null) throw new IllegalArgumentException(&quot;arguments not optional&quot;);</span>
+
+<span class="nc" id="L118">        auditDetailsRecord.setSystemId(systemId);</span>
+<span class="nc" id="L119">        auditDetailsRecord.setCommitter(committerId);</span>
+
+<span class="nc bnc" id="L121" title="All 2 branches missed.">        if (description != null) {</span>
+<span class="nc" id="L122">            auditDetailsRecord.setDescription(description);</span>
+        }
+<span class="nc" id="L124">        auditDetailsRecord.setChangeType(ContributionChangeType.creation);</span>
+
+<span class="nc" id="L126">        return commit();</span>
+    }
+
+    /**
+     * @throws org.jooq.exception.DataAccessException  when query executing went
+     *                                                 wrong
+     * @throws org.jooq.exception.DataChangedException on DB inconsistency
+     */
+    @Override
+    public Boolean update(Timestamp transactionTime, boolean force) {
+<span class="nc" id="L136">        boolean result = false;</span>
+
+<span class="nc bnc" id="L138" title="All 4 branches missed.">        if (force || auditDetailsRecord.changed()) {</span>
+<span class="nc" id="L139">            auditDetailsRecord.setId(UUID.randomUUID()); // force to create new entry from old values</span>
+            // auditDetailsRecord.setTimeCommitted(transactionTime); // TODO-447: does this
+            // make query CI tests fail?
+<span class="nc bnc" id="L142" title="All 2 branches missed.">            result = auditDetailsRecord.insert() == 1;</span>
+        }
+
+<span class="nc" id="L145">        return result;</span>
+    }
+
+    @Override
+    public Boolean update(Timestamp transactionTime) {
+<span class="nc" id="L150">        return update(TransactionTime.millis(), false);</span>
+    }
+
+    @Override
+    public Boolean update(Boolean force) {
+<span class="nc" id="L155">        return update(TransactionTime.millis(), force);</span>
+    }
+
+    @Override
+    public Boolean update() {
+<span class="nc" id="L160">        return update(false);</span>
+    }
+
+    @Override
+    public Boolean update(
+            UUID systemId, UUID committer, I_ConceptAccess.ContributionChangeType changeType, String description) {
+<span class="nc bnc" id="L166" title="All 2 branches missed.">        if (systemId != null) setSystemId(systemId);</span>
+<span class="nc bnc" id="L167" title="All 2 branches missed.">        if (committer != null) setCommitter(committer);</span>
+<span class="nc bnc" id="L168" title="All 2 branches missed.">        if (changeType != null) setChangeType(I_ConceptAccess.fetchContributionChangeType(this, changeType));</span>
+<span class="nc bnc" id="L169" title="All 2 branches missed.">        if (description != null) setDescription(description);</span>
+
+<span class="nc" id="L171">        return update();</span>
+    }
+
+    @Override
+    public Integer delete() {
+<span class="nc" id="L176">        return auditDetailsRecord.delete();</span>
+    }
+
+    @Override
+    public UUID getId() {
+<span class="nc" id="L181">        return auditDetailsRecord.getId();</span>
+    }
+
+    @Override
+    public void setSystemId(UUID systemId) {
+<span class="nc" id="L186">        auditDetailsRecord.setSystemId(systemId);</span>
+<span class="nc" id="L187">    }</span>
+
+    @Override
+    public UUID getSystemId() {
+<span class="nc" id="L191">        return auditDetailsRecord.getSystemId();</span>
+    }
+
+    @Override
+    public void setCommitter(UUID committer) {
+<span class="nc" id="L196">        auditDetailsRecord.setCommitter(committer);</span>
+<span class="nc" id="L197">    }</span>
+
+    @Override
+    public UUID getCommitter() {
+<span class="nc" id="L201">        return auditDetailsRecord.getCommitter();</span>
+    }
+
+    @Override
+    public void setChangeType(UUID changeType) {
+<span class="nc" id="L206">        String changeTypeString = I_ConceptAccess.fetchConceptLiteral(this, changeType);</span>
+<span class="nc" id="L207">        auditDetailsRecord.setChangeType(ContributionChangeType.valueOf(changeTypeString));</span>
+<span class="nc" id="L208">    }</span>
+
+    @Override
+    public void setChangeType(I_ConceptAccess.ContributionChangeType changeType) {
+<span class="nc" id="L212">        auditDetailsRecord.setChangeType(ContributionChangeType.valueOf(changeType.name()));</span>
+<span class="nc" id="L213">    }</span>
+
+    @Override
+    public ContributionChangeType getChangeType() {
+<span class="nc" id="L217">        return auditDetailsRecord.getChangeType();</span>
+    }
+
+    @Override
+    public void setDescription(String description) {
+<span class="nc" id="L222">        auditDetailsRecord.setDescription(description);</span>
+<span class="nc" id="L223">    }</span>
+
+    @Override
+    public String getDescription() {
+<span class="nc" id="L227">        return auditDetailsRecord.getDescription();</span>
+    }
+
+    @Override
+    public Timestamp getTimeCommitted() {
+<span class="nc" id="L232">        return auditDetailsRecord.getTimeCommitted();</span>
+    }
+
+    @Override
+    public String getTimeCommittedTzId() {
+<span class="nc" id="L237">        return auditDetailsRecord.getTimeCommittedTzid();</span>
+    }
+
+    @Override
+    public void setRecord(AuditDetailsRecord record) {
+<span class="nc bnc" id="L242" title="All 2 branches missed.">        if (Objects.isNull(record.getSysTenant())) record.setSysTenant(this.auditDetailsRecord.getSysTenant());</span>
+<span class="nc bnc" id="L243" title="All 2 branches missed.">        if (!this.auditDetailsRecord.getSysTenant().equals(record.getSysTenant()))</span>
+<span class="nc" id="L244">            throw new InternalServerException(&quot;Tenant id mismatch&quot;);</span>
+<span class="nc" id="L245">        this.auditDetailsRecord = record;</span>
+<span class="nc" id="L246">    }</span>
+
+    @Override
+    public AuditDetails getAsAuditDetails() {
+<span class="nc" id="L250">        String systemId = getSystemId().toString();</span>
+<span class="nc" id="L251">        PartyProxy party = new PersistedPartyProxy(this).retrieve(getCommitter());</span>
+<span class="nc" id="L252">        DvDateTime time = new DvDateTime(getTimeCommitted()</span>
+<span class="nc" id="L253">                .toInstant()</span>
+<span class="nc" id="L254">                .atZone(ZoneId.of(auditDetailsRecord.getTimeCommittedTzid()))</span>
+<span class="nc" id="L255">                .toOffsetDateTime());</span>
+<span class="nc" id="L256">        DvCodedText changeType = new DvCodedText(</span>
+<span class="nc" id="L257">                getChangeType().getLiteral(),</span>
+<span class="nc" id="L258">                new CodePhrase(</span>
+<span class="nc" id="L259">                        new TerminologyId(&quot;openehr&quot;),</span>
+<span class="nc" id="L260">                        Integer.toString(I_ConceptAccess.ContributionChangeType.valueOf(</span>
+<span class="nc" id="L261">                                        getChangeType().getLiteral().toUpperCase())</span>
+<span class="nc" id="L262">                                .getCode())));</span>
+<span class="nc" id="L263">        DvText description = new DvText(getDescription());</span>
+<span class="nc" id="L264">        return new AuditDetails(systemId, party, time, changeType, description);</span>
+    }
+
+    @Override
+    public Short getSysTenant() {
+<span class="nc" id="L269">        return auditDetailsRecord.getSysTenant();</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.7.202105040129</span></div></body></html>

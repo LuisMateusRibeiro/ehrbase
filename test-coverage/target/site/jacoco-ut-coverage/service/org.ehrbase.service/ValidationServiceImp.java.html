@@ -1,0 +1,227 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../../jacoco-resources/report.gif" type="image/gif"/><title>ValidationServiceImp.java</title><link rel="stylesheet" href="../../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../../index.html" class="el_report">Coverage with Unit Tests</a> &gt; <a href="../index.html" class="el_bundle">service</a> &gt; <a href="index.source.html" class="el_package">org.ehrbase.service</a> &gt; <span class="el_source">ValidationServiceImp.java</span></div><h1>ValidationServiceImp.java</h1><pre class="source lang-java linenums">/*
+ * Copyright (c) 2019-2022 vitasystems GmbH and Hannover Medical School.
+ *
+ * This file is part of project EHRbase
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     https://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.ehrbase.service;
+
+import com.nedap.archie.query.RMPathQuery;
+import com.nedap.archie.rm.composition.Composition;
+import com.nedap.archie.rm.ehr.EhrStatus;
+import com.nedap.archie.rmobjectvalidator.APathQueryCache;
+import com.nedap.archie.rmobjectvalidator.RMObjectValidationMessage;
+import com.nedap.archie.rmobjectvalidator.RMObjectValidator;
+import java.lang.reflect.Field;
+import java.util.List;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.regex.Pattern;
+import org.ehrbase.api.definitions.ServerConfig;
+import org.ehrbase.api.exception.UnprocessableEntityException;
+import org.ehrbase.api.exception.ValidationException;
+import org.ehrbase.api.service.ValidationService;
+import org.ehrbase.openehr.sdk.terminology.openehr.TerminologyService;
+import org.ehrbase.openehr.sdk.validation.CompositionValidator;
+import org.ehrbase.openehr.sdk.validation.ConstraintViolationException;
+import org.ehrbase.openehr.sdk.validation.terminology.ExternalTerminologyValidation;
+import org.ehrbase.openehr.sdk.validation.terminology.ItemStructureVisitor;
+import org.ehrbase.openehr.sdk.webtemplate.model.WebTemplate;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.stereotype.Service;
+
+/**
+ * {@link ValidationService} implementation.
+ *
+ * @author Christian Chevalley
+ * @since 1.0.0
+ */
+@Service
+public class ValidationServiceImp implements ValidationService {
+
+<span class="nc" id="L56">    private final Logger logger = LoggerFactory.getLogger(this.getClass());</span>
+
+<span class="nc" id="L58">    private static final Pattern NAMESPACE_PATTERN = Pattern.compile(&quot;[a-zA-Z][a-zA-Z0-9-_:/&amp;+?]*&quot;);</span>
+
+    private final KnowledgeCacheService knowledgeCacheService;
+
+    private final TerminologyService terminologyService;
+
+    private final ThreadLocal&lt;CompositionValidator&gt; compositionValidator;
+
+<span class="nc" id="L66">    private final Map&lt;String, RMPathQuery&gt; rmPathQueryCache = new ConcurrentHashMap&lt;&gt;();</span>
+
+<span class="nc" id="L68">    public ValidationServiceImp(</span>
+            KnowledgeCacheService knowledgeCacheService,
+            TerminologyService terminologyService,
+            ServerConfig serverConfig,
+            ObjectProvider&lt;ExternalTerminologyValidation&gt; objectProvider,
+            @Value(&quot;${cache.validation.useSharedRMPathQueryCache:true}&quot;) boolean sharedAqlQueryCache) {
+<span class="nc" id="L74">        this.knowledgeCacheService = knowledgeCacheService;</span>
+<span class="nc" id="L75">        this.terminologyService = terminologyService;</span>
+
+<span class="nc" id="L77">        boolean disableStrictValidation = serverConfig.isDisableStrictValidation();</span>
+<span class="nc bnc" id="L78" title="All 2 branches missed.">        if (disableStrictValidation) {</span>
+<span class="nc" id="L79">            logger.warn(&quot;Disabling strict invariant validation. Caution is advised.&quot;);</span>
+        }
+
+        APathQueryCache delegator;
+<span class="nc bnc" id="L83" title="All 2 branches missed.">        if (sharedAqlQueryCache) {</span>
+<span class="nc" id="L84">            delegator = new APathQueryCache() {</span>
+                @Override
+                public RMPathQuery getApathQuery(String query) {
+<span class="nc" id="L87">                    return rmPathQueryCache.computeIfAbsent(query, RMPathQuery::new);</span>
+                }
+            };
+<span class="nc" id="L90">        } else {</span>
+<span class="nc" id="L91">            logger.warn(&quot;shared RMPathQueryCache is disabled&quot;);</span>
+<span class="nc" id="L92">            delegator = null;</span>
+        }
+<span class="nc" id="L94">        compositionValidator = ThreadLocal.withInitial(() -&gt; {</span>
+<span class="nc" id="L95">            CompositionValidator validator =</span>
+<span class="nc" id="L96">                    createCompositionValidator(objectProvider, disableStrictValidation, delegator);</span>
+<span class="nc" id="L97">            return validator;</span>
+        });
+<span class="nc" id="L99">    }</span>
+
+    private static CompositionValidator createCompositionValidator(
+            ObjectProvider&lt;ExternalTerminologyValidation&gt; objectProvider,
+            boolean disableStrictValidation,
+            APathQueryCache delegator) {
+<span class="nc" id="L105">        CompositionValidator validator = new CompositionValidator();</span>
+<span class="nc" id="L106">        objectProvider.ifAvailable(validator::setExternalTerminologyValidation);</span>
+<span class="nc bnc" id="L107" title="All 2 branches missed.">        validator.setRunInvariantChecks(!disableStrictValidation);</span>
+<span class="nc" id="L108">        setSharedAqlQueryCache(validator, delegator);</span>
+<span class="nc" id="L109">        return validator;</span>
+    }
+
+    private static void setSharedAqlQueryCache(CompositionValidator validator, APathQueryCache delegator) {
+<span class="nc bnc" id="L113" title="All 2 branches missed.">        if (delegator == null) {</span>
+<span class="nc" id="L114">            return;</span>
+        }
+        try {
+            // as RMObjectValidator.queryCache is hard-coded, it is replaced via reflection
+<span class="nc" id="L118">            Field queryCacheField = RMObjectValidator.class.getDeclaredField(&quot;queryCache&quot;);</span>
+<span class="nc" id="L119">            queryCacheField.setAccessible(true);</span>
+<span class="nc" id="L120">            queryCacheField.set(validator.getRmObjectValidator(), delegator);</span>
+<span class="nc" id="L121">        } catch (IllegalAccessException | NoSuchFieldException e) {</span>
+<span class="nc" id="L122">            throw new RuntimeException(&quot;Failed to inject shared RMPathQuery cache&quot;, e);</span>
+        }
+<span class="nc" id="L124">    }</span>
+
+    @Override
+    public void check(String templateID, Composition composition) throws Exception {
+        WebTemplate webTemplate;
+        try {
+<span class="nc" id="L130">            webTemplate = knowledgeCacheService.getQueryOptMetaData(templateID);</span>
+<span class="nc" id="L131">        } catch (IllegalArgumentException e) {</span>
+<span class="nc" id="L132">            throw new UnprocessableEntityException(e.getMessage());</span>
+        }
+
+        // Validate the composition based on WebTemplate
+<span class="nc" id="L136">        var constraintViolations = compositionValidator.get().validate(composition, webTemplate);</span>
+<span class="nc bnc" id="L137" title="All 2 branches missed.">        if (!constraintViolations.isEmpty()) {</span>
+<span class="nc" id="L138">            throw new ConstraintViolationException(constraintViolations);</span>
+        }
+
+        // check codephrases against terminologies
+<span class="nc" id="L142">        ItemStructureVisitor itemStructureVisitor = new ItemStructureVisitor(terminologyService);</span>
+<span class="nc" id="L143">        itemStructureVisitor.validate(composition);</span>
+<span class="nc" id="L144">    }</span>
+
+    @Override
+    public void check(Composition composition) throws Exception {
+        // check if this composition is valid for processing
+<span class="nc bnc" id="L149" title="All 2 branches missed.">        if (composition.getName() == null) {</span>
+<span class="nc" id="L150">            throw new IllegalArgumentException(&quot;Composition missing mandatory attribute: name&quot;);</span>
+        }
+<span class="nc bnc" id="L152" title="All 2 branches missed.">        if (composition.getArchetypeNodeId() == null) {</span>
+<span class="nc" id="L153">            throw new IllegalArgumentException(&quot;Composition missing mandatory attribute: archetype_node_id&quot;);</span>
+        }
+<span class="nc bnc" id="L155" title="All 2 branches missed.">        if (composition.getLanguage() == null) {</span>
+<span class="nc" id="L156">            throw new IllegalArgumentException(&quot;Composition missing mandatory attribute: language&quot;);</span>
+        }
+<span class="nc bnc" id="L158" title="All 2 branches missed.">        if (composition.getCategory() == null) {</span>
+<span class="nc" id="L159">            throw new IllegalArgumentException(&quot;Composition missing mandatory attribute: category&quot;);</span>
+        }
+<span class="nc bnc" id="L161" title="All 2 branches missed.">        if (composition.getComposer() == null) {</span>
+<span class="nc" id="L162">            throw new IllegalArgumentException(&quot;Composition missing mandatory attribute: composer&quot;);</span>
+        }
+<span class="nc bnc" id="L164" title="All 2 branches missed.">        if (composition.getArchetypeDetails() == null) {</span>
+<span class="nc" id="L165">            throw new IllegalArgumentException(&quot;Composition missing mandatory attribute: archetype details&quot;);</span>
+        }
+<span class="nc bnc" id="L167" title="All 2 branches missed.">        if (composition.getArchetypeDetails().getTemplateId() == null) {</span>
+<span class="nc" id="L168">            throw new IllegalArgumentException(</span>
+<span class="nc" id="L169">                    &quot;Composition missing mandatory attribute: archetype details/template_id&quot;);</span>
+        }
+
+<span class="nc" id="L172">        check(composition.getArchetypeDetails().getTemplateId().getValue(), composition);</span>
+
+<span class="nc" id="L174">        logger.debug(&quot;Composition validated successfully&quot;);</span>
+<span class="nc" id="L175">    }</span>
+
+    @Override
+    public void check(EhrStatus ehrStatus) {
+        // case of a system generated ehr
+<span class="nc bnc" id="L180" title="All 2 branches missed.">        if (ehrStatus == null) {</span>
+<span class="nc" id="L181">            return;</span>
+        }
+
+        // first, check the built EhrStatus using the general Archie RM-Validator
+<span class="nc" id="L185">        List&lt;RMObjectValidationMessage&gt; rmObjectValidationMessages =</span>
+<span class="nc" id="L186">                compositionValidator.get().getRmObjectValidator().validate(ehrStatus);</span>
+
+<span class="nc bnc" id="L188" title="All 2 branches missed.">        if (!rmObjectValidationMessages.isEmpty()) {</span>
+<span class="nc" id="L189">            StringBuilder stringBuilder = new StringBuilder();</span>
+<span class="nc bnc" id="L190" title="All 2 branches missed.">            for (RMObjectValidationMessage rmObjectValidationMessage : rmObjectValidationMessages) {</span>
+<span class="nc" id="L191">                stringBuilder.append(rmObjectValidationMessage.toString());</span>
+<span class="nc" id="L192">                stringBuilder.append(&quot;\n&quot;);</span>
+            }
+<span class="nc" id="L194">            throw new ValidationException(stringBuilder.toString());</span>
+        }
+
+        // second, additional specific checks and other mandatory attributes
+
+<span class="nc bnc" id="L199" title="All 2 branches missed.">        if (ehrStatus.getSubject() == null) {</span>
+<span class="nc" id="L200">            throw new ValidationException(&quot;subject is required&quot;);</span>
+        }
+
+<span class="nc bnc" id="L203" title="All 2 branches missed.">        if (ehrStatus.getSubject().getExternalRef()</span>
+                != null) { // external_ref has 0..1 multiplicity, so null itself is okay
+            // but if it is there it has to have an ID
+<span class="nc bnc" id="L206" title="All 2 branches missed.">            if (ehrStatus.getSubject().getExternalRef().getId() == null</span>
+<span class="nc" id="L207">                    || ehrStatus</span>
+<span class="nc" id="L208">                            .getSubject()</span>
+<span class="nc" id="L209">                            .getExternalRef()</span>
+<span class="nc" id="L210">                            .getId()</span>
+<span class="nc" id="L211">                            .getValue()</span>
+<span class="nc bnc" id="L212" title="All 2 branches missed.">                            .isEmpty()) {</span>
+<span class="nc" id="L213">                throw new ValidationException(&quot;ExternalRef ID is required&quot;);</span>
+            }
+            // and a namespace
+<span class="nc bnc" id="L216" title="All 2 branches missed.">            if (ehrStatus.getSubject().getExternalRef().getNamespace() == null) {</span>
+<span class="nc" id="L217">                throw new ValidationException(&quot;ExternalRef namespace is required&quot;);</span>
+                // which needs to be valid
+<span class="nc" id="L219">            } else if (!NAMESPACE_PATTERN</span>
+<span class="nc" id="L220">                    .matcher(ehrStatus.getSubject().getExternalRef().getNamespace())</span>
+<span class="nc bnc" id="L221" title="All 2 branches missed.">                    .matches()) {</span>
+<span class="nc" id="L222">                throw new ValidationException(&quot;Subject's namespace format invalid&quot;);</span>
+            }
+        }
+<span class="nc" id="L225">    }</span>
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.7.202105040129</span></div></body></html>

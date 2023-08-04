@@ -1,0 +1,173 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../../jacoco-resources/report.gif" type="image/gif"/><title>ItemStack.java</title><link rel="stylesheet" href="../../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../../index.html" class="el_report">Coverage with Unit Tests</a> &gt; <a href="../index.html" class="el_bundle">jooq-pg</a> &gt; <a href="index.source.html" class="el_package">org.ehrbase.jooq.dbencoding</a> &gt; <span class="el_source">ItemStack.java</span></div><h1>ItemStack.java</h1><pre class="source lang-java linenums">/*
+ * Copyright (c) 2019 vitasystems GmbH and Hannover Medical School.
+ *
+ * This file is part of project EHRbase
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     https://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.ehrbase.jooq.dbencoding;
+
+import java.util.*;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+/** ETHERCIS Project ehrservice Created by Christian Chevalley on 8/3/2015. */
+<span class="fc" id="L25">public class ItemStack {</span>
+
+    private static final String archetypePrefix = &quot;[openEHR-&quot;;
+    private static final String namedItemPrefix = &quot; and name/value='&quot;;
+    private static final String namedItemSuffix = &quot;']&quot;;
+
+<span class="fc" id="L31">    private Logger log = LoggerFactory.getLogger(this.getClass());</span>
+
+    // contains the ADL path to an element
+<span class="fc" id="L34">    private Deque&lt;String&gt; pathStack = new ArrayDeque&lt;&gt;();</span>
+    // contains the named path to an element (used to bind Flat JSON)
+<span class="fc" id="L36">    private Deque&lt;String&gt; namedStack = new ArrayDeque&lt;&gt;();</span>
+
+    // used to resolve and index containments
+    private class ContainmentStruct {
+        private String label;
+        private String fullPath; // full path
+
+<span class="fc" id="L43">        ContainmentStruct(String archetype, String path) {</span>
+<span class="fc" id="L44">            this.label = archetype;</span>
+<span class="fc" id="L45">            this.fullPath = path;</span>
+<span class="fc" id="L46">        }</span>
+
+        public String getLabel() {
+<span class="fc" id="L49">            return label;</span>
+        }
+
+        String getFullPath() {
+<span class="fc" id="L53">            return fullPath;</span>
+        }
+    }
+
+<span class="fc" id="L57">    private Stack&lt;ContainmentStruct&gt; containmentStack = new Stack&lt;&gt;();</span>
+
+<span class="fc" id="L59">    private Map&lt;String, String&gt; ltreeMap = new TreeMap&lt;&gt;();</span>
+
+    public Map&lt;String, String&gt; getLtreeMap() {
+<span class="fc" id="L62">        return ltreeMap;</span>
+    }
+
+    // replace all dots by underscore and keep only the archetype name part
+    public static String normalizeLabel(String path) {
+<span class="fc" id="L67">        String label = path.substring(path.indexOf(&quot;[&quot;) + 1);</span>
+<span class="fc" id="L68">        int namedIndex = label.indexOf(namedItemPrefix);</span>
+<span class="fc bfc" id="L69" title="All 2 branches covered.">        if (namedIndex &gt;= 0) label = label.substring(0, namedIndex);</span>
+
+        // replace all dots by underscores since it is used as delimiter in a dotted labels expression
+        // for ltree
+        // only A-Za-z0-9_ are allowed to express a label
+<span class="fc" id="L74">        label = label.replace(&quot;\\.&quot;, &quot;_&quot;).replace(&quot;-&quot;, &quot;_&quot;);</span>
+<span class="fc bfc" id="L75" title="All 2 branches covered.">        if (label.endsWith(&quot;]&quot;)) label = label.substring(0, label.indexOf(&quot;]&quot;));</span>
+<span class="fc" id="L76">        return label;</span>
+    }
+
+    public static String getLabelType(String path) {
+<span class="nc bnc" id="L80" title="All 2 branches missed.">        if (path.contains(&quot;[&quot;)) return path.substring(1, path.indexOf(&quot;[&quot;));</span>
+<span class="nc" id="L81">        return path;</span>
+    }
+
+    private boolean isArchetypeSlot(String path) {
+<span class="fc" id="L85">        return path.contains(archetypePrefix);</span>
+    }
+
+    private void flushContainmentMap() {
+        // get the last element on stack
+<span class="fc" id="L90">        ContainmentStruct containmentStruct = containmentStack.lastElement();</span>
+<span class="fc bfc" id="L91" title="All 2 branches covered.">        if (!ltreeMap.containsKey(containmentStruct.getLabel()))</span>
+<span class="fc" id="L92">            ltreeMap.put(containmentStruct.getLabel(), containmentStruct.getFullPath());</span>
+<span class="fc" id="L93">    }</span>
+
+    public void pushStacks(String path, String name) {
+        // specify name/value for path in the format /something[openEHR-EHR-blablah...] for
+        // disambiguation
+<span class="fc" id="L98">        log.debug(&quot;-- PUSH PATH:&quot; + path + &quot;::&quot; + name);</span>
+<span class="fc bfc" id="L99" title="All 2 branches covered.">        if ((path.contains(archetypePrefix)</span>
+<span class="fc bfc" id="L100" title="All 2 branches covered.">                        || path.contains(CompositionSerializer.TAG_ACTIVITIES)</span>
+<span class="fc bfc" id="L101" title="All 2 branches covered.">                        || path.contains(CompositionSerializer.TAG_ITEMS)</span>
+<span class="fc bfc" id="L102" title="All 2 branches covered.">                        || path.contains(CompositionSerializer.TAG_EVENTS))</span>
+<span class="fc bfc" id="L103" title="All 2 branches covered.">                &amp;&amp; name != null) {</span>
+            // add name in path
+<span class="fc" id="L105">            path = path.substring(0, path.indexOf(&quot;]&quot;)) + namedItemPrefix + name + namedItemSuffix;</span>
+        }
+<span class="fc" id="L107">        pushStack(pathStack, path);</span>
+<span class="fc bfc" id="L108" title="All 2 branches covered.">        if (name != null) pushStack(namedStack, name.toLowerCase().replace(&quot; &quot;, &quot;_&quot;));</span>
+<span class="fc bfc" id="L109" title="All 2 branches covered.">        if (isArchetypeSlot(path)) {</span>
+
+<span class="fc" id="L111">            String label = normalizeLabel(path);</span>
+            // get the previous label if any
+<span class="fc" id="L113">            String previousLabel = null;</span>
+
+<span class="fc bfc" id="L115" title="All 2 branches covered.">            if (!containmentStack.isEmpty()) {</span>
+<span class="fc" id="L116">                previousLabel = containmentStack.lastElement().getLabel();</span>
+            }
+<span class="fc bfc" id="L118" title="All 2 branches covered.">            if (previousLabel != null) {</span>
+<span class="fc" id="L119">                label = previousLabel + &quot;.&quot; + label;</span>
+            }
+<span class="fc" id="L121">            ContainmentStruct containmentStruct = new ContainmentStruct(label, pathStackDump());</span>
+<span class="fc" id="L122">            containmentStack.push(containmentStruct);</span>
+        }
+<span class="fc" id="L124">    }</span>
+
+    public void popStacks() {
+<span class="fc bfc" id="L127" title="All 2 branches covered.">        log.debug(&quot;-- POP PATH:&quot; + (pathStack.isEmpty() ? &quot;*empty*&quot; : pathStack.getLast()));</span>
+<span class="fc" id="L128">        String path = popStack(pathStack);</span>
+<span class="fc bfc" id="L129" title="All 4 branches covered.">        if (path != null &amp;&amp; isArchetypeSlot(path)) {</span>
+<span class="fc" id="L130">            flushContainmentMap();</span>
+<span class="fc" id="L131">            containmentStack.pop();</span>
+        }
+<span class="fc" id="L133">        popStack(namedStack);</span>
+<span class="fc" id="L134">    }</span>
+
+    private void pushStack(Deque&lt;String&gt; stack, String s) {
+<span class="fc" id="L137">        stack.push(s);</span>
+<span class="fc" id="L138">    }</span>
+
+    private String popStack(Deque&lt;String&gt; stack) {
+<span class="fc bfc" id="L141" title="All 2 branches covered.">        if (!stack.isEmpty()) {</span>
+<span class="fc" id="L142">            return stack.pop();</span>
+        }
+<span class="fc" id="L144">        return null;</span>
+    }
+
+    private String stackDump(Deque stack) {
+<span class="fc" id="L148">        StringBuilder b = new StringBuilder();</span>
+<span class="fc bfc" id="L149" title="All 2 branches covered.">        for (Object s : stack.toArray()) b.append((String) s);</span>
+<span class="fc" id="L150">        return b.toString();</span>
+    }
+
+    public String namedStackDump() {
+<span class="nc" id="L154">        StringBuilder b = new StringBuilder();</span>
+<span class="nc bnc" id="L155" title="All 2 branches missed.">        for (Object s : namedStack.toArray()) b.append(s).append(&quot;/&quot;);</span>
+<span class="nc" id="L156">        return b.toString();</span>
+    }
+
+    public String expandedStackDump() {
+<span class="nc" id="L160">        StringBuilder b = new StringBuilder();</span>
+<span class="nc" id="L161">        int i = 0;</span>
+<span class="nc" id="L162">        String[] pathArray = pathStack.toArray(new String[] {});</span>
+<span class="nc bnc" id="L163" title="All 2 branches missed.">        for (Object s : namedStack.toArray()) {</span>
+<span class="nc" id="L164">            b.append(s).append(&quot;{{&quot;).append(pathArray[i++]).append(&quot;}}/&quot;);</span>
+        }
+<span class="nc" id="L166">        return b.toString();</span>
+    }
+
+    public String pathStackDump() {
+<span class="fc" id="L170">        return stackDump(pathStack);</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.7.202105040129</span></div></body></html>

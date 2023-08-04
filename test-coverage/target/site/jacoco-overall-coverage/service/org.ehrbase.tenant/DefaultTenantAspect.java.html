@@ -1,0 +1,132 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../../jacoco-resources/report.gif" type="image/gif"/><title>DefaultTenantAspect.java</title><link rel="stylesheet" href="../../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../../index.html" class="el_report">Overall Coverage</a> &gt; <a href="../index.html" class="el_bundle">service</a> &gt; <a href="index.source.html" class="el_package">org.ehrbase.tenant</a> &gt; <span class="el_source">DefaultTenantAspect.java</span></div><h1>DefaultTenantAspect.java</h1><pre class="source lang-java linenums">/*
+ * Copyright (c) 2019 vitasystems GmbH and Hannover Medical School.
+ *
+ * This file is part of project EHRbase
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     https://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.ehrbase.tenant;
+
+import java.lang.annotation.Annotation;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.List;
+import java.util.Objects;
+import java.util.Optional;
+import org.aspectj.lang.ProceedingJoinPoint;
+import org.aspectj.lang.annotation.Around;
+import org.aspectj.lang.annotation.Aspect;
+import org.aspectj.lang.annotation.Pointcut;
+import org.aspectj.lang.reflect.MethodSignature;
+import org.ehrbase.api.annotations.TenantAware;
+import org.ehrbase.api.tenant.TenantAuthentication;
+import org.ehrbase.api.tenant.TenantIdExtractionStrategy;
+import org.springframework.aop.aspectj.MethodInvocationProceedingJoinPoint;
+import org.springframework.security.core.context.SecurityContext;
+import org.springframework.security.core.context.SecurityContextHolder;
+
+@Aspect
+public class DefaultTenantAspect implements org.ehrbase.api.aspect.TenantAspect {
+<span class="nc" id="L40">    private static final List&lt;Class&lt;? extends Annotation&gt;&gt; MATCHED_ANNOTATIONS = List.of(TenantAware.class);</span>
+    private final List&lt;TenantIdExtractionStrategy&lt;?&gt;&gt; extractionStrategies;
+
+    public DefaultTenantAspect() {
+<span class="nc" id="L44">        this(new ArrayList&lt;&gt;());</span>
+<span class="nc" id="L45">    }</span>
+
+<span class="nc" id="L47">    private static final Comparator&lt;TenantIdExtractionStrategy&lt;?&gt;&gt; PRIORITY_SORT =</span>
+<span class="nc" id="L48">            Comparator.comparingInt(TenantIdExtractionStrategy::priority);</span>
+
+<span class="nc" id="L50">    public DefaultTenantAspect(List&lt;TenantIdExtractionStrategy&lt;?&gt;&gt; extractionStrategies) {</span>
+<span class="nc" id="L51">        extractionStrategies.sort(PRIORITY_SORT);</span>
+<span class="nc" id="L52">        this.extractionStrategies = extractionStrategies;</span>
+<span class="nc" id="L53">    }</span>
+
+    public &lt;T&gt; void addExtractionStrategy(TenantIdExtractionStrategy&lt;T&gt; strategy) {
+<span class="nc" id="L56">        extractionStrategies.add(strategy);</span>
+<span class="nc" id="L57">        extractionStrategies.sort(PRIORITY_SORT);</span>
+<span class="nc" id="L58">    }</span>
+
+    @Pointcut(value = &quot;@within(tenantAnnotation)&quot;)
+<span class="nc" id="L61">    public void matchTenantAnnotation(org.ehrbase.api.annotations.TenantAware tenantAnnotation) {}</span>
+
+<span class="nc" id="L63">    private static final String ERR_NON_TENANT_ID = &quot;Fatal error, no tenant id available&quot;;</span>
+
+    /*
+     * currently we support only TenantAuthentication&lt;String&gt;. when more
+     * is needed we must implement a more sophisticated conversion.
+     */
+    @Around(&quot;matchTenantAnnotation(tenantAnnotation)&quot;)
+    public Object action(ProceedingJoinPoint pjp, TenantAware tenantAnnotation) throws Throwable {
+<span class="nc" id="L71">        return action(pjp, List.of(tenantAnnotation));</span>
+    }
+
+    @Override
+    public Object action(ProceedingJoinPoint pjp, List&lt;Annotation&gt; annotations) throws Throwable {
+<span class="nc" id="L76">        annotations.stream()</span>
+<span class="nc" id="L77">                .filter(TenantAware.class::isInstance)</span>
+<span class="nc" id="L78">                .map(TenantAware.class::cast)</span>
+<span class="nc" id="L79">                .findFirst()</span>
+<span class="nc" id="L80">                .ifPresent(tenantAnnotation -&gt; {</span>
+<span class="nc bnc" id="L81" title="All 2 branches missed.">                    if (isMethodTenantAware(pjp, tenantAnnotation)) {</span>
+<span class="nc" id="L82">                        Object[] args = pjp.getArgs();</span>
+<span class="nc" id="L83">                        TenantAuthentication&lt;?&gt; tenant = Objects.requireNonNull(extract(args), ERR_NON_TENANT_ID);</span>
+<span class="nc" id="L84">                        SecurityContext ctx = SecurityContextHolder.getContext();</span>
+<span class="nc" id="L85">                        ctx.setAuthentication(DefaultTenantAuthentication.of(tenant, Object::toString));</span>
+                    }
+<span class="nc" id="L87">                });</span>
+<span class="nc" id="L88">        return pjp.proceed();</span>
+    }
+
+    private boolean isMethodTenantAware(ProceedingJoinPoint pjp, TenantAware tenantAnnotation) {
+<span class="nc bnc" id="L92" title="All 2 branches missed.">        if (tenantAnnotation.exclude().length != 0</span>
+<span class="nc bnc" id="L93" title="All 2 branches missed.">                &amp;&amp; pjp instanceof MethodInvocationProceedingJoinPoint mijp</span>
+<span class="nc bnc" id="L94" title="All 2 branches missed.">                &amp;&amp; mijp.getSignature() instanceof MethodSignature signature) {</span>
+
+<span class="nc" id="L96">            List&lt;String&gt; allVariants = List.of(</span>
+<span class="nc" id="L97">                    signature.getMethod().getName(),</span>
+<span class="nc" id="L98">                    signature.toShortString(),</span>
+<span class="nc" id="L99">                    signature.toLongString(),</span>
+<span class="nc" id="L100">                    signature.toString());</span>
+
+<span class="nc bnc" id="L102" title="All 2 branches missed.">            for (String exclude : tenantAnnotation.exclude()) {</span>
+<span class="nc bnc" id="L103" title="All 2 branches missed.">                if (allVariants.contains(exclude)) {</span>
+<span class="nc" id="L104">                    return false;</span>
+                }
+            }
+        }
+
+<span class="nc" id="L109">        return true;</span>
+    }
+
+    private TenantAuthentication&lt;?&gt; extract(Object... args) {
+<span class="nc" id="L113">        Optional&lt;TenantAuthentication&lt;?&gt;&gt; priorAuth = Optional.empty();</span>
+
+<span class="nc bnc" id="L115" title="All 2 branches missed.">        for (TenantIdExtractionStrategy&lt;?&gt; strg : extractionStrategies) {</span>
+<span class="nc bnc" id="L116" title="All 2 branches missed.">            if (!strg.accept(args)) continue;</span>
+
+<span class="nc" id="L118">            Optional&lt;? extends TenantAuthentication&lt;?&gt;&gt; extract = strg.extractWithPrior(priorAuth, args);</span>
+<span class="nc bnc" id="L119" title="All 2 branches missed.">            if (!extract.isPresent()) continue;</span>
+
+<span class="nc" id="L121">            priorAuth = (Optional&lt;TenantAuthentication&lt;?&gt;&gt;) extract;</span>
+        }
+
+<span class="nc" id="L124">        return priorAuth.get();</span>
+    }
+
+    @Override
+    public List&lt;Class&lt;? extends Annotation&gt;&gt; matchAnnotations() {
+<span class="nc" id="L129">        return MATCHED_ANNOTATIONS;</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.7.202105040129</span></div></body></html>

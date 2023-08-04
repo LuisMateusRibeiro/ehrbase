@@ -1,0 +1,108 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../../jacoco-resources/report.gif" type="image/gif"/><title>AdminApiUtils.java</title><link rel="stylesheet" href="../../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../../index.html" class="el_report">Coverage with Unit Tests</a> &gt; <a href="../index.html" class="el_bundle">service</a> &gt; <a href="index.source.html" class="el_package">org.ehrbase.dao.access.jooq</a> &gt; <span class="el_source">AdminApiUtils.java</span></div><h1>AdminApiUtils.java</h1><pre class="source lang-java linenums">/*
+ * Copyright (c) 2022 vitasystems GmbH and Hannover Medical School.
+ *
+ * This file is part of project EHRbase
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     https://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.ehrbase.dao.access.jooq;
+
+import java.util.Objects;
+import java.util.UUID;
+import org.ehrbase.api.exception.InternalServerException;
+import org.ehrbase.jooq.pg.Routines;
+import org.ehrbase.jooq.pg.tables.AdminDeleteCompositionHistory;
+import org.ehrbase.jooq.pg.tables.records.*;
+import org.jooq.DSLContext;
+import org.jooq.Result;
+
+/**
+ * Util class to offer reusable methods in the scope of the Admin API.
+ */
+public class AdminApiUtils {
+
+    DSLContext ctx;
+
+<span class="nc" id="L36">    public AdminApiUtils(DSLContext ctx) {</span>
+<span class="nc" id="L37">        this.ctx = Objects.requireNonNull(ctx);</span>
+<span class="nc" id="L38">    }</span>
+
+    /**
+     * Deletes Composition and audit.
+     * @param id Composition
+     */
+    private void internalDeleteComposition(UUID id) {
+        // delete event_context and its participation first
+<span class="nc" id="L46">        Routines.adminDeleteEventContextForCompo(ctx.configuration(), id);</span>
+
+        // deletion of composition itself
+<span class="nc" id="L49">        Result&lt;AdminDeleteCompositionRecord&gt; delCompo = Routines.adminDeleteComposition(ctx.configuration(), id);</span>
+        // for each deleted compo delete auxiliary objects
+<span class="nc" id="L51">        delCompo.forEach(del -&gt; {</span>
+            // invoke deletion of audit
+<span class="nc" id="L53">            deleteAudit(del.getAudit(), &quot;Composition&quot;, false);</span>
+            // invoke deletion of attestation, if available
+<span class="nc bnc" id="L55" title="All 2 branches missed.">            if (del.getAttestation() != null) {</span>
+<span class="nc" id="L56">                Result&lt;AdminDeleteAttestationRecord&gt; delAttest =</span>
+<span class="nc" id="L57">                        Routines.adminDeleteAttestation(ctx.configuration(), del.getAttestation());</span>
+<span class="nc" id="L58">                delAttest.forEach(attest -&gt; deleteAudit(attest.getAudit(), &quot;Attestation&quot;, false));</span>
+            }
+
+            // delete contribution
+<span class="nc" id="L62">            deleteContribution(del.getContribution(), null, false);</span>
+<span class="nc" id="L63">        });</span>
+<span class="nc" id="L64">    }</span>
+
+    /**
+     * Admin deletion of the given Composition.
+     * @param id Composition
+     */
+    public void deleteComposition(UUID id) {
+        // actual deletion of the composition
+<span class="nc" id="L72">        internalDeleteComposition(id);</span>
+
+        // cleanup of composition auxiliary objects
+<span class="nc" id="L75">        int res = ctx.selectQuery(new AdminDeleteCompositionHistory().call(id)).execute();</span>
+<span class="nc bnc" id="L76" title="All 2 branches missed.">        if (res != 1) throw new InternalServerException(&quot;Admin deletion of Composition auxiliary objects failed!&quot;);</span>
+<span class="nc" id="L77">    }</span>
+
+    /**
+     * Admin deletion of the given Audit
+     * @param id Audit
+     * @param context Object context to build error message, e.g. &quot;Composition&quot; for the audit of a Composition
+     * @param resultCanBeEmpty Config parameter to disable check of result, in case the object is deleted already (for broader scopes, like EHR itself)
+     */
+    public void deleteAudit(UUID id, String context, Boolean resultCanBeEmpty) {
+<span class="nc" id="L86">        Result&lt;AdminDeleteAuditRecord&gt; delAudit = Routines.adminDeleteAudit(ctx.configuration(), id);</span>
+<span class="nc bnc" id="L87" title="All 4 branches missed.">        if (resultCanBeEmpty.equals(false) &amp;&amp; delAudit.size() != 1)</span>
+<span class="nc" id="L88">            throw new InternalServerException(&quot;Admin deletion of &quot; + context + &quot; Audit failed!&quot;);</span>
+<span class="nc" id="L89">    }</span>
+
+    /**
+     * Admin deletion of the given Contribution
+     * @param id Contribution
+     * @param audit Audit ID, optional
+     * @param resultCanBeEmpty Config parameter to disable check of result, in case the object is deleted already (for broader scopes, like EHR itself)
+     */
+    public void deleteContribution(UUID id, UUID audit, Boolean resultCanBeEmpty) {
+        // delete contribution
+<span class="nc" id="L99">        Result&lt;AdminDeleteContributionRecord&gt; rec = Routines.adminDeleteContribution(ctx.configuration(), id);</span>
+        // and its audit (depending of how this is called, either get audit ID from parameter or from response)
+<span class="nc bnc" id="L101" title="All 2 branches missed.">        if (rec.isNotEmpty()) {</span>
+<span class="nc" id="L102">            rec.forEach(del -&gt; deleteAudit(del.getAudit(), &quot;Contribution&quot;, resultCanBeEmpty));</span>
+<span class="nc bnc" id="L103" title="All 2 branches missed.">        } else if (audit != null) {</span>
+<span class="nc" id="L104">            deleteAudit(audit, &quot;Contribution&quot;, resultCanBeEmpty);</span>
+        }
+<span class="nc" id="L106">    }</span>
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.7.202105040129</span></div></body></html>

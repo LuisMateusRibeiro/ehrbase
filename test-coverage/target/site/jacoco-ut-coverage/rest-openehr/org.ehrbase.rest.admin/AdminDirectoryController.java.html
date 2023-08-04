@@ -1,0 +1,114 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../../jacoco-resources/report.gif" type="image/gif"/><title>AdminDirectoryController.java</title><link rel="stylesheet" href="../../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../../index.html" class="el_report">Coverage with Unit Tests</a> &gt; <a href="../index.html" class="el_bundle">rest-openehr</a> &gt; <a href="index.source.html" class="el_package">org.ehrbase.rest.admin</a> &gt; <span class="el_source">AdminDirectoryController.java</span></div><h1>AdminDirectoryController.java</h1><pre class="source lang-java linenums">/*
+ * Copyright (c) 2020 vitasystems GmbH and Hannover Medical School.
+ *
+ * This file is part of project EHRbase
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     https://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.ehrbase.rest.admin;
+
+import static org.springframework.web.util.UriComponentsBuilder.fromPath;
+
+import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.headers.Header;
+import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
+import io.swagger.v3.oas.annotations.tags.Tag;
+import java.util.UUID;
+import org.ehrbase.api.annotations.TenantAware;
+import org.ehrbase.api.audit.msg.AuditMsgBuilder;
+import org.ehrbase.api.authorization.EhrbaseAuthorization;
+import org.ehrbase.api.authorization.EhrbasePermission;
+import org.ehrbase.api.service.DirectoryService;
+import org.ehrbase.openehr.sdk.response.dto.admin.AdminDeleteResponseData;
+import org.ehrbase.rest.BaseController;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
+
+/**
+ * Admin API controller for directories. Provides endpoint to remove complete directory trees from database physically.
+ */
+@TenantAware
+@Tag(name = &quot;Admin - Directory&quot;)
+@ConditionalOnProperty(prefix = &quot;admin-api&quot;, name = &quot;active&quot;)
+@RestController
+@RequestMapping(
+        path = &quot;${admin-api.context-path:/rest/admin}/ehr&quot;,
+        produces = {MediaType.APPLICATION_JSON_VALUE, MediaType.APPLICATION_XML_VALUE})
+public class AdminDirectoryController extends BaseController {
+
+    private final DirectoryService directoryService;
+
+    @Autowired
+<span class="nc" id="L60">    public AdminDirectoryController(DirectoryService directoryService) {</span>
+
+<span class="nc" id="L62">        this.directoryService = directoryService;</span>
+<span class="nc" id="L63">    }</span>
+
+    @EhrbaseAuthorization(permission = EhrbasePermission.EHRBASE_ADMIN_ACCESS)
+    @EhrbaseAuthorization(permission = EhrbasePermission.EHRBASE_DIRECTORY_DELETE)
+    @DeleteMapping(path = &quot;/{ehr_id}/directory/{directory_id}&quot;)
+    @ApiResponses(
+            value = {
+                @ApiResponse(
+                        responseCode = &quot;200&quot;,
+                        description = &quot;Directory has been deleted successfully&quot;,
+                        headers = {
+                            @Header(
+                                    name = CONTENT_TYPE,
+                                    description = RESP_CONTENT_TYPE_DESC,
+                                    schema = @Schema(implementation = MediaType.class))
+                        }),
+                @ApiResponse(responseCode = &quot;401&quot;, description = &quot;Client credentials are invalid or have expired.&quot;),
+                @ApiResponse(
+                        responseCode = &quot;403&quot;,
+                        description = &quot;Client has no permission to access since admin role is missing.&quot;),
+                @ApiResponse(responseCode = &quot;404&quot;, description = &quot;EHR or Directory could not be found.&quot;)
+            })
+    public ResponseEntity&lt;AdminDeleteResponseData&gt; deleteDirectory(
+            @Parameter(description = &quot;Target EHR ed to remove Directory from&quot;, required = true)
+                    @PathVariable(value = &quot;ehr_id&quot;)
+                    String ehrId,
+            @Parameter(description = &quot;Target Directory id to delete&quot;, required = true)
+                    @PathVariable(value = &quot;directory_id&quot;)
+                    String directoryId) {
+
+<span class="nc" id="L93">        UUID ehrUuid = UUID.fromString(ehrId);</span>
+
+<span class="nc" id="L95">        UUID folderUid = UUID.fromString(directoryId);</span>
+
+<span class="nc" id="L97">        createAuditLogsMsgBuilder(ehrUuid.toString(), folderUid.toString());</span>
+
+<span class="nc" id="L99">        directoryService.adminDeleteFolder(ehrUuid, folderUid);</span>
+
+<span class="nc" id="L101">        return ResponseEntity.noContent().build();</span>
+    }
+
+    private void createAuditLogsMsgBuilder(String ehrId, String versionedObjectUid) {
+<span class="nc" id="L105">        AuditMsgBuilder.getInstance()</span>
+<span class="nc" id="L106">                .setEhrIds(ehrId)</span>
+<span class="nc" id="L107">                .setDirectoryId(versionedObjectUid)</span>
+<span class="nc" id="L108">                .setLocation(fromPath(&quot;&quot;)</span>
+<span class="nc" id="L109">                        .pathSegment(EHR, ehrId, DIRECTORY, versionedObjectUid)</span>
+<span class="nc" id="L110">                        .build()</span>
+<span class="nc" id="L111">                        .toString());</span>
+<span class="nc" id="L112">    }</span>
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.7.202105040129</span></div></body></html>

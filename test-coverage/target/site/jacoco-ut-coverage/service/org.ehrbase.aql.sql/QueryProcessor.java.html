@@ -1,0 +1,434 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../../jacoco-resources/report.gif" type="image/gif"/><title>QueryProcessor.java</title><link rel="stylesheet" href="../../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../../index.html" class="el_report">Coverage with Unit Tests</a> &gt; <a href="../index.html" class="el_bundle">service</a> &gt; <a href="index.source.html" class="el_package">org.ehrbase.aql.sql</a> &gt; <span class="el_source">QueryProcessor.java</span></div><h1>QueryProcessor.java</h1><pre class="source lang-java linenums">/*
+ * Copyright (c) 2019 vitasystems GmbH and Hannover Medical School.
+ *
+ * This file is part of project EHRbase
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     https://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.ehrbase.aql.sql;
+
+import static org.ehrbase.jooq.pg.Tables.ENTRY;
+
+import java.util.*;
+import org.apache.commons.lang3.tuple.Pair;
+import org.ehrbase.aql.compiler.Contains;
+import org.ehrbase.aql.compiler.Statements;
+import org.ehrbase.aql.compiler.TopAttributes;
+import org.ehrbase.aql.definition.I_VariableDefinition;
+import org.ehrbase.aql.definition.LateralJoinDefinition;
+import org.ehrbase.aql.definition.Variables;
+import org.ehrbase.aql.sql.binding.*;
+import org.ehrbase.aql.sql.postprocessing.RawJsonTransform;
+import org.ehrbase.aql.sql.queryimpl.*;
+import org.ehrbase.aql.sql.queryimpl.attribute.JoinSetup;
+import org.ehrbase.dao.access.interfaces.I_DomainAccess;
+import org.ehrbase.service.IntrospectService;
+import org.jooq.*;
+import org.jooq.Record;
+import org.jooq.conf.Settings;
+import org.jooq.impl.DSL;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+/**
+ * Perform an assembled SQL query depending on its strategy
+ * &lt;p&gt;
+ * The strategy depends on whether the query contains elements which path depends on the context
+ * (e.g. a composition).
+ * &lt;ul&gt;
+ * &lt;li&gt;If a query contains path expression that need to be resolved, the query process consists in
+ * evaluating the path for each composition (iteration)
+ * &lt;li&gt;If the query contains only static fields (columns), a single query execution is done.
+ * &lt;/ul&gt;
+ * &lt;/p&gt;
+ * &lt;p&gt;
+ * Created by christian on 4/28/2016.
+ */
+@SuppressWarnings({&quot;java:S3776&quot;, &quot;java:S3740&quot;})
+public class QueryProcessor extends TemplateMetaData {
+
+    public static final String NIL_TEMPLATE = &quot;*&quot;;
+
+<span class="fc" id="L62">    private final Logger logger = LoggerFactory.getLogger(this.getClass());</span>
+
+    /**
+     *
+     */
+    public static class AqlSelectQuery {
+        private final SelectQuery&lt;Record&gt; selectQuery;
+        private final Collection&lt;List&lt;QuerySteps&gt;&gt; querySteps;
+        private boolean outputWithJson;
+
+<span class="fc" id="L72">        AqlSelectQuery(</span>
+                SelectQuery&lt;Record&gt; selectQuery, Collection&lt;List&lt;QuerySteps&gt;&gt; querySteps, boolean outputWithJson) {
+<span class="fc" id="L74">            this.selectQuery = selectQuery;</span>
+<span class="fc" id="L75">            this.querySteps = querySteps;</span>
+<span class="fc" id="L76">            this.outputWithJson = outputWithJson;</span>
+<span class="fc" id="L77">        }</span>
+
+        public SelectQuery&lt;Record&gt; getSelectQuery() {
+<span class="fc" id="L80">            return selectQuery;</span>
+        }
+
+        public boolean isOutputWithJson() {
+<span class="nc" id="L84">            return outputWithJson;</span>
+        }
+
+        Collection&lt;List&lt;QuerySteps&gt;&gt; getQuerySteps() {
+<span class="nc" id="L88">            return querySteps;</span>
+        }
+    }
+
+    private final I_DomainAccess domainAccess;
+    private final Contains contains;
+    private Statements statements;
+    private final String serverNodeId;
+<span class="fc" id="L96">    private JoinSetup joinSetup = new JoinSetup();</span>
+
+    public QueryProcessor(
+            I_DomainAccess domainAccess,
+            IntrospectService introspectCache,
+            Contains contains,
+            Statements statements,
+            String serverNodeId) {
+<span class="fc" id="L104">        super(introspectCache);</span>
+<span class="fc" id="L105">        this.domainAccess = domainAccess;</span>
+<span class="fc" id="L106">        this.contains = contains;</span>
+<span class="fc" id="L107">        this.statements = statements;</span>
+<span class="fc" id="L108">        this.serverNodeId = serverNodeId;</span>
+<span class="fc" id="L109">    }</span>
+
+    public AqlResult execute() {
+<span class="nc" id="L112">        AqlSelectQuery aqlSelectQuery = buildAqlSelectQuery();</span>
+
+<span class="nc" id="L114">        Result&lt;Record&gt; result = fetchResultSet(aqlSelectQuery.getSelectQuery(), null);</span>
+
+        // if any jsonb data field transform them into raw json
+<span class="nc" id="L117">        RawJsonTransform.toRawJson(result);</span>
+<span class="nc" id="L118">        DurationFormatter.toISO8601(result);</span>
+
+<span class="nc" id="L120">        List&lt;List&lt;String&gt;&gt; explainList = buildExplain(aqlSelectQuery.getSelectQuery());</span>
+
+<span class="nc" id="L122">        return new AqlResult(result, explainList);</span>
+    }
+
+    public AqlSelectQuery buildAqlSelectQuery() {
+
+<span class="fc" id="L127">        Map&lt;String, List&lt;QuerySteps&gt;&gt; cacheQuery = new LinkedHashMap&lt;&gt;();</span>
+
+<span class="fc" id="L129">        boolean containsJson = false;</span>
+
+<span class="fc" id="L131">        statements = new OrderByField(statements).merge();</span>
+
+<span class="fc bfc" id="L133" title="All 2 branches covered.">        if (contains.getTemplates().isEmpty()) {</span>
+<span class="pc bpc" id="L134" title="1 of 4 branches missed.">            if (contains.hasContains() &amp;&amp; contains.requiresTemplateWhereClause()) {</span>
+                try {
+<span class="fc" id="L136">                    cacheQuery.put(NIL_TEMPLATE, buildNullSelect());</span>
+<span class="pc" id="L137">                } catch (UnknownVariableException e) {</span>
+                    // do nothing
+                }
+<span class="nc" id="L140">            } else</span>
+                try {
+<span class="fc" id="L142">                    cacheQuery.put(NIL_TEMPLATE, buildQuerySteps(NIL_TEMPLATE));</span>
+<span class="pc" id="L143">                } catch (UnknownVariableException e) {</span>
+                    // do nothing
+                }
+<span class="nc" id="L146">        } else {</span>
+<span class="fc bfc" id="L147" title="All 2 branches covered.">            for (String templateId : contains.getTemplates()) {</span>
+                try {
+<span class="fc" id="L149">                    cacheQuery.put(templateId, buildQuerySteps(templateId));</span>
+<span class="pc" id="L150">                } catch (UnknownVariableException e) {</span>
+                    // ignore
+<span class="nc bnc" id="L152" title="All 2 branches missed.">                    if (logger.isDebugEnabled()) {</span>
+<span class="nc" id="L153">                        logger.debug(&quot;Template {}: {}&quot;, templateId, e.getMessage());</span>
+                    }
+                }
+            }
+        }
+
+        // assemble the query from the cache
+<span class="fc" id="L160">        SelectQuery unionSetQuery = domainAccess.getContext().selectQuery();</span>
+<span class="fc" id="L161">        boolean first = true;</span>
+
+<span class="fc bfc" id="L163" title="All 2 branches covered.">        for (List&lt;QuerySteps&gt; queryStepList : cacheQuery.values()) {</span>
+
+<span class="fc bfc" id="L165" title="All 2 branches covered.">            for (QuerySteps queryStep : queryStepList) {</span>
+
+<span class="fc" id="L167">                SelectQuery select = queryStep.getSelectQuery();</span>
+
+<span class="fc bfc" id="L169" title="All 2 branches covered.">                if (!queryStep.getTemplateId().equalsIgnoreCase(NIL_TEMPLATE)) joinSetup.setUseEntry(true);</span>
+
+<span class="fc" id="L171">                JoinBinder joinBinder = new JoinBinder(domainAccess, joinSetup);</span>
+
+<span class="fc" id="L173">                select.addFrom(joinBinder.initialFrom());</span>
+
+<span class="fc" id="L175">                select = joinBinder.addJoinClause(select);</span>
+
+<span class="fc" id="L177">                select = setLateralJoins(queryStep.getLateralJoins(), select);</span>
+
+                // this deals with 'contains c' which adds an implicit where on template id
+<span class="fc bfc" id="L180" title="All 2 branches covered.">                if (!queryStep.getTemplateId().equals(NIL_TEMPLATE)) {</span>
+<span class="fc" id="L181">                    select.addConditions(ENTRY.TEMPLATE_ID.eq(queryStep.getTemplateId()));</span>
+                }
+<span class="fc" id="L183">                Condition whereCondition = queryStep.getWhereCondition();</span>
+<span class="fc bfc" id="L184" title="All 2 branches covered.">                if (whereCondition != null) select.addConditions(Operator.AND, whereCondition);</span>
+
+<span class="fc bfc" id="L186" title="All 2 branches covered.">                if (first) {</span>
+<span class="fc" id="L187">                    unionSetQuery = select;</span>
+<span class="fc" id="L188">                    first = false;</span>
+<span class="fc" id="L189">                } else {</span>
+<span class="fc" id="L190">                    unionSetQuery.unionAll(select);</span>
+                }
+            }
+        }
+
+        // Add function or Distinct
+<span class="fc" id="L196">        SuperQuery superQuery = new SuperQuery(domainAccess, statements.getVariables(), unionSetQuery, containsJson);</span>
+<span class="fc bfc" id="L197" title="All 2 branches covered.">        if (new Variables(statements.getVariables()).hasDefinedDistinct()</span>
+<span class="fc bfc" id="L198" title="All 2 branches covered.">                || new Variables(statements.getVariables()).hasDefinedFunction()) {</span>
+<span class="fc" id="L199">            unionSetQuery = superQuery.select();</span>
+<span class="pc bpc" id="L200" title="1 of 2 branches missed.">            if (statements.getOrderAttributes() != null</span>
+<span class="fc bfc" id="L201" title="All 2 branches covered.">                    &amp;&amp; !statements.getOrderAttributes().isEmpty()) {</span>
+<span class="fc" id="L202">                unionSetQuery = superQuery.setOrderBy(statements.getOrderAttributes(), unionSetQuery);</span>
+            }
+<span class="fc" id="L204">            containsJson = superQuery.isOutputWithJson();</span>
+<span class="pc bpc" id="L205" title="1 of 2 branches missed.">        } else if (statements.getOrderAttributes() != null</span>
+<span class="fc bfc" id="L206" title="All 2 branches covered.">                &amp;&amp; !statements.getOrderAttributes().isEmpty()) {</span>
+<span class="fc" id="L207">            unionSetQuery = superQuery.selectOrderBy(statements.getOrderAttributes());</span>
+<span class="fc" id="L208">            containsJson = superQuery.isOutputWithJson();</span>
+        }
+
+        // Add Top , Limit or Offset; Top and Limit can not be both present.
+<span class="fc" id="L212">        LimitBinding limitBinding = new LimitBinding(</span>
+<span class="fc" id="L213">                Optional.ofNullable(statements.getTopAttributes())</span>
+<span class="fc" id="L214">                        .map(TopAttributes::getWindow)</span>
+<span class="fc" id="L215">                        .orElse(statements.getLimitAttribute()),</span>
+<span class="fc" id="L216">                statements.getOffsetAttribute(),</span>
+<span class="fc" id="L217">                unionSetQuery);</span>
+
+<span class="fc" id="L219">        unionSetQuery = limitBinding.bind();</span>
+
+<span class="fc" id="L221">        return new AqlSelectQuery(unionSetQuery, cacheQuery.values(), containsJson);</span>
+    }
+
+    private List&lt;QuerySteps&gt; buildQuerySteps(String templateId) throws UnknownVariableException {
+
+<span class="fc" id="L226">        List&lt;QuerySteps&gt; queryStepsList = new ArrayList&lt;&gt;();</span>
+
+        // process WHERE clause first
+<span class="fc" id="L229">        WhereMultiFields whereMultiFields = new WhereMultiFields(</span>
+<span class="fc" id="L230">                domainAccess, introspectCache, contains, statements.getWhereClause(), serverNodeId);</span>
+<span class="fc" id="L231">        MultiFieldsMap multiWhereFieldsMap = new MultiFieldsMap(whereMultiFields.bind(templateId));</span>
+<span class="fc" id="L232">        joinSetup = joinSetup.merge(whereMultiFields.getJoinSetup());</span>
+
+        // process SELECT and check to reconciliate where and select columns
+<span class="fc" id="L235">        SelectBinder selectBinder = new SelectBinder(domainAccess, introspectCache, contains, statements, serverNodeId);</span>
+<span class="fc" id="L236">        MultiFieldsMultiMap multiSelectFieldsMap = new MultiFieldsMultiMap(selectBinder.bind(templateId));</span>
+<span class="fc" id="L237">        joinSetup = joinSetup.merge(selectBinder.getCompositionAttributeQuery().getJoinSetup());</span>
+
+<span class="fc" id="L239">        int selectCursor = 0;</span>
+<span class="fc" id="L240">        int whereCursor = 0;</span>
+
+<span class="fc" id="L242">        int selectCursorMax = multiSelectFieldsMap.upperPathBoundary();</span>
+<span class="fc" id="L243">        int whereCursorMax = multiWhereFieldsMap.upperPathBoundary();</span>
+
+        // build the actual sets of fields depending on the generated multi fields
+        // ...
+
+<span class="fc" id="L248">        SelectQuery&lt;?&gt; select = domainAccess.getContext().selectQuery();</span>
+
+<span class="fc bfc" id="L250" title="All 4 branches covered.">        while (whereCursorMax == 0 || whereCursor &lt; whereCursorMax) {</span>
+
+            // iterate on variable
+<span class="fc bfc" id="L253" title="All 2 branches covered.">            while (selectCursor &lt; selectCursorMax) {</span>
+                // iterate on paths for the variable
+<span class="fc bfc" id="L255" title="All 2 branches covered.">                for (Iterator&lt;MultiFields&gt; it = multiSelectFieldsMap.multiFieldsIterator(); it.hasNext(); ) {</span>
+<span class="fc" id="L256">                    MultiFields multiSelectFields = it.next();</span>
+<span class="fc" id="L257">                    select.addSelect(multiSelectFields</span>
+<span class="fc" id="L258">                            .getQualifiedFieldOrLast(selectCursor)</span>
+<span class="fc" id="L259">                            .getSQLField());</span>
+                }
+
+<span class="fc" id="L262">                Condition condition = selectBinder.getWhereConditions(</span>
+<span class="fc" id="L263">                        templateId, whereCursor, multiWhereFieldsMap, selectCursor, multiSelectFieldsMap);</span>
+<span class="pc bpc" id="L264" title="1 of 4 branches missed.">                if (condition != null &amp;&amp; condition.equals(DSL.falseCondition()))</span>
+<span class="nc" id="L265">                    break; // do not add since it is always false</span>
+
+<span class="fc" id="L267">                List&lt;LateralJoinDefinition&gt; joins = new ArrayList&lt;&gt;();</span>
+
+<span class="fc" id="L269">                joins.addAll(lateralJoinsSelectClause(NIL_TEMPLATE, 0)); // composition attributes</span>
+<span class="fc bfc" id="L270" title="All 2 branches covered.">                if (!templateId.equals(NIL_TEMPLATE)) {</span>
+<span class="fc" id="L271">                    joins.addAll(lateralJoinsSelectClause(templateId, selectCursor)); // select clause fields</span>
+<span class="fc" id="L272">                    joins.addAll(lateralJoinsWhereClause(templateId, whereCursor)); // where clause fields</span>
+                }
+
+                // check whether the *same* query step is already in the list
+<span class="fc" id="L276">                QuerySteps querySteps = new QuerySteps(select, condition, joins, templateId);</span>
+<span class="pc bpc" id="L277" title="1 of 2 branches missed.">                if (QuerySteps.isIncludedInList(querySteps, queryStepsList)) {</span>
+                    // re-initialize select
+<span class="nc" id="L279">                    selectCursor++;</span>
+<span class="nc" id="L280">                    select = domainAccess.getContext().selectQuery();</span>
+
+<span class="nc" id="L282">                    continue;</span>
+                }
+
+<span class="fc" id="L285">                queryStepsList.add(querySteps);</span>
+<span class="fc" id="L286">                selectCursor++;</span>
+                // re-initialize select
+<span class="fc" id="L288">                select = domainAccess.getContext().selectQuery();</span>
+            }
+<span class="fc bfc" id="L290" title="All 2 branches covered.">            if (whereCursorMax == 0) // no where clause</span>
+<span class="fc" id="L291">            break;</span>
+<span class="fc" id="L292">            whereCursor++;</span>
+<span class="fc" id="L293">            selectCursor = 0;</span>
+            // re-initialize select
+<span class="fc" id="L295">            select = domainAccess.getContext().selectQuery();</span>
+        }
+<span class="fc" id="L297">        return queryStepsList;</span>
+    }
+
+    private SelectQuery&lt;?&gt; setLateralJoins(List&lt;LateralJoinDefinition&gt; lateralJoins, SelectQuery&lt;?&gt; selectQuery) {
+<span class="pc bpc" id="L301" title="1 of 2 branches missed.">        if (lateralJoins == null) {</span>
+<span class="nc" id="L302">            return selectQuery;</span>
+        }
+
+<span class="fc" id="L305">        HashSet&lt;Pair&lt;String, String&gt;&gt; usedLaterals = new HashSet&lt;&gt;();</span>
+
+<span class="fc bfc" id="L307" title="All 2 branches covered.">        for (LateralJoinDefinition lateralJoinDefinition : lateralJoins) {</span>
+<span class="fc" id="L308">            var key = Pair.of(lateralJoinDefinition.getTable().getName(), lateralJoinDefinition.getLateralVariable());</span>
+
+<span class="fc bfc" id="L310" title="All 2 branches covered.">            if (usedLaterals.contains(key)) {</span>
+<span class="fc" id="L311">                continue;</span>
+            }
+
+<span class="fc bfc" id="L314" title="All 2 branches covered.">            if (lateralJoinDefinition.getCondition() == null) {</span>
+<span class="fc" id="L315">                selectQuery.addJoin(lateralJoinDefinition.getTable(), lateralJoinDefinition.getJoinType());</span>
+<span class="fc" id="L316">            } else {</span>
+<span class="fc" id="L317">                selectQuery.addJoin(</span>
+<span class="fc" id="L318">                        lateralJoinDefinition.getTable(),</span>
+<span class="fc" id="L319">                        lateralJoinDefinition.getJoinType(),</span>
+<span class="fc" id="L320">                        lateralJoinDefinition.getCondition());</span>
+            }
+
+<span class="fc" id="L323">            usedLaterals.add(key);</span>
+        }
+
+<span class="fc" id="L326">        return selectQuery;</span>
+    }
+
+    private List&lt;LateralJoinDefinition&gt; lateralJoinsSelectClause(String templateId, int cursor) {
+<span class="fc" id="L330">        List&lt;LateralJoinDefinition&gt; lateralJoinsList = new ArrayList&lt;&gt;();</span>
+
+        // traverse the lateral joins derived from SELECT clause
+<span class="fc bfc" id="L333" title="All 2 branches covered.">        for (VariableDefinitions it = statements.getVariables(); it.hasNext(); ) {</span>
+<span class="fc" id="L334">            Object item = it.next();</span>
+<span class="pc bpc" id="L335" title="1 of 4 branches missed.">            if (item instanceof I_VariableDefinition &amp;&amp; ((I_VariableDefinition) item).isLateralJoin(templateId)) {</span>
+<span class="fc" id="L336">                Set&lt;LateralJoinDefinition&gt; listOfLaterals =</span>
+<span class="fc" id="L337">                        ((I_VariableDefinition) item).getLateralJoinDefinitions(templateId);</span>
+<span class="pc bpc" id="L338" title="1 of 2 branches missed.">                int index = cursor &lt; listOfLaterals.size() ? cursor : listOfLaterals.size() - 1;</span>
+<span class="fc" id="L339">                LateralJoinDefinition encapsulatedLateralJoinDefinition =</span>
+<span class="fc" id="L340">                        ((I_VariableDefinition) item).getLateralJoinDefinition(templateId, index);</span>
+<span class="fc" id="L341">                LateralJoinDefinition lateralJoinDefinition = new LateralJoinDefinition(</span>
+<span class="fc" id="L342">                        encapsulatedLateralJoinDefinition.getSqlExpression(),</span>
+<span class="fc" id="L343">                        DSL.lateral(encapsulatedLateralJoinDefinition.getTable()),</span>
+<span class="fc" id="L344">                        encapsulatedLateralJoinDefinition.getLateralVariable(),</span>
+<span class="fc" id="L345">                        encapsulatedLateralJoinDefinition.getJoinType(),</span>
+<span class="fc" id="L346">                        encapsulatedLateralJoinDefinition.getCondition(),</span>
+<span class="fc" id="L347">                        encapsulatedLateralJoinDefinition.getClause());</span>
+<span class="fc" id="L348">                lateralJoinsList.add(lateralJoinDefinition);</span>
+            }
+        }
+
+<span class="fc" id="L352">        return lateralJoinsList;</span>
+    }
+
+    private List&lt;LateralJoinDefinition&gt; lateralJoinsWhereClause(String templateId, int cursor) {
+<span class="fc" id="L356">        List&lt;LateralJoinDefinition&gt; lateralJoinsList = new ArrayList&lt;&gt;();</span>
+
+<span class="fc bfc" id="L358" title="All 2 branches covered.">        for (Object item : statements.getWhereClause()) {</span>
+<span class="fc bfc" id="L359" title="All 4 branches covered.">            if (item instanceof I_VariableDefinition &amp;&amp; ((I_VariableDefinition) item).isLateralJoin(templateId)) {</span>
+<span class="fc" id="L360">                LateralJoinDefinition lateralJoinDefinition =</span>
+<span class="fc" id="L361">                        ((I_VariableDefinition) item).getLateralJoinDefinition(templateId, cursor);</span>
+<span class="pc bpc" id="L362" title="1 of 2 branches missed.">                if (((I_VariableDefinition) item).getLateralJoinDefinitions(templateId) == null) {</span>
+<span class="nc" id="L363">                    throw new IllegalStateException(&quot;unresolved lateral join for template: &quot; + templateId + &quot;, path:&quot;</span>
+<span class="nc" id="L364">                            + ((I_VariableDefinition) item).getPath());</span>
+<span class="fc" id="L365">                } else if (cursor</span>
+<span class="pc bpc" id="L366" title="1 of 2 branches missed.">                        &gt; ((I_VariableDefinition) item)</span>
+<span class="fc" id="L367">                                        .getLateralJoinDefinitions(templateId)</span>
+<span class="fc" id="L368">                                        .size()</span>
+<span class="fc" id="L369">                                - 1) {</span>
+<span class="nc" id="L370">                    continue;</span>
+                }
+                // check if lateral join is borrowed from SELECT clause, if so, don't add
+<span class="pc bpc" id="L373" title="1 of 2 branches missed.">                else if (lateralJoinDefinition.getClause().equals(IQueryImpl.Clause.SELECT)) continue;</span>
+
+<span class="fc" id="L375">                lateralJoinsList.add(new LateralJoinDefinition(</span>
+<span class="fc" id="L376">                        lateralJoinDefinition.getSqlExpression(),</span>
+<span class="fc" id="L377">                        DSL.lateral(lateralJoinDefinition.getTable()),</span>
+<span class="fc" id="L378">                        ((I_VariableDefinition) item).getSubstituteFieldVariable(),</span>
+<span class="fc" id="L379">                        JoinType.JOIN,</span>
+<span class="fc" id="L380">                        null,</span>
+<span class="fc" id="L381">                        IQueryImpl.Clause.WHERE));</span>
+            }
+        }
+
+<span class="fc" id="L385">        return lateralJoinsList;</span>
+    }
+
+    private Result&lt;Record&gt; fetchResultSet(Select&lt;?&gt; select, Result&lt;Record&gt; result) {
+        Result&lt;Record&gt; intermediary;
+        try {
+<span class="nc" id="L391">            intermediary = (Result&lt;Record&gt;) select.fetch();</span>
+<span class="nc" id="L392">        } catch (Exception e) {</span>
+
+<span class="nc" id="L394">            String reason = &quot;Could not perform SQL query:&quot; + e.getCause() + &quot;, AQL expression:&quot;</span>
+<span class="nc" id="L395">                    + statements.getParsedExpression()</span>
+                    + &quot;, Translated SQL:&quot;
+<span class="nc" id="L397">                    + select.getSQL();</span>
+<span class="nc" id="L398">            throw new IllegalArgumentException(reason);</span>
+        }
+<span class="nc bnc" id="L400" title="All 2 branches missed.">        if (result != null) {</span>
+<span class="nc" id="L401">            result.addAll(intermediary);</span>
+<span class="nc bnc" id="L402" title="All 2 branches missed.">        } else if (intermediary != null) {</span>
+<span class="nc" id="L403">            result = intermediary;</span>
+        }
+<span class="nc" id="L405">        return result;</span>
+    }
+
+    private List&lt;List&lt;String&gt;&gt; buildExplain(Select&lt;?&gt; select) {
+<span class="nc" id="L409">        List&lt;List&lt;String&gt;&gt; explainList = new ArrayList&lt;&gt;();</span>
+
+<span class="nc" id="L411">        DSLContext pretty = DSL.using(domainAccess.getContext().dialect(), new Settings().withRenderFormatted(true));</span>
+<span class="nc" id="L412">        String sql = pretty.render(select);</span>
+<span class="nc" id="L413">        List&lt;String&gt; details = new ArrayList&lt;&gt;();</span>
+<span class="nc" id="L414">        details.add(sql);</span>
+<span class="nc bnc" id="L415" title="All 2 branches missed.">        for (Param&lt;?&gt; parameter : select.getParams().values()) {</span>
+<span class="nc" id="L416">            details.add(parameter.getValue().toString());</span>
+        }
+<span class="nc" id="L418">        explainList.add(details);</span>
+<span class="nc" id="L419">        return explainList;</span>
+    }
+
+    private List&lt;QuerySteps&gt; buildNullSelect() throws UnknownVariableException {
+
+<span class="fc" id="L424">        List&lt;QuerySteps&gt; queryStepsList = buildQuerySteps(NIL_TEMPLATE);</span>
+
+        // force a null condition for these steps
+<span class="fc bfc" id="L427" title="All 2 branches covered.">        for (QuerySteps querySteps : queryStepsList) {</span>
+<span class="fc" id="L428">            querySteps.setWhereCondition(DSL.condition(&quot;1 = 0&quot;));</span>
+        }
+
+<span class="fc" id="L431">        return queryStepsList;</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.7.202105040129</span></div></body></html>

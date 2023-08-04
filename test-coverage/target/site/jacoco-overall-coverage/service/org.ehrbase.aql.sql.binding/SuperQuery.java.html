@@ -1,0 +1,190 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../../jacoco-resources/report.gif" type="image/gif"/><title>SuperQuery.java</title><link rel="stylesheet" href="../../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../../index.html" class="el_report">Overall Coverage</a> &gt; <a href="../index.html" class="el_bundle">service</a> &gt; <a href="index.source.html" class="el_package">org.ehrbase.aql.sql.binding</a> &gt; <span class="el_source">SuperQuery.java</span></div><h1>SuperQuery.java</h1><pre class="source lang-java linenums">/*
+ * Copyright (c) 2017-2022 vitasystems GmbH and Hannover Medical School.
+ *
+ * This file is part of project EHRbase
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     https://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.ehrbase.aql.sql.binding;
+
+import static org.jooq.impl.DSL.field;
+import static org.jooq.impl.DSL.name;
+
+import java.util.ArrayList;
+import java.util.Iterator;
+import java.util.List;
+import org.apache.commons.lang3.StringUtils;
+import org.ehrbase.aql.compiler.OrderAttribute;
+import org.ehrbase.aql.definition.FuncParameter;
+import org.ehrbase.aql.definition.FunctionDefinition;
+import org.ehrbase.aql.definition.I_VariableDefinition;
+import org.ehrbase.aql.definition.Variables;
+import org.ehrbase.aql.sql.queryimpl.DefaultColumnId;
+import org.ehrbase.dao.access.interfaces.I_DomainAccess;
+import org.jooq.DSLContext;
+import org.jooq.Field;
+import org.jooq.Record;
+import org.jooq.SelectQuery;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+/**
+ * @author Christian Chevalley
+ * @author Renaud Subiger
+ * @since 1.0
+ */
+public class SuperQuery {
+
+<span class="fc" id="L48">    private final Logger log = LoggerFactory.getLogger(getClass());</span>
+
+    private final DSLContext context;
+
+    private final VariableDefinitions variableDefinitions;
+
+    private final SelectQuery&lt;?&gt; query;
+
+    private boolean outputWithJson;
+
+    public SuperQuery(
+            I_DomainAccess domainAccess,
+            VariableDefinitions variableDefinitions,
+            SelectQuery&lt;?&gt; query,
+<span class="fc" id="L62">            boolean containsJson) {</span>
+<span class="fc" id="L63">        this.context = domainAccess.getContext();</span>
+<span class="fc" id="L64">        this.variableDefinitions = variableDefinitions;</span>
+<span class="fc" id="L65">        this.query = query;</span>
+<span class="fc" id="L66">        this.outputWithJson = containsJson;</span>
+<span class="fc" id="L67">    }</span>
+
+    private List&lt;Field&lt;?&gt;&gt; selectDistinctFields() {
+<span class="fc" id="L70">        List&lt;Field&lt;?&gt;&gt; fields = new ArrayList&lt;&gt;();</span>
+<span class="fc" id="L71">        Iterator&lt;I_VariableDefinition&gt; iterator = variableDefinitions.iterator();</span>
+
+        // check if the list of variable contains at least ONE distinct statement
+<span class="pc bpc" id="L74" title="1 of 2 branches missed.">        if (!variableDefinitions.hasDistinctOperator()) {</span>
+<span class="nc" id="L75">            return fields;</span>
+        }
+
+<span class="fc bfc" id="L78" title="All 2 branches covered.">        while (iterator.hasNext()) {</span>
+<span class="fc" id="L79">            I_VariableDefinition variableDefinition = iterator.next();</span>
+<span class="pc bpc" id="L80" title="1 of 2 branches missed.">            if (variableDefinition instanceof FunctionDefinition) {</span>
+<span class="nc" id="L81">                StringBuilder stringBuilder = new StringBuilder();</span>
+<span class="nc bnc" id="L82" title="All 2 branches missed.">                for (FuncParameter funcParameter : variableDefinition.getFuncParameters()) {</span>
+<span class="nc" id="L83">                    stringBuilder.append(funcParameter.getValue());</span>
+<span class="nc" id="L84">                }</span>
+<span class="nc" id="L85">                fields.add(field(name(stringBuilder.toString())));</span>
+
+<span class="nc" id="L87">            } else {</span>
+<span class="fc bfc" id="L88" title="All 2 branches covered.">                if (variableDefinition.getAlias() == null</span>
+<span class="pc bpc" id="L89" title="1 of 2 branches missed.">                        || variableDefinition.getAlias().isEmpty()) {</span>
+<span class="fc" id="L90">                    fields.add(field(name(DefaultColumnId.value(variableDefinition)))); // CR #50</span>
+                } else {
+<span class="fc" id="L92">                    fields.add(field(name(variableDefinition.getAlias())));</span>
+                }
+            }
+<span class="fc" id="L95">        }</span>
+
+<span class="fc" id="L97">        return fields;</span>
+    }
+
+    private SelectQuery&lt;Record&gt; selectDistinct(SelectQuery&lt;Record&gt; selectQuery) {
+<span class="fc" id="L101">        List&lt;Field&lt;?&gt;&gt; fields = selectDistinctFields();</span>
+<span class="fc" id="L102">        selectQuery.addDistinctOn(fields);</span>
+<span class="fc" id="L103">        selectQuery.addFrom(query);</span>
+<span class="fc" id="L104">        return selectQuery;</span>
+    }
+
+    private SelectQuery&lt;Record&gt; selectAggregate(SelectQuery&lt;Record&gt; selectQuery) {
+<span class="fc" id="L108">        List&lt;Field&lt;?&gt;&gt; fields = new ArrayList&lt;&gt;();</span>
+<span class="fc" id="L109">        List&lt;String&gt; skipField = new ArrayList&lt;&gt;();</span>
+<span class="fc" id="L110">        Iterator&lt;I_VariableDefinition&gt; iterator = variableDefinitions.iterator();</span>
+<span class="fc" id="L111">        boolean distinctRequired = false;</span>
+
+<span class="fc bfc" id="L113" title="All 2 branches covered.">        while (iterator.hasNext()) {</span>
+<span class="fc" id="L114">            I_VariableDefinition variableDefinition = iterator.next();</span>
+<span class="fc" id="L115">            String alias = getAlias(variableDefinition);</span>
+<span class="fc bfc" id="L116" title="All 2 branches covered.">            if (variableDefinition.isFunction()) {</span>
+<span class="fc" id="L117">                skipField.add(alias);</span>
+
+<span class="fc" id="L119">                FunctionExpression functionExpression = new FunctionExpression(variableDefinitions, variableDefinition);</span>
+<span class="fc" id="L120">                Field&lt;?&gt; field = field(functionExpression.toString());</span>
+<span class="fc" id="L121">                skipField.addAll(functionExpression.arguments());</span>
+
+<span class="pc bpc" id="L123" title="1 of 2 branches missed.">                if (variableDefinition.getAlias() != null) {</span>
+<span class="fc" id="L124">                    field = field.as(alias);</span>
+                }
+
+<span class="fc" id="L127">                fields.add(field);</span>
+<span class="pc bpc" id="L128" title="1 of 2 branches missed.">            } else if (variableDefinition.isExtension()) {</span>
+<span class="nc" id="L129">                log.debug(&quot;Not yet implemented&quot;);</span>
+            } else {
+                // check if this alias is serviced by a function
+                // check if this alias requires distinct
+<span class="pc bpc" id="L133" title="1 of 4 branches missed.">                distinctRequired = distinctRequired || variableDefinition.isDistinct();</span>
+
+<span class="pc bpc" id="L135" title="1 of 2 branches missed.">                if (skipField.contains(alias)) {</span>
+<span class="fc" id="L136">                    continue;</span>
+                }
+
+<span class="nc bnc" id="L139" title="All 2 branches missed.">                if (variableDefinition.isDistinct()) {</span>
+<span class="nc" id="L140">                    fields.add(field(name(&quot;DISTINCT &quot; + alias)));</span>
+                } else {
+<span class="nc" id="L142">                    fields.add(field(name(alias)));</span>
+                }
+            }
+<span class="fc" id="L145">        }</span>
+
+<span class="fc" id="L147">        selectQuery.addSelect(fields);</span>
+<span class="fc" id="L148">        selectQuery.addFrom(query);</span>
+
+        // aggregate return scalar values
+<span class="fc" id="L151">        this.outputWithJson = false;</span>
+
+<span class="fc" id="L153">        return selectQuery;</span>
+    }
+
+    public SelectQuery&lt;Record&gt; selectOrderBy(List&lt;OrderAttribute&gt; orderAttributes) {
+<span class="fc" id="L157">        SelectQuery&lt;Record&gt; selectQuery = context.selectQuery();</span>
+<span class="fc" id="L158">        selectQuery.addFrom(query);</span>
+<span class="fc" id="L159">        selectQuery = setOrderBy(orderAttributes, selectQuery);</span>
+<span class="fc" id="L160">        return selectQuery;</span>
+    }
+
+    public SelectQuery&lt;Record&gt; setOrderBy(List&lt;OrderAttribute&gt; orderAttributes, SelectQuery&lt;Record&gt; selectQuery) {
+<span class="fc" id="L164">        return new OrderByBinder(variableDefinitions, orderAttributes, selectQuery).bind();</span>
+    }
+
+    public SelectQuery&lt;Record&gt; select() {
+<span class="fc" id="L168">        SelectQuery&lt;Record&gt; selectQuery = context.selectQuery();</span>
+
+<span class="fc bfc" id="L170" title="All 2 branches covered.">        if (new Variables(variableDefinitions).hasDefinedFunction()) {</span>
+<span class="fc" id="L171">            return selectAggregate(selectQuery);</span>
+<span class="pc bpc" id="L172" title="1 of 2 branches missed.">        } else if (new Variables(variableDefinitions).hasDefinedDistinct()) { // build a super select</span>
+<span class="fc" id="L173">            return selectDistinct(selectQuery);</span>
+        } else {
+<span class="nc" id="L175">            return selectQuery;</span>
+        }
+    }
+
+    public boolean isOutputWithJson() {
+<span class="fc" id="L180">        return outputWithJson;</span>
+    }
+
+    private String getAlias(I_VariableDefinition variableDefinition) {
+<span class="pc bpc" id="L184" title="1 of 2 branches missed.">        if (StringUtils.isEmpty(variableDefinition.getAlias())) {</span>
+<span class="nc" id="L185">            return variableDefinition.getPath();</span>
+        }
+<span class="fc" id="L187">        return variableDefinition.getAlias();</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.7.202105040129</span></div></body></html>

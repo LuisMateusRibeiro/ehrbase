@@ -1,0 +1,136 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../../jacoco-resources/report.gif" type="image/gif"/><title>Statements.java</title><link rel="stylesheet" href="../../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../../index.html" class="el_report">Coverage with Unit Tests</a> &gt; <a href="../index.html" class="el_bundle">service</a> &gt; <a href="index.source.html" class="el_package">org.ehrbase.aql.compiler</a> &gt; <span class="el_source">Statements.java</span></div><h1>Statements.java</h1><pre class="source lang-java linenums">/*
+ * Copyright (c) 2019 vitasystems GmbH and Hannover Medical School.
+ *
+ * This file is part of project EHRbase
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     https://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.ehrbase.aql.compiler;
+
+import java.util.List;
+import org.antlr.v4.runtime.tree.ParseTree;
+import org.antlr.v4.runtime.tree.ParseTreeWalker;
+import org.ehrbase.aql.containment.IdentifierMapper;
+import org.ehrbase.aql.definition.FromEhrDefinition;
+import org.ehrbase.aql.definition.I_VariableDefinition;
+import org.ehrbase.aql.definition.VariableDefinition;
+import org.ehrbase.aql.sql.binding.VariableDefinitions;
+import org.ehrbase.aql.sql.queryimpl.attribute.ehr.EhrResolver;
+import org.ehrbase.openehr.sdk.validation.terminology.ExternalTerminologyValidation;
+
+@SuppressWarnings({&quot;java:S3740&quot;})
+public class Statements {
+
+    private ParseTree parseTree;
+    private List&lt;Object&gt; whereClause;
+    private List&lt;I_VariableDefinition&gt; variables;
+    private TopAttributes topAttributes;
+    private List&lt;OrderAttribute&gt; orderAttributes;
+    private IdentifierMapper identifierMapper;
+
+    private Integer limitAttribute;
+    private Integer offsetAttribute;
+    private ExternalTerminologyValidation tsAdapter;
+
+<span class="fc" id="L45">    public Statements(ParseTree parseTree, IdentifierMapper identifierMapper, ExternalTerminologyValidation tsAdapter) {</span>
+<span class="fc" id="L46">        this.parseTree = parseTree;</span>
+<span class="fc" id="L47">        this.identifierMapper = identifierMapper;</span>
+<span class="fc" id="L48">        this.tsAdapter = tsAdapter;</span>
+<span class="fc" id="L49">    }</span>
+
+    public Statements process() {
+<span class="fc" id="L52">        QueryCompilerPass2 queryCompilerPass2 = new QueryCompilerPass2();</span>
+<span class="fc" id="L53">        ParseTreeWalker walker = new ParseTreeWalker();</span>
+<span class="fc" id="L54">        walker.walk(queryCompilerPass2, parseTree);</span>
+<span class="fc" id="L55">        variables = queryCompilerPass2.getVariables();</span>
+
+<span class="fc" id="L57">        whereClause = visitWhere();</span>
+
+        // from Contains
+<span class="fc bfc" id="L60" title="All 2 branches covered.">        if (identifierMapper.hasEhrContainer()) appendEhrPredicate(identifierMapper.getEhrContainer());</span>
+
+<span class="fc" id="L62">        topAttributes = queryCompilerPass2.getTopAttributes();</span>
+<span class="fc" id="L63">        orderAttributes = queryCompilerPass2.getOrderAttributes();</span>
+<span class="fc" id="L64">        limitAttribute = queryCompilerPass2.getLimitAttribute();</span>
+<span class="fc" id="L65">        offsetAttribute = queryCompilerPass2.getOffsetAttribute();</span>
+<span class="fc" id="L66">        return this;</span>
+    }
+
+    private List visitWhere() {
+
+<span class="fc" id="L71">        WhereVisitor whereVisitor = new WhereVisitor(tsAdapter);</span>
+<span class="fc" id="L72">        whereVisitor.visit(parseTree);</span>
+<span class="fc" id="L73">        return whereVisitor.getWhereExpression();</span>
+    }
+
+    private void appendEhrPredicate(FromEhrDefinition.EhrPredicate ehrPredicate) {
+<span class="fc bfc" id="L77" title="All 2 branches covered.">        if (ehrPredicate == null) return;</span>
+
+        // append field, operator and value to the where clause
+<span class="fc bfc" id="L80" title="All 2 branches covered.">        if (!whereClause.isEmpty()) {</span>
+<span class="fc" id="L81">            whereClause.add(&quot;and&quot;);</span>
+        }
+<span class="fc" id="L83">        whereClause.add(new VariableDefinition(ehrPredicate.getField(), null, ehrPredicate.getIdentifier(), false));</span>
+<span class="fc" id="L84">        whereClause.add(ehrPredicate.getOperator());</span>
+<span class="fc" id="L85">        whereClause.add(ehrPredicate.getValue());</span>
+<span class="fc" id="L86">    }</span>
+
+    public List getWhereClause() {
+<span class="fc" id="L89">        return whereClause;</span>
+    }
+
+    public VariableDefinitions getVariables() {
+<span class="fc" id="L93">        boolean containsNonEhrVariable = variables.stream()</span>
+<span class="fc" id="L94">                .map(I_VariableDefinition::getIdentifier)</span>
+<span class="fc" id="L95">                .map(s -&gt; identifierMapper.getContainer(s))</span>
+<span class="fc bfc" id="L96" title="All 4 branches covered.">                .anyMatch(c -&gt; c != null &amp;&amp; !c.getClass().isAssignableFrom(FromEhrDefinition.EhrPredicate.class));</span>
+<span class="fc" id="L97">        boolean containsOnlyEhrAttributes = variables.stream()</span>
+<span class="fc bfc" id="L98" title="All 2 branches covered.">                .filter(v -&gt; identifierMapper.getContainer(v.getIdentifier()) != null</span>
+                        &amp;&amp; identifierMapper
+<span class="fc" id="L100">                                .getContainer(v.getIdentifier())</span>
+<span class="fc" id="L101">                                .getClass()</span>
+<span class="fc bfc" id="L102" title="All 2 branches covered.">                                .isAssignableFrom(FromEhrDefinition.EhrPredicate.class))</span>
+<span class="fc" id="L103">                .allMatch(v -&gt; EhrResolver.isEhrAttribute(v.getPath()));</span>
+
+        // Force distinct If only contains ehr variables
+<span class="fc bfc" id="L106" title="All 4 branches covered.">        if (!containsNonEhrVariable &amp;&amp; containsOnlyEhrAttributes) {</span>
+<span class="fc" id="L107">            variables.forEach(v -&gt; v.setDistinct(true));</span>
+        }
+<span class="fc" id="L109">        return new VariableDefinitions(variables);</span>
+    }
+
+    public TopAttributes getTopAttributes() {
+<span class="fc" id="L113">        return topAttributes;</span>
+    }
+
+    public List&lt;OrderAttribute&gt; getOrderAttributes() {
+<span class="fc" id="L117">        return orderAttributes;</span>
+    }
+
+    public Integer getLimitAttribute() {
+<span class="fc" id="L121">        return limitAttribute;</span>
+    }
+
+    public Integer getOffsetAttribute() {
+<span class="fc" id="L125">        return offsetAttribute;</span>
+    }
+
+    public void put(I_VariableDefinition variableDefinition) {
+<span class="fc" id="L129">        variables.add(variableDefinition);</span>
+<span class="fc" id="L130">    }</span>
+
+    public String getParsedExpression() {
+<span class="nc" id="L133">        return parseTree.getText();</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.7.202105040129</span></div></body></html>

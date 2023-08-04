@@ -1,0 +1,109 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../../jacoco-resources/report.gif" type="image/gif"/><title>WhereMultiFields.java</title><link rel="stylesheet" href="../../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../../index.html" class="el_report">Coverage with Unit Tests</a> &gt; <a href="../index.html" class="el_bundle">service</a> &gt; <a href="index.source.html" class="el_package">org.ehrbase.aql.sql.binding</a> &gt; <span class="el_source">WhereMultiFields.java</span></div><h1>WhereMultiFields.java</h1><pre class="source lang-java linenums">/*
+ * Copyright (c) 2019 vitasystems GmbH and Hannover Medical School.
+ *
+ * This file is part of project EHRbase
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     https://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.ehrbase.aql.sql.binding;
+
+import java.util.ArrayList;
+import java.util.List;
+import org.ehrbase.aql.compiler.Contains;
+import org.ehrbase.aql.definition.I_VariableDefinition;
+import org.ehrbase.aql.definition.VariableDefinition;
+import org.ehrbase.aql.sql.PathResolver;
+import org.ehrbase.aql.sql.queryimpl.CompositionAttributeQuery;
+import org.ehrbase.aql.sql.queryimpl.IQueryImpl;
+import org.ehrbase.aql.sql.queryimpl.JsonbEntryQuery;
+import org.ehrbase.aql.sql.queryimpl.MultiFields;
+import org.ehrbase.aql.sql.queryimpl.UnknownVariableException;
+import org.ehrbase.aql.sql.queryimpl.attribute.JoinSetup;
+import org.ehrbase.dao.access.interfaces.I_DomainAccess;
+import org.ehrbase.service.IntrospectService;
+import org.ehrbase.service.KnowledgeCacheService;
+
+/**
+ * Bind the abstract WHERE clause parameters into a SQL expression
+ * Created by christian on 5/20/2016.
+ */
+// ignore cognitive complexity flag as this code as evolved historically and adjusted depending on use cases
+@SuppressWarnings({&quot;java:S3776&quot;, &quot;java:S135&quot;})
+public class WhereMultiFields {
+
+    private JsonbEntryQuery jsonbEntryQuery;
+    private CompositionAttributeQuery compositionAttributeQuery;
+    private final List&lt;Object&gt; whereClause;
+    private PathResolver pathResolver;
+
+    public WhereMultiFields(
+            JsonbEntryQuery jsonbEntryQuery,
+            CompositionAttributeQuery compositionAttributeQuery,
+            List&lt;Object&gt; whereClause,
+<span class="nc" id="L53">            PathResolver pathResolver) {</span>
+<span class="nc" id="L54">        this.jsonbEntryQuery = jsonbEntryQuery;</span>
+<span class="nc" id="L55">        this.compositionAttributeQuery = compositionAttributeQuery;</span>
+<span class="nc" id="L56">        this.whereClause = whereClause;</span>
+<span class="nc" id="L57">        this.pathResolver = pathResolver;</span>
+<span class="nc" id="L58">    }</span>
+
+    public WhereMultiFields(
+            I_DomainAccess domainAccess,
+            IntrospectService introspectCache,
+            Contains contains,
+            List&lt;Object&gt; whereClause,
+<span class="fc" id="L65">            String serverNodeId) {</span>
+<span class="fc" id="L66">        this.pathResolver = new PathResolver((KnowledgeCacheService) introspectCache, contains.getIdentifierMapper());</span>
+<span class="fc" id="L67">        this.jsonbEntryQuery = new JsonbEntryQuery(domainAccess, introspectCache, pathResolver);</span>
+<span class="fc" id="L68">        this.compositionAttributeQuery =</span>
+                new CompositionAttributeQuery(domainAccess, pathResolver, serverNodeId, introspectCache);
+<span class="fc" id="L70">        this.whereClause = whereClause;</span>
+<span class="fc" id="L71">    }</span>
+
+    private void buildWhereCondition(List&lt;MultiFields&gt; multiFieldsList, String templateId, List&lt;Object&gt; item)
+            throws UnknownVariableException {
+
+<span class="fc bfc" id="L76" title="All 2 branches covered.">        for (Object part : item) {</span>
+<span class="fc bfc" id="L77" title="All 2 branches covered.">            if (part instanceof VariableDefinition) {</span>
+                // substitute the identifier
+<span class="fc" id="L79">                multiFieldsList.add(</span>
+                        new ExpressionField((I_VariableDefinition) part, jsonbEntryQuery, compositionAttributeQuery)
+<span class="fc" id="L81">                                .toSql(</span>
+<span class="fc" id="L82">                                        pathResolver.classNameOf(((I_VariableDefinition) part).getIdentifier()),</span>
+                                        templateId,
+<span class="fc" id="L84">                                        ((I_VariableDefinition) part).getIdentifier(),</span>
+                                        IQueryImpl.Clause.WHERE));
+<span class="pc bpc" id="L86" title="1 of 2 branches missed.">            } else if (part instanceof List) {</span>
+<span class="nc" id="L87">                buildWhereCondition(multiFieldsList, templateId, (List) part);</span>
+            }
+<span class="fc" id="L89">        }</span>
+<span class="fc" id="L90">    }</span>
+
+    public List&lt;MultiFields&gt; bind(String templateId) throws UnknownVariableException {
+
+<span class="fc" id="L94">        List&lt;MultiFields&gt; multiFieldsList = new ArrayList&lt;&gt;();</span>
+
+<span class="fc bfc" id="L96" title="All 2 branches covered.">        if (whereClause.isEmpty()) return multiFieldsList;</span>
+
+        // work on a copy since Exist is destructive
+<span class="fc" id="L99">        List&lt;Object&gt; whereItems = new ArrayList&lt;&gt;(whereClause);</span>
+<span class="fc" id="L100">        buildWhereCondition(multiFieldsList, templateId, whereItems);</span>
+
+<span class="fc" id="L102">        return multiFieldsList;</span>
+    }
+
+    public JoinSetup getJoinSetup() {
+<span class="fc" id="L106">        return compositionAttributeQuery.getJoinSetup();</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.7.202105040129</span></div></body></html>

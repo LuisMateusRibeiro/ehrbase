@@ -1,0 +1,117 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../../jacoco-resources/report.gif" type="image/gif"/><title>JsonbFunctionCall.java</title><link rel="stylesheet" href="../../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../../index.html" class="el_report">Coverage with Unit Tests</a> &gt; <a href="../index.html" class="el_bundle">service</a> &gt; <a href="index.source.html" class="el_package">org.ehrbase.aql.sql.queryimpl</a> &gt; <span class="el_source">JsonbFunctionCall.java</span></div><h1>JsonbFunctionCall.java</h1><pre class="source lang-java linenums">/*
+ * Copyright (c) 2019 vitasystems GmbH and Hannover Medical School.
+ *
+ * This file is part of project EHRbase
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     https://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.ehrbase.aql.sql.queryimpl;
+
+import static org.ehrbase.jooq.pg.Tables.ENTRY;
+
+import java.util.ArrayList;
+import java.util.List;
+
+/**
+ * Created by christian on 5/9/2018.
+ */
+public class JsonbFunctionCall {
+
+    private final List&lt;String&gt; resolvedPath;
+    private final String marker;
+    private final String function;
+    private String rightJsonbExpressionPart;
+
+<span class="fc" id="L35">    public JsonbFunctionCall(List&lt;String&gt; itemPathArray, String marker, String function) {</span>
+<span class="fc" id="L36">        this.function = function;</span>
+<span class="fc" id="L37">        this.marker = marker;</span>
+
+<span class="fc" id="L39">        var p = itemPathArray;</span>
+        // check if the list contains an entry with AQL_NODE_NAME_PREDICATE_MARKER
+<span class="fc bfc" id="L41" title="All 2 branches covered.">        while (p.contains(marker)) {</span>
+<span class="fc" id="L42">            p = resolveIterativeCall(p);</span>
+        }
+<span class="fc" id="L44">        this.resolvedPath = p;</span>
+<span class="fc" id="L45">    }</span>
+
+    public List&lt;String&gt; resolve() {
+<span class="fc" id="L48">        return resolvedPath;</span>
+    }
+
+    private List&lt;String&gt; resolveIterativeCall(List&lt;String&gt; itemPathArray) {
+
+<span class="fc" id="L53">        StringBuilder expression = new StringBuilder();</span>
+<span class="fc" id="L54">        int markerPos = itemPathArray.indexOf(marker);</span>
+        // prepare the function call
+<span class="fc" id="L56">        expression.append(&quot;(&quot;);</span>
+<span class="fc" id="L57">        expression.append(function);</span>
+<span class="fc" id="L58">        expression.append(&quot;(&quot;);</span>
+        int startPos;
+        // check if the table clause is already in the sequence in a nested call to aql_node_name_predicate
+<span class="pc bpc" id="L61" title="1 of 2 branches missed.">        if (!itemPathArray.get(0).contains(function)) {</span>
+<span class="fc" id="L62">            expression.append(&quot;(&quot;);</span>
+<span class="fc" id="L63">            expression.append(ENTRY.ENTRY_);</span>
+<span class="fc" id="L64">            startPos = 0;</span>
+        } else {
+<span class="nc" id="L66">            expression.append(itemPathArray.get(0));</span>
+<span class="nc" id="L67">            startPos = 1;</span>
+        }
+<span class="fc" id="L69">        expression.append(&quot;#&gt;&gt;&quot;);</span>
+<span class="fc" id="L70">        expression.append(&quot;'{&quot;);</span>
+<span class="fc" id="L71">        expression.append(String.join(&quot;,&quot;, itemPathArray.subList(startPos, markerPos)));</span>
+<span class="fc" id="L72">        expression.append(&quot;}'&quot;);</span>
+<span class="fc" id="L73">        expression.append(&quot;)&quot;);</span>
+<span class="fc" id="L74">        expression.append(&quot;::jsonb&quot;);</span>
+<span class="fc" id="L75">        expression.append(&quot;)&quot;);</span>
+
+        // Locate end tag (end of array or next marker)
+
+<span class="fc" id="L79">        List&lt;String&gt; resultList = new ArrayList&lt;&gt;();</span>
+<span class="fc" id="L80">        List&lt;String&gt; rightList = itemPathArray.subList(markerPos + 1, itemPathArray.size());</span>
+<span class="pc bpc" id="L81" title="1 of 2 branches missed.">        if (rightList.contains(marker)) {</span>
+<span class="nc" id="L82">            resultList.add(expression.toString());</span>
+<span class="nc" id="L83">            resultList.addAll(rightList);</span>
+        } else {
+<span class="fc" id="L85">            rightJsonbExpressionPart = rightJsonExpression(rightList);</span>
+<span class="fc" id="L86">            expression.append(&quot;)&quot;);</span>
+<span class="fc" id="L87">            resultList.add(expression.toString());</span>
+        }
+
+<span class="fc" id="L90">        return resultList;</span>
+    }
+
+    private String rightJsonExpression(List&lt;String&gt; pathItems) {
+<span class="fc bfc" id="L94" title="All 2 branches covered.">        if (pathItems.isEmpty()) {</span>
+<span class="fc" id="L95">            return &quot;&quot;;</span>
+        }
+
+<span class="fc" id="L98">        StringBuilder expression = new StringBuilder();</span>
+<span class="fc" id="L99">        expression.append(&quot;#&gt;&gt;&quot;);</span>
+<span class="fc" id="L100">        expression.append(&quot;'&quot;);</span>
+<span class="fc" id="L101">        expression.append(&quot;{&quot;);</span>
+<span class="fc" id="L102">        expression.append(String.join(&quot;,&quot;, pathItems));</span>
+<span class="fc" id="L103">        expression.append(&quot;}&quot;);</span>
+<span class="fc" id="L104">        expression.append(&quot;'&quot;);</span>
+
+<span class="fc" id="L106">        return expression.toString();</span>
+    }
+
+    public boolean hasRightMostJsonbExpression() {
+<span class="pc bpc" id="L110" title="1 of 2 branches missed.">        return rightJsonbExpressionPart != null;</span>
+    }
+
+    public String getRightMostJsonbExpression() {
+<span class="fc" id="L114">        return rightJsonbExpressionPart;</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.7.202105040129</span></div></body></html>

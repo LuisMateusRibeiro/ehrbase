@@ -1,0 +1,180 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../../jacoco-resources/report.gif" type="image/gif"/><title>PersistedPartyRelated.java</title><link rel="stylesheet" href="../../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../../index.html" class="el_report">Overall Coverage</a> &gt; <a href="../index.html" class="el_bundle">service</a> &gt; <a href="index.source.html" class="el_package">org.ehrbase.dao.access.jooq.party</a> &gt; <span class="el_source">PersistedPartyRelated.java</span></div><h1>PersistedPartyRelated.java</h1><pre class="source lang-java linenums">/*
+ * Copyright (c) 2020 vitasystems GmbH and Hannover Medical School.
+ *
+ * This file is part of project EHRbase
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     https://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.ehrbase.dao.access.jooq.party;
+
+import static org.ehrbase.jooq.pg.Tables.PARTY_IDENTIFIED;
+
+import com.nedap.archie.rm.datavalues.DvCodedText;
+import com.nedap.archie.rm.generic.PartyIdentified;
+import com.nedap.archie.rm.generic.PartyProxy;
+import com.nedap.archie.rm.generic.PartyRelated;
+import java.util.Collection;
+import java.util.List;
+import java.util.UUID;
+import java.util.function.BiFunction;
+import java.util.function.Supplier;
+import java.util.stream.Collectors;
+import org.ehrbase.dao.access.interfaces.I_DomainAccess;
+import org.ehrbase.dao.access.jooq.rmdatavalue.JooqDvCodedText;
+import org.ehrbase.jooq.pg.enums.PartyType;
+import org.ehrbase.jooq.pg.tables.records.PartyIdentifiedRecord;
+import org.ehrbase.jooq.pg.udt.records.DvCodedTextRecord;
+import org.ehrbase.service.PersistentCodePhrase;
+import org.ehrbase.service.PersistentTermMapping;
+import org.jooq.Record;
+import org.jooq.impl.DSL;
+
+/**
+ * Manages PartyRelated persistence, in particular handles attribute 'relationship' (DvCodedText)
+ * TODO: relationship should be normalized (e.g. in another table) since the same person can play different relationship roles (mother, spouse etc.)
+ *
+ */
+class PersistedPartyRelated extends PersistedParty {
+
+    PersistedPartyRelated(I_DomainAccess domainAccess) {
+<span class="fc" id="L50">        super(domainAccess);</span>
+<span class="fc" id="L51">    }</span>
+
+    @Override
+    public PartyProxy render(PartyIdentifiedRecord partyIdentifiedRecord) {
+        // a party identified with a relationship!
+<span class="nc" id="L56">        return partyIdentConvert.apply(</span>
+<span class="nc" id="L57">                (PartyIdentified) new PersistedPartyIdentified(domainAccess).render(partyIdentifiedRecord),</span>
+<span class="nc" id="L58">                partyIdentifiedRecord);</span>
+    }
+
+<span class="fc" id="L61">    private static final BiFunction&lt;PartyIdentified, PartyIdentifiedRecord, PartyProxy&gt; partyIdentConvert =</span>
+<span class="fc" id="L62">            (pId, pIdRec) -&gt; {</span>
+<span class="fc" id="L63">                PartyRelated partyRelated = new PartyRelated();</span>
+<span class="fc" id="L64">                partyRelated.setExternalRef(pId.getExternalRef());</span>
+<span class="fc" id="L65">                partyRelated.setName(pId.getName());</span>
+<span class="fc" id="L66">                partyRelated.setIdentifiers(pId.getIdentifiers());</span>
+<span class="fc" id="L67">                partyRelated.setRelationship(new JooqDvCodedText(pIdRec.getRelationship()).toRmInstance());</span>
+<span class="fc" id="L68">                return partyRelated;</span>
+<span class="fc" id="L69">            };</span>
+
+    private I_DomainAccess getDomainAccess() {
+<span class="nc" id="L72">        return domainAccess;</span>
+    }
+
+<span class="fc" id="L75">    Supplier&lt;PersistedPartyIdentified&gt; persistedPartyIdentifiedCreator =</span>
+<span class="pc" id="L76">            () -&gt; new PersistedPartyIdentified(getDomainAccess());</span>
+
+    @Override
+    public List&lt;PartyProxy&gt; renderMultiple(Collection&lt;PartyIdentifiedRecord&gt; partyIdentifiedRecords) {
+<span class="fc" id="L80">        List&lt;PartyProxy&gt; renderMultiple = persistedPartyIdentifiedCreator.get().renderMultiple(partyIdentifiedRecords);</span>
+
+<span class="fc" id="L82">        return renderMultiple.stream()</span>
+<span class="fc" id="L83">                .map(pp -&gt; (PartyIdentified) pp)</span>
+<span class="fc" id="L84">                .map(pi -&gt; {</span>
+<span class="fc" id="L85">                    return partyIdentifiedRecords.stream()</span>
+<span class="fc" id="L86">                            .filter(pir -&gt; pir.getName().equals(pi.getName()))</span>
+<span class="fc" id="L87">                            .findFirst()</span>
+<span class="fc" id="L88">                            .map(pir -&gt; partyIdentConvert.apply(pi, pir))</span>
+<span class="pc" id="L89">                            .orElseThrow(() -&gt; new IllegalStateException());</span>
+                })
+<span class="fc" id="L91">                .collect(Collectors.toList());</span>
+    }
+
+    @Override
+    public UUID store(PartyProxy partyProxy, Short sysTenant) {
+<span class="nc" id="L96">        PartyRefValue partyRefValue = new PartyRefValue(partyProxy).attributes();</span>
+
+        // store a new party identified
+<span class="nc" id="L99">        UUID partyIdentifiedUuid = domainAccess</span>
+<span class="nc" id="L100">                .getContext()</span>
+<span class="nc" id="L101">                .insertInto(</span>
+<span class="nc" id="L102">                        PARTY_IDENTIFIED,</span>
+<span class="nc" id="L103">                        PARTY_IDENTIFIED.NAME,</span>
+<span class="nc" id="L104">                        PARTY_IDENTIFIED.PARTY_REF_NAMESPACE,</span>
+<span class="nc" id="L105">                        PARTY_IDENTIFIED.PARTY_REF_VALUE,</span>
+<span class="nc" id="L106">                        PARTY_IDENTIFIED.PARTY_REF_SCHEME,</span>
+<span class="nc" id="L107">                        PARTY_IDENTIFIED.PARTY_REF_TYPE,</span>
+<span class="nc" id="L108">                        PARTY_IDENTIFIED.PARTY_TYPE,</span>
+<span class="nc" id="L109">                        PARTY_IDENTIFIED.OBJECT_ID_TYPE,</span>
+<span class="nc" id="L110">                        PARTY_IDENTIFIED.RELATIONSHIP,</span>
+<span class="nc" id="L111">                        PARTY_IDENTIFIED.SYS_TENANT)</span>
+<span class="nc" id="L112">                .values(</span>
+<span class="nc" id="L113">                        ((PartyIdentified) partyProxy).getName(),</span>
+<span class="nc" id="L114">                        partyRefValue.getNamespace(),</span>
+<span class="nc" id="L115">                        partyRefValue.getValue(),</span>
+<span class="nc" id="L116">                        partyRefValue.getScheme(),</span>
+<span class="nc" id="L117">                        partyRefValue.getType(),</span>
+<span class="nc" id="L118">                        PartyType.party_related,</span>
+<span class="nc" id="L119">                        partyRefValue.getObjectIdType(),</span>
+<span class="nc" id="L120">                        relationshipAsRecord(partyProxy),</span>
+<span class="nc" id="L121">                        sysTenant)</span>
+<span class="nc" id="L122">                .returning(PARTY_IDENTIFIED.ID)</span>
+<span class="nc" id="L123">                .fetchOne()</span>
+<span class="nc" id="L124">                .getId();</span>
+        // store identifiers
+<span class="nc" id="L126">        new PartyIdentifiers(domainAccess).store((PartyIdentified) partyProxy, partyIdentifiedUuid, sysTenant);</span>
+
+<span class="nc" id="L128">        return partyIdentifiedUuid;</span>
+    }
+
+    @Override
+    public UUID findInDB(PartyProxy partyProxy) {
+<span class="nc" id="L133">        UUID uuid = new PersistedPartyRef(domainAccess).findInDB(partyProxy.getExternalRef());</span>
+
+        // see https://www.postgresql.org/docs/11/rowtypes.html for syntax on accessing specific attributes in UDT
+<span class="nc bnc" id="L136" title="All 2 branches missed.">        if (uuid == null) {</span>
+<span class="nc bnc" id="L137" title="All 2 branches missed.">            if (partyProxy.getExternalRef() == null) { // check for the same name and same relationship</span>
+<span class="nc" id="L138">                Record record = domainAccess</span>
+<span class="nc" id="L139">                        .getContext()</span>
+<span class="nc" id="L140">                        .fetchAny(</span>
+<span class="nc" id="L141">                                PARTY_IDENTIFIED,</span>
+<span class="nc" id="L142">                                PARTY_IDENTIFIED</span>
+<span class="nc" id="L143">                                        .PARTY_REF_VALUE</span>
+<span class="nc" id="L144">                                        .isNull()</span>
+<span class="nc" id="L145">                                        .and(PARTY_IDENTIFIED.PARTY_REF_NAMESPACE.isNull())</span>
+<span class="nc" id="L146">                                        .and(PARTY_IDENTIFIED.PARTY_REF_SCHEME.isNull())</span>
+<span class="nc" id="L147">                                        .and(PARTY_IDENTIFIED.PARTY_REF_TYPE.isNull())</span>
+<span class="nc" id="L148">                                        .and(PARTY_IDENTIFIED.NAME.eq(((PartyIdentified) partyProxy).getName()))</span>
+<span class="nc" id="L149">                                        .and(DSL.field(&quot;(&quot; + PARTY_IDENTIFIED.RELATIONSHIP + &quot;).value&quot;)</span>
+<span class="nc" id="L150">                                                .eq(relationshipAsRecord(partyProxy)</span>
+<span class="nc" id="L151">                                                        .getValue()))</span>
+<span class="nc" id="L152">                                        .and(PARTY_IDENTIFIED.PARTY_TYPE.eq(PartyType.party_related)));</span>
+
+<span class="nc bnc" id="L154" title="All 2 branches missed.">                if (record != null) {</span>
+<span class="nc" id="L155">                    uuid = ((PartyIdentifiedRecord) record).getId();</span>
+                    // check for identifiers
+<span class="nc" id="L157">                    if (!new PartyIdentifiers(domainAccess)</span>
+<span class="nc bnc" id="L158" title="All 2 branches missed.">                            .compare((PartyIdentifiedRecord) record, ((PartyRelated) partyProxy).getIdentifiers()))</span>
+<span class="nc" id="L159">                        uuid = null;</span>
+                }
+            }
+        }
+
+<span class="nc" id="L164">        return uuid;</span>
+    }
+
+    private DvCodedTextRecord relationshipAsRecord(PartyProxy partyProxy) {
+
+<span class="nc" id="L169">        DvCodedText relationship = ((PartyRelated) partyProxy).getRelationship();</span>
+
+<span class="nc" id="L171">        return new DvCodedTextRecord(</span>
+<span class="nc" id="L172">                relationship.getValue(),</span>
+<span class="nc" id="L173">                new PersistentCodePhrase(relationship.getDefiningCode()).encode(),</span>
+<span class="nc" id="L174">                relationship.getFormatting(),</span>
+<span class="nc" id="L175">                new PersistentCodePhrase(relationship.getLanguage()).encode(),</span>
+<span class="nc" id="L176">                new PersistentCodePhrase(relationship.getEncoding()).encode(),</span>
+<span class="nc" id="L177">                new PersistentTermMapping().termMappingRepresentation(relationship.getMappings()));</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.7.202105040129</span></div></body></html>

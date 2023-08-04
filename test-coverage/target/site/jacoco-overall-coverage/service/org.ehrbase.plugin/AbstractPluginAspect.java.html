@@ -1,0 +1,156 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../../jacoco-resources/report.gif" type="image/gif"/><title>AbstractPluginAspect.java</title><link rel="stylesheet" href="../../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../../index.html" class="el_report">Overall Coverage</a> &gt; <a href="../index.html" class="el_bundle">service</a> &gt; <a href="index.source.html" class="el_package">org.ehrbase.plugin</a> &gt; <span class="el_source">AbstractPluginAspect.java</span></div><h1>AbstractPluginAspect.java</h1><pre class="source lang-java linenums">/*
+ * Copyright (c) 2022 vitasystems GmbH and Hannover Medical School.
+ *
+ * This file is part of project EHRbase
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     https://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.ehrbase.plugin;
+
+import java.util.Comparator;
+import java.util.List;
+import java.util.Map;
+import java.util.function.BiFunction;
+import java.util.function.Function;
+import java.util.stream.Collectors;
+import org.apache.commons.lang3.function.TriFunction;
+import org.aspectj.lang.ProceedingJoinPoint;
+import org.aspectj.lang.annotation.Pointcut;
+import org.ehrbase.api.exception.InternalServerException;
+import org.ehrbase.plugin.extensionpoints.CompositionExtensionPoint;
+import org.springframework.beans.factory.ListableBeanFactory;
+import org.springframework.core.annotation.AnnotationAwareOrderComparator;
+
+/**
+ * @author Stefan Spiska
+ */
+/*TODO: maybe we should add the Ordered interface, so derived aspects will be evaluated in a predictable order in
+relation to other aspects we might have or add later for other features or even through a plugin?*/
+public abstract class AbstractPluginAspect&lt;EXTENSIONPOINT&gt; {
+
+<span class="nc" id="L41">    private final Comparator&lt;Map.Entry&lt;String, EXTENSIONPOINT&gt;&gt; EXTENSION_POINTS_COMPARATOR =</span>
+            // respect @Order
+            ((Comparator&lt;Map.Entry&lt;String, EXTENSIONPOINT&gt;&gt;)
+<span class="nc" id="L44">                            (e1, e2) -&gt; AnnotationAwareOrderComparator.INSTANCE.compare(e1.getValue(), e2.getValue()))</span>
+<span class="nc" id="L45">                    .reversed()</span>
+                    // ensure constant ordering
+<span class="nc" id="L47">                    .thenComparing(Map.Entry::getKey);</span>
+
+    protected final ListableBeanFactory beanFactory;
+
+    private final Class&lt;EXTENSIONPOINT&gt; clazz;
+
+<span class="nc" id="L53">    protected AbstractPluginAspect(ListableBeanFactory beanFactory, Class&lt;EXTENSIONPOINT&gt; clazz) {</span>
+<span class="nc" id="L54">        this.beanFactory = beanFactory;</span>
+<span class="nc" id="L55">        this.clazz = clazz;</span>
+<span class="nc" id="L56">    }</span>
+
+    @Pointcut(&quot;within(org.ehrbase.service..*)&quot;)
+<span class="nc" id="L59">    public void inServiceLayerPC() {}</span>
+
+    /**
+     * Proceed with Error handling.
+     *
+     * @param pjp
+     * @param args
+     * @return
+     */
+    protected Object proceed(ProceedingJoinPoint pjp, Object[] args) {
+        try {
+<span class="nc" id="L70">            return pjp.proceed(args);</span>
+<span class="nc" id="L71">        } catch (RuntimeException | Error e) {</span>
+            // Simple rethrow to handle in Controller layer
+<span class="nc" id="L73">            throw e;</span>
+<span class="nc" id="L74">        } catch (Throwable e) {</span>
+            // should never happen
+<span class="nc" id="L76">            throw new InternalServerException(e.getMessage(), e);</span>
+        }
+    }
+
+    /**
+     * @return Order List of {@link CompositionExtensionPoint} in Context.
+     */
+    protected List&lt;EXTENSIONPOINT&gt; getActiveExtensionPointsOrderedDesc() {
+
+<span class="nc" id="L85">        return beanFactory.getBeansOfType(clazz).entrySet().stream()</span>
+<span class="nc" id="L86">                .sorted(EXTENSION_POINTS_COMPARATOR)</span>
+<span class="nc" id="L87">                .map(Map.Entry::getValue)</span>
+<span class="nc" id="L88">                .collect(Collectors.toList());</span>
+    }
+
+    /**
+     * Proceeds with the invocation by calling the given method on all extension points in ascending order and then the
+     * service method (analog to Spring AOP aspects behaviour).
+     *
+     * @param pjp
+     * @param extensionPointMethod Method that is part of Type EXTENSIONPOINT to call
+     * @param argsToInputObj       Function to convert from an Object array to the input type IN used by extensionPointMethod
+     * @param setArgs              Function to set/modify the Object array used for {@link ProceedingJoinPoint}::proceed using
+     *                             an object of type IN
+     * @param &lt;IN&gt;                 POJO Type used by extensionPointMethod for argument aggregation
+     * @param &lt;OUT&gt;                return type of extensionPointMethod and the service method invocation represented by pjp
+     * @return result of passing the method call through all extension points to the service layer and processing the return
+     * value back through all extension points
+     */
+    protected &lt;IN, OUT&gt; OUT proceedWithPluginExtensionPoints(
+            ProceedingJoinPoint pjp,
+            TriFunction&lt;EXTENSIONPOINT, IN, Function&lt;IN, OUT&gt;, OUT&gt; extensionPointMethod,
+            Function&lt;Object[], IN&gt; argsToInputObj,
+            BiFunction&lt;IN, Object[], Object[]&gt; setArgs) {
+<span class="nc" id="L110">        return proceedWithPluginExtensionPoints(pjp, extensionPointMethod, argsToInputObj, setArgs, ret -&gt; (OUT) ret);</span>
+    }
+
+    /**
+     * Proceeds with the invocation by calling the given method on all extension points in ascending order and then the
+     * service method (analog to Spring AOP aspects behaviour).
+     *
+     * @param pjp
+     * @param extensionPointMethod Method that is part of Type EXTENSIONPOINT to call
+     * @param argsToInputObj       Function to convert from an Object array to the input type IN used by extensionPointMethod
+     * @param setArgs              Function to set/modify the Object array used for {@link ProceedingJoinPoint}::proceed using
+     *                             an object of type IN
+     * @param afterProceed         function to apply to adapt the return value of the service call to the return type of the
+     *                             extension point method (OUT)
+     * @param &lt;IN&gt;                 POJO Type used by extensionPointMethod for argument aggregation
+     * @param &lt;OUT&gt;                return type of extensionPointMethod and in most cases the service method invocation
+     *                             represented by pjp
+     * @return result of passing the method call through all extension points to the service layer and processing the return
+     * value back through all extension points
+     */
+    protected &lt;IN, OUT&gt; OUT proceedWithPluginExtensionPoints(
+            ProceedingJoinPoint pjp,
+            TriFunction&lt;EXTENSIONPOINT, IN, Function&lt;IN, OUT&gt;, OUT&gt; extensionPointMethod,
+            Function&lt;Object[], IN&gt; argsToInputObj,
+            BiFunction&lt;IN, Object[], Object[]&gt; setArgs,
+            Function&lt;Object, OUT&gt; afterProceed) {
+
+<span class="nc" id="L137">        List&lt;EXTENSIONPOINT&gt; extensionPoints = getActiveExtensionPointsOrderedDesc();</span>
+<span class="nc bnc" id="L138" title="All 2 branches missed.">        if (extensionPoints.isEmpty()) {</span>
+<span class="nc" id="L139">            return afterProceed.apply(proceed(pjp, pjp.getArgs()));</span>
+        }
+
+<span class="nc" id="L142">        IN inputArgsObj = argsToInputObj.apply(pjp.getArgs());</span>
+        // last extension point (first in the list) will hand over to the service layer
+<span class="nc" id="L144">        Function&lt;IN, OUT&gt; callChain = in -&gt; afterProceed.apply(proceed(pjp, setArgs.apply(in, pjp.getArgs())));</span>
+        // set up extension points to hand over to the next one of lower priority
+<span class="nc bnc" id="L146" title="All 2 branches missed.">        for (int i = 0; i &lt; extensionPoints.size() - 1; i++) {</span>
+<span class="nc" id="L147">            final EXTENSIONPOINT ep = extensionPoints.get(i);</span>
+<span class="nc" id="L148">            final Function&lt;IN, OUT&gt; lastCall = callChain;</span>
+<span class="nc" id="L149">            callChain = in -&gt; extensionPointMethod.apply(ep, in, lastCall);</span>
+        }
+
+        // actually execute the first extension point method
+<span class="nc" id="L153">        return extensionPointMethod.apply(extensionPoints.get(extensionPoints.size() - 1), inputArgsObj, callChain);</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.7.202105040129</span></div></body></html>

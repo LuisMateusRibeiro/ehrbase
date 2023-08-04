@@ -1,0 +1,457 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../../jacoco-resources/report.gif" type="image/gif"/><title>QueryCompilerPass2.java</title><link rel="stylesheet" href="../../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../../index.html" class="el_report">Coverage with Unit Tests</a> &gt; <a href="../index.html" class="el_bundle">service</a> &gt; <a href="index.source.html" class="el_package">org.ehrbase.aql.compiler</a> &gt; <span class="el_source">QueryCompilerPass2.java</span></div><h1>QueryCompilerPass2.java</h1><pre class="source lang-java linenums">/*
+ * Copyright (c) 2019 vitasystems GmbH and Hannover Medical School.
+ *
+ * This file is part of project EHRbase
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     https://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.ehrbase.aql.compiler;
+
+import java.util.ArrayDeque;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Deque;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Random;
+import org.antlr.v4.runtime.RuleContext;
+import org.antlr.v4.runtime.tree.ParseTree;
+import org.antlr.v4.runtime.tree.TerminalNode;
+import org.apache.commons.lang3.StringUtils;
+import org.ehrbase.aql.definition.ConstantDefinition;
+import org.ehrbase.aql.definition.ExtensionDefinition;
+import org.ehrbase.aql.definition.FuncParameter;
+import org.ehrbase.aql.definition.FuncParameterType;
+import org.ehrbase.aql.definition.FunctionDefinition;
+import org.ehrbase.aql.definition.I_VariableDefinition;
+import org.ehrbase.aql.definition.IdentifiedPathVariable;
+import org.ehrbase.aql.definition.PredicateDefinition;
+import org.ehrbase.aql.definition.VariableDefinition;
+import org.ehrbase.aql.parser.AqlBaseListener;
+import org.ehrbase.aql.parser.AqlParser;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.util.CollectionUtils;
+
+/**
+ * AQL compilation pass 2&lt;p&gt; This pass uses the results of pass 1 to:
+ * &lt;ul&gt;
+ * &lt;li&gt;resolve AQL paths from symbols, example: c/items[at0002]/items[at0001]/value/value/magnitude
+ * &lt;li&gt;create the list of variables used in SELECT
+ * &lt;li&gt;create the list of ORDER BY expression parts
+ * &lt;li&gt;set the TOP clause if specified
+ * &lt;/ul&gt;
+ *
+ * @author Christian Chevalley
+ * @author Stefan Spiska
+ * @since 1.0
+ */
+@SuppressWarnings(&quot;java:S2245&quot;)
+<span class="fc" id="L61">public class QueryCompilerPass2 extends AqlBaseListener {</span>
+
+    private static final int POSTGRESQL_ALIAS_LENGTH_LIMIT = 63;
+
+<span class="fc" id="L65">    private final Logger logger = LoggerFactory.getLogger(getClass());</span>
+
+<span class="fc" id="L67">    private final String[] allowedFunctions = {</span>
+        &quot;COUNT&quot;,
+        &quot;MIN&quot;,
+        &quot;MAX&quot;,
+        &quot;AVG&quot;,
+        &quot;SUM&quot;,
+        &quot;SUBSTR&quot;,
+        &quot;STRPOS&quot;,
+        &quot;SPLIT_PART&quot;,
+        &quot;BTRIM&quot;,
+        &quot;CONCAT&quot;,
+        &quot;CONCAT_WS&quot;,
+        &quot;DECODE&quot;,
+        &quot;ENCODE&quot;,
+        &quot;FORMAT&quot;,
+        &quot;INITCAP&quot;,
+        &quot;LEFT&quot;,
+        &quot;LENGTH&quot;,
+        &quot;LPAD&quot;,
+        &quot;LTRIM&quot;,
+        &quot;REGEXP_MATCH&quot;,
+        &quot;REGEXP_REPLACE&quot;,
+        &quot;REGEXP_SPLIT_TO_ARRAY&quot;,
+        &quot;REGEXP_SPLIT_TO_TABLE&quot;,
+        &quot;REPEAT&quot;,
+        &quot;REPLACE&quot;,
+        &quot;REVERSE&quot;,
+        &quot;RIGHT&quot;,
+        &quot;RPAD&quot;,
+        &quot;RTRIM&quot;,
+        &quot;TRANSLATE&quot;,
+        &quot;CAST&quot;,
+        &quot;NOW&quot;
+    };
+
+<span class="fc" id="L102">    private final Deque&lt;I_VariableDefinition&gt; variableStack = new ArrayDeque&lt;&gt;();</span>
+<span class="fc" id="L103">    private final Map&lt;AqlParser.SelectExprContext, PredicateDefinition&gt; predicateDefinitionMap = new HashMap&lt;&gt;();</span>
+<span class="fc" id="L104">    private final Random random = new Random();</span>
+
+<span class="fc" id="L106">    private Deque&lt;OrderAttribute&gt; orderAttributes = null;</span>
+<span class="fc" id="L107">    private Integer limitAttribute = null;</span>
+<span class="fc" id="L108">    private Integer offsetAttribute = null;</span>
+<span class="fc" id="L109">    private TopAttributes topAttributes = null;</span>
+
+    @Override
+    public void exitObjectPath(AqlParser.ObjectPathContext objectPathContext) {
+<span class="fc" id="L113">        logger.debug(&quot;Object Path-&gt;&quot;);</span>
+<span class="fc" id="L114">    }</span>
+
+    @Override
+    public void exitSelectExpr(AqlParser.SelectExprContext selectExprContext) {
+<span class="fc" id="L118">        boolean isDistinct = false;</span>
+
+<span class="fc" id="L120">        AqlParser.IdentifiedPathContext identifiedPathContext = selectExprContext.identifiedPath();</span>
+
+<span class="fc bfc" id="L122" title="All 2 branches covered.">        if (selectExprContext.DISTINCT() != null) {</span>
+            // has distinct expression
+<span class="fc" id="L124">            isDistinct = true;</span>
+        }
+
+<span class="fc bfc" id="L127" title="All 2 branches covered.">        if (identifiedPathContext != null) {</span>
+            VariableDefinition variableDefinition;
+<span class="fc" id="L129">            variableDefinition = new IdentifiedPathVariable(</span>
+                            identifiedPathContext,
+                            selectExprContext,
+                            isDistinct,
+<span class="fc" id="L133">                            predicateDefinitionMap.get(selectExprContext))</span>
+<span class="fc" id="L134">                    .definition();</span>
+<span class="fc bfc" id="L135" title="All 2 branches covered.">            if (variableDefinition.getAlias() != null) {</span>
+<span class="fc" id="L136">                variableDefinition.setVoidAlias(false);</span>
+            }
+<span class="fc" id="L138">            pushVariableDefinition(variableDefinition);</span>
+<span class="pc bpc" id="L139" title="1 of 2 branches missed.">        } else if (selectExprContext.stdExpression() != null) {</span>
+            // function handling
+<span class="fc" id="L141">            logger.debug(&quot;Found standard expression&quot;);</span>
+            // set alias if any (function AS alias
+<span class="fc bfc" id="L143" title="All 2 branches covered.">            if (selectExprContext.stdExpression().function() != null) {</span>
+<span class="fc" id="L144">                handleFunctionDefinition(selectExprContext.stdExpression().function(), selectExprContext);</span>
+<span class="fc bfc" id="L145" title="All 2 branches covered.">            } else if (selectExprContext.stdExpression().castFunction() != null) {</span>
+<span class="fc" id="L146">                handleCastFunctionDefinition(selectExprContext.stdExpression().castFunction(), selectExprContext);</span>
+<span class="pc bpc" id="L147" title="1 of 2 branches missed.">            } else if (selectExprContext.stdExpression().extension() != null) {</span>
+<span class="nc" id="L148">                handleExtensionDefinition(selectExprContext.stdExpression().extension(), selectExprContext);</span>
+            } else {
+<span class="fc" id="L150">                handleTerminalNodeExpression(selectExprContext.stdExpression(), selectExprContext);</span>
+            }
+
+        } else {
+<span class="nc" id="L154">            throw new IllegalArgumentException(&quot;Could not interpret select context&quot;);</span>
+        }
+<span class="fc" id="L156">    }</span>
+
+    @Override
+    public void exitNodePredicateComparable(AqlParser.NodePredicateComparableContext nodePredicateComparableContext) {
+        String operand1;
+<span class="fc" id="L161">        String operand2 = null;</span>
+<span class="fc" id="L162">        String operator = null;</span>
+
+<span class="fc bfc" id="L164" title="All 2 branches covered.">        if (nodePredicateComparableContext.predicateOperand().isEmpty()) {</span>
+<span class="fc" id="L165">            return;</span>
+        }
+
+<span class="fc" id="L168">        operand1 = nodePredicateComparableContext.predicateOperand(0).getText();</span>
+
+<span class="pc bpc" id="L170" title="1 of 2 branches missed.">        if (!CollectionUtils.isEmpty(nodePredicateComparableContext.predicateOperand())) {</span>
+<span class="fc" id="L171">            operand2 = nodePredicateComparableContext.predicateOperand(1).getText();</span>
+        }
+
+<span class="pc bpc" id="L174" title="1 of 2 branches missed.">        if (!CollectionUtils.isEmpty(nodePredicateComparableContext.children)) {</span>
+<span class="fc" id="L175">            operator = nodePredicateComparableContext.getChild(1).getText();</span>
+        }
+
+        // identify the matching variable
+<span class="fc" id="L179">        RuleContext ruleContext = nodePredicateComparableContext.getParent();</span>
+
+        // traverse the parent until reaching the Select context or no more parent
+<span class="pc bpc" id="L182" title="1 of 4 branches missed.">        while (!(ruleContext instanceof AqlParser.SelectExprContext) &amp;&amp; ruleContext != null) {</span>
+<span class="fc" id="L183">            ruleContext = ruleContext.getParent();</span>
+        }
+
+<span class="pc bpc" id="L186" title="1 of 2 branches missed.">        if (ruleContext instanceof AqlParser.SelectExprContext) {</span>
+<span class="fc" id="L187">            PredicateDefinition predicateDefinition = new PredicateDefinition(operand1, operator, operand2);</span>
+<span class="fc" id="L188">            predicateDefinitionMap.put((AqlParser.SelectExprContext) ruleContext, predicateDefinition);</span>
+        }
+<span class="fc" id="L190">    }</span>
+
+    private void pushVariableDefinition(I_VariableDefinition variableDefinition) {
+<span class="fc" id="L193">        isUnique(variableDefinition);</span>
+<span class="fc" id="L194">        variableStack.push(variableDefinition);</span>
+<span class="fc" id="L195">    }</span>
+
+    private void handleFunctionDefinition(
+            AqlParser.FunctionContext functionContext, AqlParser.SelectExprContext inSelectExprContext) {
+<span class="fc" id="L199">        logger.debug(&quot;Found function&quot;);</span>
+<span class="fc" id="L200">        String name = functionContext.FUNCTION_IDENTIFIER().getText();</span>
+
+<span class="pc bpc" id="L202" title="1 of 2 branches missed.">        if (!Arrays.asList(allowedFunctions).contains(name.toUpperCase())) {</span>
+<span class="nc" id="L203">            throw new IllegalArgumentException(&quot;Found not supported function:'&quot; + name + &quot;'&quot;);</span>
+        }
+
+<span class="fc" id="L206">        List&lt;FuncParameter&gt; parameters = new ArrayList&lt;&gt;();</span>
+
+<span class="fc" id="L208">        int serial = 0;</span>
+
+<span class="fc bfc" id="L210" title="All 2 branches covered.">        for (ParseTree pathTree : functionContext.children) {</span>
+<span class="fc bfc" id="L211" title="All 2 branches covered.">            if (pathTree instanceof AqlParser.IdentifiedPathContext) {</span>
+<span class="fc" id="L212">                AqlParser.IdentifiedPathContext pathContext = (AqlParser.IdentifiedPathContext) pathTree;</span>
+<span class="fc" id="L213">                VariableDefinition variableDefinition =</span>
+<span class="fc" id="L214">                        new IdentifiedPathVariable(pathContext, inSelectExprContext, false, null).definition();</span>
+                // by default postgresql limits the size of column name to 63 bytes
+<span class="fc bfc" id="L216" title="All 2 branches covered.">                if (variableDefinition.getAlias() == null</span>
+<span class="pc bpc" id="L217" title="1 of 2 branches missed.">                        || variableDefinition.getAlias().isEmpty()</span>
+<span class="pc bpc" id="L218" title="1 of 2 branches missed.">                        || variableDefinition.getAlias().length() &gt; POSTGRESQL_ALIAS_LENGTH_LIMIT) {</span>
+<span class="fc" id="L219">                    variableDefinition.setAlias(&quot;_FCT_ARG_&quot; + serial++);</span>
+                }
+<span class="fc" id="L221">                pushVariableDefinition(variableDefinition);</span>
+<span class="fc" id="L222">                parameters.add(new FuncParameter(</span>
+                        FuncParameterType.VARIABLE,
+<span class="pc bpc" id="L224" title="1 of 2 branches missed.">                        variableDefinition.getAlias() == null</span>
+<span class="nc" id="L225">                                ? variableDefinition.getPath()</span>
+<span class="fc" id="L226">                                : variableDefinition.getAlias()));</span>
+<span class="pc bpc" id="L227" title="1 of 2 branches missed.">            } else if (pathTree instanceof AqlParser.OperandContext) {</span>
+<span class="nc" id="L228">                parameters.add(new FuncParameter(FuncParameterType.OPERAND, pathTree.getText()));</span>
+<span class="pc bpc" id="L229" title="1 of 2 branches missed.">            } else if (pathTree instanceof TerminalNode) {</span>
+<span class="fc" id="L230">                parameters.add(new FuncParameter(FuncParameterType.IDENTIFIER, pathTree.getText()));</span>
+            }
+<span class="fc" id="L232">        }</span>
+<span class="fc" id="L233">        String alias = extractAlias(inSelectExprContext);</span>
+<span class="fc bfc" id="L234" title="All 2 branches covered.">        if (alias == null) {</span>
+<span class="pc bpc" id="L235" title="1 of 2 branches missed.">            if (inSelectExprContext.IDENTIFIER() == null) {</span>
+<span class="fc" id="L236">                alias = name;</span>
+            } else {
+<span class="nc" id="L238">                inSelectExprContext.IDENTIFIER().getText();</span>
+            }
+        }
+<span class="fc" id="L241">        String path = functionContext.getText();</span>
+<span class="fc" id="L242">        FunctionDefinition definition = new FunctionDefinition(name, alias, path, parameters);</span>
+<span class="fc" id="L243">        pushVariableDefinition(definition);</span>
+<span class="fc" id="L244">    }</span>
+
+    private void handleCastFunctionDefinition(
+            AqlParser.CastFunctionContext castFunctionContext, AqlParser.SelectExprContext inSelectExprContext) {
+<span class="fc" id="L248">        logger.debug(&quot;Found CAST function&quot;);</span>
+
+<span class="fc" id="L250">        List&lt;FuncParameter&gt; parameters = new ArrayList&lt;&gt;();</span>
+
+<span class="fc" id="L252">        int serial = 0;</span>
+
+<span class="fc bfc" id="L254" title="All 2 branches covered.">        for (ParseTree pathTree : castFunctionContext.children) {</span>
+<span class="fc bfc" id="L255" title="All 2 branches covered.">            if (pathTree instanceof AqlParser.IdentifiedPathContext) {</span>
+<span class="fc" id="L256">                AqlParser.IdentifiedPathContext pathContext = (AqlParser.IdentifiedPathContext) pathTree;</span>
+<span class="fc" id="L257">                VariableDefinition variableDefinition =</span>
+<span class="fc" id="L258">                        new IdentifiedPathVariable(pathContext, inSelectExprContext, false, null).definition();</span>
+                // by default postgresql limits the size of column name to 63 bytes
+<span class="pc bpc" id="L260" title="1 of 2 branches missed.">                if (variableDefinition.getAlias() == null</span>
+<span class="pc bpc" id="L261" title="1 of 2 branches missed.">                        || variableDefinition.getAlias().isEmpty()</span>
+<span class="pc bpc" id="L262" title="1 of 2 branches missed.">                        || variableDefinition.getAlias().length() &gt; 63) {</span>
+<span class="nc" id="L263">                    variableDefinition.setAlias(&quot;_FCT_ARG_&quot; + serial++);</span>
+                }
+<span class="fc" id="L265">                pushVariableDefinition(variableDefinition);</span>
+<span class="fc" id="L266">                parameters.add(new FuncParameter(</span>
+                        FuncParameterType.VARIABLE,
+<span class="pc bpc" id="L268" title="1 of 2 branches missed.">                        variableDefinition.getAlias() == null</span>
+<span class="nc" id="L269">                                ? variableDefinition.getPath()</span>
+<span class="fc" id="L270">                                : variableDefinition.getAlias()));</span>
+<span class="pc bpc" id="L271" title="1 of 2 branches missed.">            } else if (pathTree instanceof AqlParser.OperandContext) {</span>
+<span class="nc" id="L272">                parameters.add(new FuncParameter(FuncParameterType.OPERAND, pathTree.getText()));</span>
+<span class="pc bpc" id="L273" title="1 of 2 branches missed.">            } else if (pathTree instanceof TerminalNode) {</span>
+<span class="fc" id="L274">                String text = pathTree.getText();</span>
+<span class="fc bfc" id="L275" title="All 2 branches covered.">                if (text.contains(&quot;'&quot;)) {</span>
+                    // Unquote
+<span class="fc" id="L277">                    text = text.replace(&quot;'&quot;, &quot;&quot;);</span>
+                }
+<span class="fc" id="L279">                text = &quot; &quot; + text;</span>
+<span class="fc" id="L280">                parameters.add(new FuncParameter(FuncParameterType.IDENTIFIER, text));</span>
+            }
+<span class="fc" id="L282">        }</span>
+
+<span class="fc" id="L284">        String alias = extractAlias(inSelectExprContext);</span>
+<span class="pc bpc" id="L285" title="1 of 2 branches missed.">        if (alias == null) {</span>
+<span class="nc" id="L286">            alias = &quot;CAST&quot;;</span>
+        }
+<span class="fc" id="L288">        String path = castFunctionContext.getText();</span>
+<span class="fc" id="L289">        FunctionDefinition definition = new FunctionDefinition(&quot;CAST&quot;, alias, path, parameters);</span>
+<span class="fc" id="L290">        pushVariableDefinition(definition);</span>
+<span class="fc" id="L291">    }</span>
+
+    public void handleExtensionDefinition(
+            AqlParser.ExtensionContext extensionContext, AqlParser.SelectExprContext inSelectExprContext) {
+<span class="nc" id="L295">        logger.debug(&quot;Found extension&quot;);</span>
+<span class="nc" id="L296">        String context = extensionContext.getChild(2).getText();</span>
+<span class="nc" id="L297">        String parsableExpression = extensionContext.getChild(4).getText();</span>
+<span class="nc bnc" id="L298" title="All 2 branches missed.">        String alias = inSelectExprContext.IDENTIFIER() == null</span>
+<span class="nc" id="L299">                ? &quot;_alias_&quot; + random.nextLong()</span>
+<span class="nc" id="L300">                : inSelectExprContext.IDENTIFIER().getText();</span>
+<span class="nc" id="L301">        ExtensionDefinition definition = new ExtensionDefinition(context, parsableExpression, alias);</span>
+<span class="nc" id="L302">        pushVariableDefinition(definition);</span>
+<span class="nc" id="L303">    }</span>
+
+    public void handleTerminalNodeExpression(
+            AqlParser.StdExpressionContext inStdExpressionContext, AqlParser.SelectExprContext inSelectExprContext) {
+<span class="fc" id="L307">        logger.debug(&quot;Found terminal node&quot;);</span>
+        Object value;
+<span class="pc bpc" id="L309" title="1 of 2 branches missed.">        if (inStdExpressionContext.BOOLEAN() != null) {</span>
+<span class="nc" id="L310">            value = Boolean.valueOf(inStdExpressionContext.getText());</span>
+<span class="pc bpc" id="L311" title="1 of 2 branches missed.">        } else if (inStdExpressionContext.FALSE() != null) {</span>
+<span class="nc" id="L312">            value = false;</span>
+<span class="pc bpc" id="L313" title="1 of 2 branches missed.">        } else if (inStdExpressionContext.TRUE() != null) {</span>
+<span class="fc" id="L314">            value = true;</span>
+<span class="nc bnc" id="L315" title="All 2 branches missed.">        } else if (inStdExpressionContext.FLOAT() != null) {</span>
+<span class="nc" id="L316">            value = Float.valueOf(inStdExpressionContext.getText());</span>
+<span class="nc bnc" id="L317" title="All 2 branches missed.">        } else if (inStdExpressionContext.INTEGER() != null) {</span>
+<span class="nc" id="L318">            value = Integer.valueOf(inStdExpressionContext.getText());</span>
+<span class="nc bnc" id="L319" title="All 2 branches missed.">        } else if (inStdExpressionContext.NULL() != null) {</span>
+<span class="nc" id="L320">            value = null;</span>
+<span class="nc bnc" id="L321" title="All 2 branches missed.">        } else if (inStdExpressionContext.REAL() != null) {</span>
+<span class="nc" id="L322">            value = Double.valueOf(inStdExpressionContext.getText());</span>
+<span class="nc bnc" id="L323" title="All 2 branches missed.">        } else if (inStdExpressionContext.UNKNOWN() != null) {</span>
+<span class="nc" id="L324">            value = null;</span>
+<span class="nc bnc" id="L325" title="All 2 branches missed.">        } else if (inStdExpressionContext.STRING() != null) {</span>
+<span class="nc" id="L326">            value = inStdExpressionContext.getText().replace(&quot;'&quot;, &quot;&quot;);</span>
+        } else // DATE()
+        {
+<span class="nc" id="L329">            value = inStdExpressionContext.getText();</span>
+        }
+
+<span class="fc" id="L332">        ConstantDefinition definition = new ConstantDefinition(value, extractAlias(inSelectExprContext));</span>
+<span class="fc" id="L333">        pushVariableDefinition(definition);</span>
+<span class="fc" id="L334">    }</span>
+
+    /**
+     * check if a variable definition is unique (e.g. new aliase)
+     *
+     * @param variableDefinition
+     */
+    private void isUnique(I_VariableDefinition variableDefinition) {
+
+        // allow duplicate aliases whe used in function expressions
+<span class="fc bfc" id="L344" title="All 2 branches covered.">        if (variableDefinition.isFunction()) {</span>
+<span class="fc" id="L345">            return;</span>
+        }
+
+<span class="fc" id="L348">        String alias = variableDefinition.getAlias();</span>
+
+<span class="fc bfc" id="L350" title="All 2 branches covered.">        for (I_VariableDefinition stackedVariableDefinition : variableStack) {</span>
+<span class="fc bfc" id="L351" title="All 2 branches covered.">            if (!StringUtils.isEmpty(stackedVariableDefinition.getAlias())</span>
+<span class="fc bfc" id="L352" title="All 2 branches covered.">                    &amp;&amp; stackedVariableDefinition.getAlias().equals(alias)) {</span>
+<span class="fc" id="L353">                throw new IllegalArgumentException(&quot;Duplicated alias detected:&quot; + alias);</span>
+            }
+<span class="fc" id="L355">        }</span>
+<span class="fc" id="L356">    }</span>
+
+    private String extractAlias(AqlParser.SelectExprContext inSelectExprContext) {
+<span class="fc" id="L359">        String foundAlias = null;</span>
+<span class="fc bfc" id="L360" title="All 2 branches covered.">        if (inSelectExprContext.getChildCount() == 3</span>
+<span class="pc bpc" id="L361" title="1 of 2 branches missed.">                &amp;&amp; inSelectExprContext.getChild(1).getText().equalsIgnoreCase(&quot;AS&quot;)) {</span>
+<span class="fc" id="L362">            foundAlias = inSelectExprContext.getChild(2).getText();</span>
+        }
+<span class="fc" id="L364">        return foundAlias;</span>
+    }
+
+    @Override
+    public void exitTopExpr(AqlParser.TopExprContext context) {
+<span class="fc" id="L369">        Integer window = null;</span>
+<span class="fc" id="L370">        TopAttributes.TopDirection direction = null;</span>
+<span class="pc bpc" id="L371" title="1 of 2 branches missed.">        if (context.TOP() != null) {</span>
+<span class="fc" id="L372">            window = Integer.valueOf(context.INTEGER().getText());</span>
+<span class="fc bfc" id="L373" title="All 2 branches covered.">            if (context.BACKWARD() != null) {</span>
+<span class="fc" id="L374">                direction = TopAttributes.TopDirection.BACKWARD;</span>
+<span class="fc bfc" id="L375" title="All 2 branches covered.">            } else if (context.FORWARD() != null) {</span>
+<span class="fc" id="L376">                direction = TopAttributes.TopDirection.FORWARD;</span>
+            }
+        }
+<span class="fc" id="L379">        topAttributes = new TopAttributes(window, direction);</span>
+<span class="fc" id="L380">    }</span>
+
+    @Override
+    public void exitOrderBySeq(AqlParser.OrderBySeqContext context) {
+<span class="fc bfc" id="L384" title="All 2 branches covered.">        if (orderAttributes == null) {</span>
+<span class="fc" id="L385">            orderAttributes = new ArrayDeque&lt;&gt;();</span>
+        }
+
+<span class="fc bfc" id="L388" title="All 2 branches covered.">        for (ParseTree tree : context.children) {</span>
+<span class="pc bpc" id="L389" title="1 of 2 branches missed.">            if (tree instanceof AqlParser.OrderByExprContext) {</span>
+<span class="fc" id="L390">                AqlParser.OrderByExprContext context1 = (AqlParser.OrderByExprContext) tree;</span>
+<span class="fc" id="L391">                AqlParser.IdentifiedPathContext identifiedPathContext = context1.identifiedPath();</span>
+                String path;
+<span class="fc bfc" id="L393" title="All 2 branches covered.">                if (identifiedPathContext.objectPath() != null) {</span>
+<span class="fc" id="L394">                    path = identifiedPathContext.objectPath().getText();</span>
+                } else {
+<span class="fc" id="L396">                    path = null;</span>
+                }
+
+<span class="fc" id="L399">                String identifier = identifiedPathContext.IDENTIFIER().getText(); // f.e. 'e' in 'e/time_created/value</span>
+
+                OrderAttribute orderAttribute;
+<span class="fc bfc" id="L402" title="All 2 branches covered.">                if (path == null) {</span>
+<span class="fc" id="L403">                    orderAttribute = new OrderAttribute(new VariableDefinition(path, identifier, null, false));</span>
+                } else {
+<span class="fc" id="L405">                    orderAttribute = new OrderAttribute(new VariableDefinition(path, null, identifier, false));</span>
+                }
+
+<span class="pc bpc" id="L408" title="1 of 4 branches missed.">                if (context1.DESC() != null || context1.DESCENDING() != null) {</span>
+<span class="fc" id="L409">                    orderAttribute.setDirection(OrderAttribute.OrderDirection.DESC);</span>
+                } else {
+<span class="fc" id="L411">                    orderAttribute.setDirection(OrderAttribute.OrderDirection.ASC);</span>
+                }
+<span class="fc" id="L413">                orderAttributes.push(orderAttribute);</span>
+            }
+<span class="fc" id="L415">        }</span>
+<span class="fc" id="L416">    }</span>
+
+    @Override
+    public void exitOffset(AqlParser.OffsetContext ctx) {
+<span class="fc" id="L420">        offsetAttribute = Integer.valueOf(ctx.INTEGER().getText());</span>
+<span class="fc" id="L421">    }</span>
+
+    @Override
+    public void exitLimit(AqlParser.LimitContext ctx) {
+<span class="fc" id="L425">        limitAttribute = Integer.valueOf(ctx.INTEGER().getText());</span>
+<span class="fc" id="L426">    }</span>
+
+    @Override
+    public void exitFunction(AqlParser.FunctionContext functionContext) {
+        // get the function id and parameters
+<span class="fc" id="L431">        logger.debug(&quot;in function&quot;);</span>
+<span class="fc" id="L432">    }</span>
+
+    public List&lt;I_VariableDefinition&gt; getVariables() {
+<span class="fc" id="L435">        return new ArrayList&lt;&gt;(variableStack);</span>
+    }
+
+    TopAttributes getTopAttributes() {
+<span class="fc" id="L439">        return topAttributes;</span>
+    }
+
+    List&lt;OrderAttribute&gt; getOrderAttributes() {
+<span class="fc bfc" id="L443" title="All 2 branches covered.">        if (orderAttributes == null) {</span>
+<span class="fc" id="L444">            return new ArrayList&lt;&gt;();</span>
+        }
+<span class="fc" id="L446">        return new ArrayList&lt;&gt;(orderAttributes);</span>
+    }
+
+    Integer getLimitAttribute() {
+<span class="fc" id="L450">        return limitAttribute;</span>
+    }
+
+    Integer getOffsetAttribute() {
+<span class="fc" id="L454">        return offsetAttribute;</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.7.202105040129</span></div></body></html>

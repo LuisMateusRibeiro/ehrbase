@@ -1,0 +1,68 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../../jacoco-resources/report.gif" type="image/gif"/><title>NodePredicate.java</title><link rel="stylesheet" href="../../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../../index.html" class="el_report">Overall Coverage</a> &gt; <a href="../index.html" class="el_bundle">service</a> &gt; <a href="index.source.html" class="el_package">org.ehrbase.aql.sql.queryimpl.value_field</a> &gt; <span class="el_source">NodePredicate.java</span></div><h1>NodePredicate.java</h1><pre class="source lang-java linenums">/*
+ * Copyright (c) 2019 vitasystems GmbH and Hannover Medical School.
+ *
+ * This file is part of project EHRbase
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     https://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.ehrbase.aql.sql.queryimpl.value_field;
+
+/**
+ * Created by christian on 5/2/2018.
+ */
+public class NodePredicate {
+
+    private static final String AND_NAME_VALUE = &quot; and name/value=&quot;;
+    String nodeId;
+
+<span class="fc" id="L28">    public NodePredicate(String nodeId) {</span>
+<span class="fc" id="L29">        this.nodeId = nodeId;</span>
+<span class="fc" id="L30">    }</span>
+
+    public String removeNameValuePredicate() {
+
+<span class="fc" id="L34">        String retNodeId = nodeId;</span>
+
+<span class="pc bpc" id="L36" title="1 of 2 branches missed.">        if (retNodeId.contains(AND_NAME_VALUE)) {</span>
+<span class="nc" id="L37">            retNodeId = retNodeId.substring(0, retNodeId.indexOf(AND_NAME_VALUE)) + &quot;]&quot;;</span>
+<span class="fc bfc" id="L38" title="All 2 branches covered.">        } else if (retNodeId.contains(&quot;,&quot;)) {</span>
+<span class="fc" id="L39">            retNodeId = retNodeId.substring(0, retNodeId.indexOf(&quot;,&quot;)) + &quot;]&quot;;</span>
+        }
+
+<span class="fc" id="L42">        return retNodeId;</span>
+    }
+
+    public String predicate() {
+<span class="fc" id="L46">        String predicate = null;</span>
+
+<span class="pc bpc" id="L48" title="1 of 2 branches missed.">        if (nodeId.contains(AND_NAME_VALUE)) {</span>
+<span class="nc" id="L49">            predicate = nodeId.substring(nodeId.indexOf(AND_NAME_VALUE) + AND_NAME_VALUE.length(), nodeId.indexOf(&quot;]&quot;));</span>
+<span class="pc bpc" id="L50" title="1 of 2 branches missed.">        } else if (nodeId.contains(&quot;,&quot;)) {</span>
+<span class="fc" id="L51">            predicate = nodeId.substring(nodeId.indexOf(&quot;,&quot;) + 1, nodeId.indexOf(&quot;]&quot;));</span>
+        }
+
+<span class="fc" id="L54">        return predicate;</span>
+    }
+
+    public boolean hasPredicate() {
+
+<span class="fc" id="L59">        boolean retval = false;</span>
+
+<span class="pc bpc" id="L61" title="1 of 4 branches missed.">        if (nodeId.contains(AND_NAME_VALUE) || nodeId.contains(&quot;,&quot;)) {</span>
+<span class="fc" id="L62">            retval = true;</span>
+        }
+
+<span class="fc" id="L65">        return retval;</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.7.202105040129</span></div></body></html>

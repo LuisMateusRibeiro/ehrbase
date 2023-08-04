@@ -1,0 +1,94 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../../jacoco-resources/report.gif" type="image/gif"/><title>AqlExpression.java</title><link rel="stylesheet" href="../../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../../index.html" class="el_report">Overall Coverage</a> &gt; <a href="../index.html" class="el_bundle">service</a> &gt; <a href="index.source.html" class="el_package">org.ehrbase.aql.compiler</a> &gt; <span class="el_source">AqlExpression.java</span></div><h1>AqlExpression.java</h1><pre class="source lang-java linenums">/*
+ * Copyright (c) 2019 vitasystems GmbH and Hannover Medical School.
+ *
+ * This file is part of project EHRbase
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     https://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.ehrbase.aql.compiler;
+
+import java.lang.reflect.Method;
+import org.antlr.v4.runtime.ANTLRInputStream;
+import org.antlr.v4.runtime.CommonTokenStream;
+import org.antlr.v4.runtime.Lexer;
+import org.antlr.v4.runtime.tree.ParseTree;
+import org.ehrbase.aql.parser.AqlLexer;
+import org.ehrbase.aql.parser.AqlParser;
+
+/**
+ * Wrap the walkers for pass1 and pass2 as well as invoke the WHERE getQueryOptMetaData
+ * &lt;p&gt;
+ * The purpose of this class is to assemble all query parts from the AQL expression. The parts
+ * are then passed to specific binders to translate and/or perform the query to
+ * a backend.
+ * Created by christian on 4/1/2016.
+ * Refactored 13.8.2019
+ */
+<span class="fc" id="L37">public class AqlExpression {</span>
+
+    private AqlParser aqlParser;
+    private ParseTree parseTree;
+
+    public AqlExpression parse(String query) {
+<span class="fc" id="L43">        ANTLRInputStream antlrInputStream = new ANTLRInputStream(query);</span>
+<span class="fc" id="L44">        Lexer aqlLexer = new AqlLexer(antlrInputStream);</span>
+<span class="fc" id="L45">        CommonTokenStream commonTokenStream = new CommonTokenStream(aqlLexer);</span>
+<span class="fc" id="L46">        this.aqlParser = new AqlParser(commonTokenStream);</span>
+
+        // define our own error listener (default one just display a message on System.err
+<span class="fc" id="L49">        aqlLexer.removeErrorListeners();</span>
+<span class="fc" id="L50">        aqlLexer.addErrorListener(AqlErrorHandler.INSTANCE);</span>
+<span class="fc" id="L51">        aqlParser.removeErrorListeners();</span>
+<span class="fc" id="L52">        aqlParser.addErrorListener(AqlErrorHandler.INSTANCE);</span>
+
+<span class="fc" id="L54">        this.parseTree = aqlParser.query(); // begin parsing at query rule</span>
+
+<span class="fc" id="L56">        return this;</span>
+    }
+
+    public AqlExpression parse(String expression, String ruleName) {
+<span class="fc" id="L60">        ANTLRInputStream antlrInputStream = new ANTLRInputStream(expression);</span>
+<span class="fc" id="L61">        Lexer aqlLexer = new AqlLexer(antlrInputStream);</span>
+<span class="fc" id="L62">        CommonTokenStream commonTokenStream = new CommonTokenStream(aqlLexer);</span>
+<span class="fc" id="L63">        this.aqlParser = new AqlParser(commonTokenStream);</span>
+
+        // define our own error listener (default one just display a message on System.err
+<span class="fc" id="L66">        aqlLexer.removeErrorListeners();</span>
+<span class="fc" id="L67">        aqlLexer.addErrorListener(AqlErrorHandlerNoRecovery.INSTANCE);</span>
+<span class="fc" id="L68">        aqlParser.removeErrorListeners();</span>
+<span class="fc" id="L69">        aqlParser.addErrorListener(AqlErrorHandlerNoRecovery.INSTANCE);</span>
+
+        try {
+<span class="fc" id="L72">            Method ruleMethod = aqlParser.getClass().getMethod(ruleName);</span>
+
+<span class="nc" id="L74">            this.parseTree = (ParseTree) ruleMethod.invoke(aqlParser); // begin parsing at query rule</span>
+<span class="fc" id="L75">        } catch (Exception e) {</span>
+<span class="fc" id="L76">            throw new IllegalArgumentException(e.getCause().getMessage());</span>
+<span class="nc" id="L77">        }</span>
+
+<span class="nc" id="L79">        return this;</span>
+    }
+
+    public String dump() {
+<span class="pc bpc" id="L83" title="2 of 4 branches missed.">        if (parseTree != null &amp;&amp; aqlParser != null) return parseTree.toStringTree(aqlParser);</span>
+<span class="nc" id="L84">        else return &quot;**not initialized**&quot;;</span>
+    }
+
+    public ParseTree getParseTree() {
+<span class="pc bpc" id="L88" title="1 of 2 branches missed.">        if (parseTree == null)</span>
+<span class="nc" id="L89">            throw new IllegalStateException(</span>
+                    &quot;Parse tree is not initialized, use parse() method before calling this method&quot;);
+<span class="fc" id="L91">        return parseTree;</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.7.202105040129</span></div></body></html>
